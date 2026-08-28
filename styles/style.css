@@ -1,0 +1,2532 @@
+/* =====================================================
+GENERAL
+===================================================== */
+
+html,
+body{
+
+    margin:0;
+    padding:0;
+
+    width:100%;
+    height:100dvh;
+
+    overflow:hidden;
+
+    background:black;
+
+    touch-action:none;
+
+}
+
+/* =====================================================
+CANVAS
+===================================================== */
+
+canvas{
+
+    display:block;
+
+}
+
+/* =====================================================
+BOOT
+===================================================== */
+
+/* -------------------------
+BOOT SCREEN
+------------------------- */
+
+#bootScreen{
+
+    position:fixed;
+
+    inset:0;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    overflow:hidden;
+
+    z-index:99999;
+
+}
+
+/* -------------------------
+BACKGROUND IMAGE
+------------------------- */
+
+#bootBackground{
+
+    position:absolute;
+
+    inset:0;
+
+    background-image:
+    url('../assets/ui/boot/bootBackground.jpg');
+
+    background-size:cover;
+
+    background-position:center;
+
+    background-repeat:no-repeat;
+
+    z-index:0;
+
+    pointer-events:none;
+
+}
+
+/* -------------------------
+DARK OVERLAY
+------------------------- */
+
+#bootOverlay{
+
+    position:absolute;
+
+    inset:0;
+
+    background:
+    rgba(0,0,0,0.45);
+
+    z-index:1;
+
+    pointer-events:none;
+
+}
+
+/* -------------------------
+BOOT PANEL
+------------------------- */
+
+#bootPanel{
+
+    position:relative;
+
+    z-index:2;
+
+    text-align:center;
+
+    color:white;
+
+    padding:40px;
+
+    max-width:700px;
+
+}
+
+/* -------------------------
+TITLE
+------------------------- */
+
+#bootPanel h1{
+
+    font-size:clamp(
+        38px,
+        6vw,
+        72px
+    );
+
+    margin-bottom:20px;
+
+    text-shadow:
+    0 0 20px rgba(0,0,0,0.9);
+
+}
+
+/* -------------------------
+TEXT
+------------------------- */
+
+.bootText{
+
+    opacity:0.95;
+
+    margin-bottom:30px;
+
+    font-size:clamp(
+        16px,
+        2vw,
+        24px
+    );
+
+    line-height:1.5;
+
+    text-shadow:
+    0 0 12px rgba(0,0,0,0.9);
+
+}
+
+/* -------------------------
+BUTTON
+------------------------- */
+
+#startButton{
+
+    padding:16px 32px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:
+    rgba(255,255,255,0.12);
+
+    color:white;
+
+    font-size:18px;
+
+    cursor:pointer;
+
+    backdrop-filter:blur(6px);
+
+    border:
+    1px solid rgba(255,255,255,0.2);
+
+    transition:0.2s;
+
+}
+
+#startButton:hover{
+
+    transform:scale(1.05);
+
+}
+
+/* =====================================================
+ORIENTATION
+===================================================== */
+
+#orientationOverlay{
+
+    position:fixed;
+
+    inset:0;
+
+    display:none;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:black;
+
+    z-index:999999;
+
+}
+
+#orientationText{
+
+    color:white;
+
+    font-size:28px;
+
+    text-align:center;
+
+    padding:40px;
+
+}
+
+/* =====================================================
+GAME UI
+===================================================== */
+
+/* =====================================================
+   DIALOGUE SYSTEM
+===================================================== */
+
+.dialogue{
+
+    position:fixed;
+
+    left:50%;
+
+    bottom:2vh;
+
+    transform:translateX(-50%);
+
+    display:none;
+
+    flex-direction:column;
+
+    box-sizing:border-box;
+
+    width:min(94vw,1000px);
+
+    max-height:25vh;
+
+    padding:.7rem;
+
+    border-radius:18px;
+
+    border:2px solid #d6b06a;
+
+    background:rgba(15,15,15,.88);
+
+    backdrop-filter:blur(6px);
+
+    color:white;
+
+    z-index:15000;
+
+}
+
+/* =====================================================
+   HEADER
+===================================================== */
+
+.dialogue-header{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:.8rem;
+
+    margin-bottom:.5rem;
+
+}
+
+/* =====================================================
+   PORTRAIT
+===================================================== */
+
+.dialogue-portrait-container{
+
+    flex:0 0 auto;
+
+    width:clamp(
+
+        36px,
+
+        5vh,
+
+        70px
+
+    );
+
+    height:clamp(
+
+        36px,
+
+        5vh,
+
+        70px
+
+    );
+
+    border-radius:12px;
+
+    overflow:hidden;
+
+    border:2px solid #d6b06a;
+
+}
+
+.dialogue-portrait{
+
+    width:100%;
+
+    height:100%;
+
+    object-fit:cover;
+
+    display:block;
+
+}
+
+/* =====================================================
+   SPEAKER
+===================================================== */
+
+.dialogue-speaker{
+
+    margin:0;
+
+    color:#f2d08a;
+
+    font-weight:bold;
+
+    font-size:clamp(
+
+        1rem,
+
+        2vh,
+
+        1.6rem
+
+    );
+
+}
+
+/* =====================================================
+   BODY
+===================================================== */
+
+.dialogue-body{
+
+    display:flex;
+
+    flex-direction:column;
+
+    overflow:hidden;
+
+}
+
+/* =====================================================
+   TEXT
+===================================================== */
+
+.dialogue-text{
+
+    margin:0;
+
+    padding:.45rem 0;
+
+    line-height:1.45;
+
+    white-space:pre-line;
+
+    overflow-y:auto;
+
+    overflow-x:hidden;
+
+    scrollbar-width:thin;
+
+    max-height:14vh;
+
+    font-size:clamp(
+
+        .9rem,
+
+        1.8vh,
+
+        1.35rem
+
+    );
+
+    border-top:
+
+        1px solid rgba(
+
+            255,
+
+            255,
+
+            255,
+
+            .15
+
+        );
+
+    border-bottom:
+
+        1px solid rgba(
+
+            255,
+
+            255,
+
+            255,
+
+            .15
+
+        );
+
+}
+
+/* =====================================================
+   SCROLLBAR
+===================================================== */
+
+.dialogue-text::-webkit-scrollbar{
+
+    width:6px;
+
+}
+
+.dialogue-text::-webkit-scrollbar-track{
+
+    background:transparent;
+
+}
+
+.dialogue-text::-webkit-scrollbar-thumb{
+
+    background:rgba(
+
+        214,
+
+        176,
+
+        106,
+
+        .65
+
+    );
+
+    border-radius:20px;
+
+}
+
+.dialogue-text::-webkit-scrollbar-thumb:hover{
+
+    background:rgba(
+
+        214,
+
+        176,
+
+        106,
+
+        .95
+
+    );
+
+}
+
+/* =====================================================
+   FOOTER
+===================================================== */
+
+.dialogue-footer{
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    margin-top:.6rem;
+
+}
+
+/* =====================================================
+   BUTTON
+===================================================== */
+
+.dialogue-button{
+
+    padding:
+
+        clamp(
+
+            .35rem,
+
+            .7vh,
+
+            .7rem
+
+        )
+
+        clamp(
+
+            .8rem,
+
+            1.5vw,
+
+            1.4rem
+
+        );
+
+    border:none;
+
+    border-radius:10px;
+
+    background:#d6b06a;
+
+    color:#1b1b1b;
+
+    font-weight:bold;
+
+    cursor:pointer;
+
+    transition:
+
+        background .2s,
+
+        transform .2s;
+
+    font-size:clamp(
+
+        .85rem,
+
+        1.6vh,
+
+        1rem
+
+    );
+
+}
+
+.dialogue-button:hover{
+
+    background:#e8c987;
+
+    transform:scale(1.03);
+
+}
+
+.dialogue-button:active{
+
+    transform:scale(.98);
+
+}
+
+/* =====================================================
+   SMALL HEIGHT SCREENS
+===================================================== */
+
+@media (max-height:520px){
+
+    .dialogue{
+
+        bottom:1vh;
+
+        padding:.55rem;
+
+        max-height:25vh;
+
+    }
+
+    .dialogue-header{
+
+        margin-bottom:.35rem;
+
+    }
+
+    .dialogue-text{
+
+        max-height:13vh;
+
+    }
+
+}
+
+
+
+/* =====================================================
+RESPONSIVE ADJUSTMENTS
+===================================================== */
+
+@media (max-height:520px){
+
+    .dialogue{
+
+        max-height:30vh;
+
+        min-height:120px;
+
+        bottom:1vh;
+
+        padding:.7vh;
+
+    }
+
+    .dialogue-portrait-container{
+
+        width:5.8vh;
+
+        height:5.8vh;
+
+        min-width:34px;
+
+        min-height:34px;
+
+    }
+
+    .dialogue-text{
+
+        font-size:clamp(
+
+            12px,
+
+            1.5vh,
+
+            17px
+
+        );
+
+    }
+
+}
+
+/* =======================================================
+   REGISTRO
+======================================================= */
+
+#registryBase{
+
+    position:fixed;
+
+    left:50%;
+
+    bottom:0;
+
+    transform:translateX(-50%);
+
+   width:clamp(86px,10.8vw,185px);
+
+    height:22px;
+
+    z-index:998;
+
+    pointer-events:none;
+
+    border-radius:16px 16px 0 0;
+
+   background:
+
+linear-gradient(
+    180deg,
+    #b18a55 0%,
+    #8e673b 18%,
+    #6f4f2d 45%,
+    #4c3522 72%,
+    #2f241b 100%
+),
+
+linear-gradient(
+    90deg,
+    rgba(255,215,150,.16) 0%,
+    rgba(255,255,255,.03) 25%,
+    rgba(0,0,0,.12) 50%,
+    rgba(255,220,160,.05) 75%,
+    rgba(255,190,120,.12) 100%
+);
+
+    border-top:1px solid rgba(255,220,160,.28);
+
+    border-left:1px solid rgba(255,220,160,.10);
+
+    border-right:1px solid rgba(255,220,160,.10);
+
+    box-shadow:
+
+        inset 0 2px 2px rgba(255,255,255,.10),
+
+        inset 0 -2px 4px rgba(0,0,0,.45),
+
+        0 -4px 10px rgba(0,0,0,.40);
+
+    overflow:visible;
+
+}
+
+#registryBase::before{
+
+    content:"";
+
+    position:absolute;
+
+    inset:0;
+
+    border-radius:inherit;
+
+    opacity:.28;
+
+    background:
+
+        repeating-linear-gradient(
+
+            90deg,
+
+            rgba(255,255,255,.08) 0px,
+
+            rgba(255,255,255,0) 2px,
+
+            rgba(0,0,0,.10) 4px,
+
+            rgba(0,0,0,0) 7px
+
+        ),
+
+        linear-gradient(
+
+            90deg,
+
+            rgba(255,210,140,.10),
+
+            rgba(0,0,0,0),
+
+            rgba(255,210,140,.08)
+
+        );
+
+}
+
+#registryBase::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:50%;
+
+    bottom:100%;
+
+    transform:translateX(-50%);
+
+    width:92%;
+
+    height:18px;
+
+    background:
+
+        radial-gradient(
+
+            ellipse at 18% 100%,
+
+            rgba(240,240,240,.18),
+
+            transparent 60%
+
+        ),
+
+        radial-gradient(
+
+            ellipse at 82% 100%,
+
+            rgba(240,240,240,.18),
+
+            transparent 60%
+
+        ),
+
+        radial-gradient(
+
+            ellipse at center,
+
+            rgba(255,255,255,.10),
+
+            transparent 72%
+
+        );
+
+    filter:blur(9px);
+
+    opacity:.55;
+
+}
+
+#registryButton{
+
+    position:fixed;
+
+    left:50%;
+
+    bottom:-2px;
+
+    transform:translateX(-50%);
+
+    width:clamp(64px,4.8vw,126px);
+
+    height:auto;
+
+    z-index:999;
+
+    user-select:none;
+
+    -webkit-user-drag:none;
+
+}
+
+/*======================================================
+
+VENTANA REGISTRO
+
+======================================================*/
+
+#registry[hidden]{
+
+    display:none !important;
+
+}
+
+#registry{
+
+    position:fixed;
+
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+
+    display:flex;
+    flex-direction:column;
+
+    width:min(96vw,1600px);
+    height:min(92vh,950px);
+
+    box-sizing:border-box;
+
+    padding:24px;
+
+    background:rgba(46,31,20,.60);
+
+    backdrop-filter:blur(8px) brightness(.92) sepia(.18);
+
+    border:1px solid rgba(205,170,110,.18);
+
+    border-radius:18px;
+
+    box-shadow:
+        0 0 24px rgba(0,0,0,.55),
+        inset 0 0 18px rgba(255,220,160,.04);
+
+    overflow:hidden;
+
+    z-index:500;
+
+}
+
+#registryHeaderIcon{
+
+    width:clamp(110px,10vw,180px);
+
+    height:auto;
+
+    user-select:none;
+
+    -webkit-user-drag:none;
+
+    margin-bottom:26px;
+
+}
+
+
+/*======================================================
+
+NAVEGACIÓN REGISTRO
+
+======================================================*/
+
+#registryNav{
+
+    width:100%;
+
+    display:flex;
+
+    align-items:stretch;
+
+    gap:18px;
+
+    margin-bottom:24px;
+
+    padding-bottom:18px;
+
+    border-bottom:1px solid rgba(190,150,95,.25);
+
+}
+
+.registryTab{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:flex-start;
+
+    gap:.55rem;
+
+    flex:1;
+
+    min-width:235px;
+
+    min-height:88px;
+
+    padding:1.30rem 1.70rem;
+
+    border:none;
+
+    border-radius:14px;
+
+    background:transparent;
+
+    color:#dfc08a;
+
+    font-size:1.28rem;
+
+    font-family:inherit;
+
+    font-weight:600;
+
+    cursor:default;
+
+    transition:
+
+        background .18s ease,
+
+        transform .18s ease,
+
+        box-shadow .18s ease;
+
+}
+
+.registryTab.active{
+
+    color:#fff6df;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255,205,120,.28),
+            rgba(175,112,40,.18)
+        );
+
+    border:
+        1px solid rgba(255,225,165,.32);
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,255,255,.12),
+
+        inset 0 -1px 10px rgba(0,0,0,.25),
+
+        0 0 16px rgba(255,195,105,.14),
+
+        0 6px 18px rgba(0,0,0,.30);
+
+    transform:
+        translateY(-2px)
+        scale(1.015);
+
+}
+
+.registryTab:hover{
+
+    background:
+
+        rgba(255,220,140,.08);
+
+}
+
+/*==========================================================
+REGISTRY TAB ICONS
+==========================================================*/
+
+.registryTabIcon{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    width:3.35rem;
+
+    height:3.35rem;
+
+    margin-right:.60rem;
+
+    flex-shrink:0;
+
+}
+
+.registryTabShortcut{
+
+    width:3.15rem;
+
+    height:3.15rem;
+
+    flex-shrink:0;
+
+    object-fit:contain;
+
+    pointer-events:none;
+
+    user-select:none;
+
+    margin-right:.10rem;
+
+    align-self:center;
+
+}
+
+.registryTabIcon svg{
+
+    width:100%;
+
+    height:100%;
+
+    display:block;
+
+    opacity:0.92;
+
+    transition:
+
+        opacity .18s ease,
+
+        transform .18s ease,
+
+        filter .18s ease;
+		
+	transform:scale(1.12);	
+
+}
+
+.registryTab:hover .registryTabIcon svg{
+
+    opacity:1;
+
+    transform:scale(1.08);
+
+}
+
+.registryTab.active .registryTabIcon svg{
+
+    opacity:1;
+
+    transform:scale(1.22);
+
+    filter:
+
+        drop-shadow(
+            0 0 .45rem rgba(255,225,165,.85)
+        )
+
+        drop-shadow(
+            0 0 .85rem rgba(255,190,90,.40)
+        );
+
+}
+
+.registryTab.active .registryTabTitle{
+
+    color:#fff8ea;
+
+    font-weight:700;
+
+    text-shadow:
+
+        0 0 8px rgba(255,225,170,.22);
+
+}
+
+.registryTab.active{
+
+    position:relative;
+
+}
+
+.registryTab.active::before{
+
+    content:"";
+
+    position:absolute;
+
+    left:0;
+
+    top:10%;
+
+    bottom:10%;
+
+    width:5px;
+
+    border-radius:4px;
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(255,235,185,.95),
+
+            rgba(225,165,70,.85)
+
+        );
+
+    box-shadow:
+
+        0 0 10px rgba(255,210,140,.35);
+
+}
+
+/*======================================================
+
+CONTENIDO REGISTRO
+
+======================================================*/
+
+#registryContent{
+
+    flex:1;
+
+    display:flex;
+
+    flex-direction:column;
+
+    width:100%;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+    border-radius:14px;
+
+    background:rgba(255,245,220,.02);
+
+    border:1px solid rgba(205,170,110,.08);
+
+}
+
+/*=====================================================
+REGISTRY INVENTORY
+=====================================================*/
+
+/*-----------------------------------------------------
+MÓDULO
+-----------------------------------------------------*/
+
+/*-----------------------------------------------------*
+ * CONTENEDOR INVENTARIO
+ *-----------------------------------------------------*/
+
+
+
+/*===================================================*
+**************NUEVO DISEÑO E INVENTARIO*************
+===================================================*/
+
+/* =======================================================
+   INVENTORY MODULE V2
+   ======================================================= */
+
+#inventoryModule{
+
+    display:flex;
+    flex-direction:row;
+
+    width:100%;
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    overflow:hidden;
+
+}
+
+
+
+
+
+
+#inventoryBody{
+
+    display:flex;
+
+    flex-direction:row;
+
+    flex:1;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+    padding-top:14px;
+
+}
+#inventoryGridPanel{
+
+    flex:6;
+
+    min-width:0;
+
+    min-height:0;
+
+    display:flex;
+
+    padding:clamp(8px,.7vw,14px);
+
+    box-sizing:border-box;
+
+    overflow:hidden;
+
+    border-radius:clamp(10px,.8vw,18px);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(20,12,8,.20),
+            rgba(0,0,0,.30)
+        );
+
+    box-shadow:
+        inset 0 2px 6px rgba(0,0,0,.35),
+        inset 0 -1px 0 rgba(255,220,180,.04);
+
+}
+
+
+
+#inventorySlots{
+
+    display:grid;
+
+    grid-template-columns:repeat(5,1fr);
+
+    grid-template-rows:repeat(4,1fr);
+
+    gap:clamp(4px,.45vw,10px);
+
+    width:100%;
+    height:100%;
+
+    box-sizing:border-box;
+
+}
+
+/*=====================================================
+PANEL DERECHO V2
+=====================================================*/
+
+#inventoryInfoPanel{
+
+    flex:5;
+
+    display:flex;
+
+    flex-direction:column;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+}
+
+/*-----------------------------------------------------
+CONTENIDO PANEL DERECHO
+-----------------------------------------------------*/
+
+#inventoryInfoContent{
+
+    display:flex;
+
+    flex-direction:column;
+
+    flex:1;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:auto;
+
+    padding:clamp(10px,.8vw,18px);
+
+    gap:clamp(10px,.8vw,18px);
+
+    box-sizing:border-box;
+
+}
+
+#inventoryPreviewHeader{
+display:flex;
+
+align-items:flex-start;
+
+gap:clamp(10px,.8vw,18px);
+
+width:100%;
+
+flex-shrink:0;
+}
+
+#inventoryPreviewImage{
+
+    width:clamp(72px,8vw,110px);
+
+    aspect-ratio:1;
+
+    flex-shrink:0;
+
+    border-radius:clamp(8px,.6vw,14px);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255,235,205,.03) 0%,
+            rgba(0,0,0,.06) 100%
+        );
+
+    border:
+        1px solid rgba(198,150,96,.42);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255,230,190,.10),
+        inset 0 -2px 5px rgba(0,0,0,.32);
+
+    background-repeat:no-repeat;
+
+    background-position:center;
+
+    background-size:contain;
+
+    overflow:hidden;
+
+}
+
+#inventoryPreviewTitle{
+flex:1;
+
+min-width:0;
+
+font-size:clamp(18px,1.3vw,26px);
+
+font-weight:700;
+
+line-height:1.2;
+
+color:#ffffff;
+
+word-break:break-word;
+}
+
+#inventoryDescription{
+
+    flex:1;
+
+    color:#d7e3ef;
+
+    line-height:1.5;
+
+}
+
+#inventoryActions{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    gap:12px;
+
+}
+
+#inventoryActions button{
+
+    flex:1;
+
+}
+
+.inventoryCell img{
+
+    width:80%;
+
+    height:80%;
+
+    object-fit:contain;
+
+    pointer-events:none;
+
+    user-select:none;
+
+}
+
+/*=====================================================
+BASE DE TODOS LOS MÓDULOS DEL REGISTRO
+=====================================================*/
+
+.registryModule{
+
+    display:none;
+
+    width:100%;
+
+    height:100%;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+}
+.registryModule.active{
+
+    display:block;
+
+}
+
+/*-----------------------------------------------------
+PANEL IZQUIERDO
+-----------------------------------------------------*/
+
+#inventoryGrid{
+
+    display:flex;
+
+    flex-direction:column;
+
+    flex-shrink:0;    
+
+    min-width:315px;   
+
+    min-height:0;
+
+    overflow:hidden;
+
+}
+
+/*-----------------------------------------------------
+PANEL DERECHO
+-----------------------------------------------------*/
+
+#inventoryInfo{
+
+    display:flex;
+
+    flex-direction:column;    
+
+    min-width:0;
+
+    min-height:0;
+
+    width:auto;
+
+    height:100%;
+
+    overflow:hidden;
+
+}
+
+/*-----------------------------------------------------*
+ * CABECERA PANEL DERECHO
+ *-----------------------------------------------------*/
+
+#inventoryHeader{
+
+    display:grid;
+
+    grid-template-columns:
+
+        auto
+
+        minmax(0,1fr);
+
+    column-gap:18px;
+
+    align-items:center;
+
+    width:100%;
+
+    flex-shrink:0;
+
+    padding-bottom:14px;
+
+    border-bottom:
+
+        1px solid rgba(210,170,110,.18);
+
+}
+
+/*-----------------------------------------------------*
+ * MINIATURA
+ *-----------------------------------------------------*/
+
+#inventoryThumbnail{
+
+    width:
+        clamp(72px,7vw,110px);
+
+    aspect-ratio:1;
+
+    object-fit:contain;
+
+    flex-shrink:0;
+
+    display:none;
+
+}
+
+/*-----------------------------------------------------*
+ * BLOQUE CENTRAL
+ *-----------------------------------------------------*/
+
+#inventoryMeta{
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:center;
+
+    align-items:flex-start;
+
+    gap:12px;
+
+    min-width:0;
+
+}
+
+
+
+
+
+
+
+/*-----------------------------------------------------
+CASILLAS INVENTARIO
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    position:relative;
+
+    overflow:hidden;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:clamp(6px,0.55vw,12px);
+
+    border:
+
+        1px solid
+
+        rgba(210,145,80,0.38);
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(90,58,34,0.72) 0%,
+
+            rgba(58,36,22,0.82) 55%,
+
+            rgba(30,18,12,0.92) 100%
+
+        );
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,220,170,0.14),
+
+        inset 0 -2px 5px rgba(0,0,0,0.45),
+
+        0 0 8px rgba(0,0,0,0.18);
+
+    transition:
+
+        border-color .18s,
+
+        transform .18s,
+
+        box-shadow .18s;
+
+}
+
+/*-----------------------------------------------------
+TEXTURA SUPERIOR
+-----------------------------------------------------*/
+
+.inventoryCell::before{
+
+    content:"";
+
+    position:absolute;
+
+    inset:0;
+
+    background:
+
+        linear-gradient(
+
+            90deg,
+
+            rgba(255,255,255,0.03),
+
+            rgba(255,255,255,0),
+
+            rgba(255,255,255,0.05),
+
+            rgba(255,255,255,0)
+
+        );
+
+    opacity:.45;
+
+    pointer-events:none;
+
+}
+
+/*-----------------------------------------------------
+BRILLO INFERIOR
+-----------------------------------------------------*/
+
+.inventoryCell::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:8%;
+
+    right:8%;
+
+    bottom:6%;
+
+    height:18%;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            ellipse,
+
+            rgba(255,170,90,0.18),
+
+            transparent 70%
+
+        );
+
+    pointer-events:none;
+
+}
+/*-----------------------------------------------------
+CASILLA VACÍA
+-----------------------------------------------------*/
+
+.inventoryCell.empty{
+
+    opacity:0.88;
+
+}
+
+/*-----------------------------------------------------
+CASILLA OCUPADA
+-----------------------------------------------------*/
+
+.inventoryCell.occupied{
+
+    border-color:
+
+        rgba(255,195,110,0.72);
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,235,200,0.22),
+
+        inset 0 -2px 6px rgba(0,0,0,0.48),
+
+        0 0 12px rgba(255,165,70,0.18);
+
+}
+
+/*-----------------------------------------------------
+CASILLA SELECCIONADA
+-----------------------------------------------------*/
+
+.inventoryCell.selected{
+
+    border-color:
+
+        rgba(255,220,140,0.95);
+
+    transform:scale(1.035);
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,255,255,0.20),
+
+        inset 0 -2px 6px rgba(0,0,0,0.55),
+
+        0 0 18px rgba(255,175,70,0.38);
+
+}
+
+/*-----------------------------------------------------
+HOVER (SOLO ESCRITORIO)
+-----------------------------------------------------*/
+
+@media (hover:hover){
+
+    .inventoryCell:hover{
+
+        border-color:
+
+            rgba(255,205,120,0.82);
+
+        transform:translateY(-1px);
+
+        box-shadow:
+
+            inset 0 1px 0 rgba(255,240,200,0.20),
+
+            inset 0 -2px 6px rgba(0,0,0,0.50),
+
+            0 0 14px rgba(255,170,70,0.28);
+
+    }
+
+}
+
+/*-----------------------------------------------------
+ICONO DEL OBJETO
+-----------------------------------------------------*/
+
+.inventoryCell img{
+
+    width:78%;
+
+    height:78%;
+
+    object-fit:contain;
+
+    user-select:none;
+
+    pointer-events:none;
+
+    filter:
+
+        drop-shadow(
+
+            0 2px 3px
+
+            rgba(0,0,0,0.35)
+
+        );
+
+}
+
+
+/*-----------------------------------------------------*
+* PANEL DERECHO DEL INVENTARIO
+*-----------------------------------------------------*/
+
+#inventoryPreview{
+
+    position:relative;
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:flex-start;
+
+    align-items:center;
+
+    flex:1;
+
+    width:100%;
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    overflow:hidden;
+
+    padding:
+        clamp(12px,1vw,24px);
+
+    border-radius:
+        clamp(10px,0.9vw,18px);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(86,58,34,0.46) 0%,
+            rgba(55,36,22,0.60) 52%,
+            rgba(28,18,12,0.78) 100%
+        );
+
+    border:
+        1px solid rgba(210,150,90,.32);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255,220,180,.12),
+        inset 0 -2px 6px rgba(0,0,0,.45),
+        0 0 12px rgba(0,0,0,.18);
+
+}
+/*-----------------------------------------------------
+TÍTULO
+-----------------------------------------------------*/
+
+#inventoryTitle{
+
+    font-family:Georgia,serif;
+
+    font-weight:bold;
+
+    color:#ecd0a1;
+
+    font-size:
+
+        clamp(22px,1.55vw,34px);
+
+    line-height:1.1;
+
+    text-shadow:
+
+        0 2px 5px
+
+        rgba(0,0,0,.45);
+
+    margin:0;
+
+}
+
+/*-----------------------------------------------------*
+ * ACCIONES
+ *-----------------------------------------------------*/
+
+#inventoryActions{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:10px;
+
+    width:100%;
+
+}
+
+
+/*-----------------------------------------------------
+DESCRIPCIÓN
+-----------------------------------------------------*/
+
+#inventoryDescription{
+
+    flex:1;
+
+    overflow-y:auto;
+
+    font-size:
+
+        clamp(15px,0.92vw,18px);
+
+    line-height:1.55;
+
+    color:
+
+        rgba(240,230,210,.95);
+
+    white-space:pre-wrap;
+
+    padding-right:6px;
+
+}
+
+/*-----------------------------------------------------
+RELIEVE GENERAL DEL GRID
+-----------------------------------------------------*/
+
+
+/*-----------------------------------------------------
+PROFUNDIDAD INDIVIDUAL
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    isolation:isolate;
+
+}
+
+.inventoryCell::before{
+
+    z-index:0;
+
+}
+
+.inventoryCell::after{
+
+    z-index:1;
+
+}
+
+.inventoryCell>*{
+
+    position:relative;
+
+    z-index:2;
+
+}
+/*-----------------------------------------------------
+BRILLO SUPERIOR
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(110,74,42,.72) 0%,
+
+            rgba(70,44,26,.82) 48%,
+
+            rgba(34,20,12,.94) 100%
+
+        );
+
+}
+/*-----------------------------------------------------
+MARCO EXTERIOR
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    outline:
+
+        1px solid
+
+        rgba(255,210,150,.05);
+
+    outline-offset:-1px;
+
+}
+/*-----------------------------------------------------
+SEPARACIÓN ENTRE CASILLAS
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,235,195,.12),
+
+        inset 0 -2px 5px rgba(0,0,0,.55),
+
+        0 2px 4px rgba(0,0,0,.16);
+
+}
+
+
+
+/*-----------------------------------------------------*
+ * BOTONES DEL PANEL DERECHO
+ *-----------------------------------------------------*/
+
+#inventoryActions button{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    padding:
+        8px 16px;
+
+    border:none;
+
+    border-radius:10px;
+
+    background:
+        rgba(120,82,48,.88);
+
+    color:#f4e2c3;
+
+    font-size:
+        clamp(13px,.82vw,16px);
+
+    font-family:inherit;
+
+    cursor:pointer;
+
+    transition:
+        background .18s ease,
+        transform .15s ease;
+
+}
+
+#inventoryActions button:hover{
+
+    background:
+        rgba(160,110,62,.95);
+
+}
+
+#inventoryActions button:active{
+
+    transform:scale(.96);
+
+}
+
+/*==========================================================
+REGISTRY HELP BAR
+==========================================================*/
+
+#registryHelp{
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    flex-wrap:wrap;
+
+    gap:1.8rem;
+
+    width:100%;
+
+    min-height:3rem;
+
+    padding:0.65rem 1.25rem;
+
+    box-sizing:border-box;
+
+    border-top:1px solid rgba(255,220,160,0.12);
+
+    background:
+
+        linear-gradient(
+
+            to bottom,
+
+            rgba(42,28,16,0.70),
+
+            rgba(20,14,8,0.82)
+
+        );
+
+}
+
+.registryHelpItem{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:0.65rem;
+
+    color:#d8c7a4;
+
+    font-size:0.82rem;
+
+    user-select:none;
+
+}
+
+.registryHelpKey{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    min-width:3rem;
+
+    height:1.9rem;
+
+    padding:0 0.65rem;
+
+    border-radius:0.45rem;
+
+    background:
+
+        linear-gradient(
+
+            to bottom,
+
+            rgba(255,225,165,0.20),
+
+            rgba(170,120,60,0.15)
+
+        );
+
+    border:1px solid rgba(255,235,185,0.22);
+
+    color:#fff6de;
+
+    font-weight:bold;
+
+    font-size:0.80rem;
+
+    letter-spacing:0.03rem;
+
+    box-shadow:
+
+        inset 0 1px rgba(255,255,255,0.05),
+
+        0 1px 2px rgba(0,0,0,0.35);
+
+    transition:
+
+        transform .15s ease,
+
+        background .20s ease;
+
+}
+
+.registryHelpItem:hover .registryHelpKey{
+
+    transform:translateY(-1px);
+
+    background:
+
+        linear-gradient(
+
+            to bottom,
+
+            rgba(255,235,180,0.26),
+
+            rgba(185,140,80,0.18)
+
+        );
+
+}
+
+/*=====================================================
+ARCHIVE MODULE
+=====================================================*/
+
+#archiveModule{
+
+   
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:100%;
+
+    padding:2rem;
+
+}
+
+#archiveTitle{
+
+    font-size:1.8rem;
+
+    font-weight:700;
+
+    color:#f2ddb4;
+
+    margin-bottom:1.5rem;
+
+}
+
+#archiveContent{
+
+    flex:1;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:16px;
+
+    border:1px solid rgba(210,170,110,.20);
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(70,48,30,.45),
+
+            rgba(34,22,14,.65)
+
+        );
+
+    color:#d5c4a3;
+
+    font-size:1rem;
+
+}
+
+/*======================================================
+DIARY MODULE
+======================================================*/
+
+#diaryModule{
+
+    
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:100%;
+
+    padding:clamp(18px,2vw,28px);
+
+}
+
+/*======================================================
+ESTRUCTURA COMÚN DE LOS MÓDULOS
+======================================================*/
+
+.registryModuleTitle{
+
+    font-size:1.9rem;
+
+    font-weight:700;
+
+    color:#f3e3b5;
+
+    margin-bottom:1.5rem;
+
+    letter-spacing:.04em;
+
+}
+
+.registryModulePlaceholder{
+
+    flex:1;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:14px;
+
+    border:1px solid rgba(210,170,110,.20);
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(72,48,30,.45),
+
+            rgba(34,22,14,.68)
+
+        );
+
+    color:#d3c3a0;
+
+    font-size:1rem;
+
+    text-align:center;
+
+    padding:2rem;
+
+}
+
+/*======================================================
+HELP MODULE
+======================================================*/
+
+#helpModule{
+
+    
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:100%;
+
+    padding:clamp(18px,2vw,28px);
+
+}
+
+
+
+/*=========================================================
+FORZAR OCULTACIÓN DE MÓDULOS HIDDEN
+=========================================================*/
+
+#registryContent > [hidden]{
+
+    display:none !important;
+
+}
+
+
+
+/*=====================================================*/
+/* WORKSPACE INVENTARIO */
+/*=====================================================*/
+
+#inventoryWorkspace{
+
+    display:flex;
+
+    flex-direction:row;
+
+    align-items:stretch;
+
+    width:100%;
+
+    height:100%;
+
+    gap:clamp(12px,1vw,24px);
+
+}
+
+#inventoryLeft{
+
+    flex:0 0 auto;
+
+}
+
+#inventoryRight{
+
+    flex:1 1 auto;
+
+    min-width:0;
+
+    display:flex;
+
+}
+
+/*=========================================================
+REGISTRY · RESPONSIVE MOBILE
+=========================================================*/
+
+@media (max-width:1024px){
+
+    /*--------------------------------------
+    PESTAÑAS
+    --------------------------------------*/
+
+   .registryTab{
+
+    min-width:0;
+
+    width:25%;
+
+    min-height:46px;
+
+    padding:4px 6px;
+
+    border-radius:10px;
+
+}
+
+    /*--------------------------------------
+    OCULTAR ATAJOS DE TECLADO
+    --------------------------------------*/
+
+    .registryTabShortcut{
+
+        display:none;
+
+    }
+
+    /*--------------------------------------
+    ICONO DE LA PESTAÑA
+    --------------------------------------*/
+
+    .registryTabIcon{
+
+    width:1.6rem;
+
+    height:1.6rem;
+
+    margin-right:.25rem;
+
+}
+
+.registryTabTitle{
+
+    font-size:.75rem;
+
+}
+
+    /*--------------------------------------
+    TEXTO DE LA PESTAÑA
+    --------------------------------------*/
+
+    .registryTabTitle{
+
+        font-size:.82rem;
+
+    }
+
+   /*--------------------------------------
+CABECERA DEL REGISTRO
+--------------------------------------*/
+
+#registryHeader{
+
+    padding-top:6px;
+
+    padding-bottom:6px;
+
+}
+
+/*--------------------------------------
+CABECERA
+--------------------------------------*/
+
+#registryHeader{
+
+    padding:4px 0;
+
+}
+
+#registryHeaderIcon{
+
+    display:none;
+
+}
+
+/*--------------------------------------
+CONTENIDO DEL REGISTRO
+--------------------------------------*/
+
+#registryContent{
+
+    padding-top:8px;
+
+    padding-bottom:8px;
+
+    gap:10px;
+
+}
+
+/*--------------------------------------
+BARRA DE ATAJOS (NO NECESARIA EN MÓVIL)
+--------------------------------------*/
+
+#registryHelp{
+
+    display:none;
+
+}
+
+
+
+
+
+#inventoryDescription{
+
+    font-size:0.82rem;
+
+    line-height:1.25;
+
+    overflow-y:auto;
+
+}
+
+}
+
+
+
+
+
+
+
+

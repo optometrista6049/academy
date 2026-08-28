@@ -1,0 +1,92 @@
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+import { scene } from '../core/scene.js';
+
+import { getHeightAt }
+
+from '../terrain/terrainHeight.js';
+
+export function loadModel(
+
+    url,
+    x,
+    z,
+    desiredHeight = 2,
+    onLoaded = null
+
+){
+
+    const loader = new GLTFLoader();
+
+    loader.load(
+        url,
+        function(gltf){
+
+        const model = gltf.scene;
+
+        // =========================
+        // AUTO SCALE
+        // =========================
+
+        const box = new THREE.Box3().setFromObject(model);
+
+        const size = new THREE.Vector3();
+
+        box.getSize(size);
+
+        const scale = desiredHeight / size.y;
+
+        model.scale.setScalar(scale);
+
+        // recalcular box
+
+        box.setFromObject(model);
+
+        const groundOffset = -box.min.y;
+
+        // =========================
+        // POSITION
+        // =========================
+
+        model.position.x = x;
+
+        model.position.z = z;
+
+        model.position.y =
+            getHeightAt(x,z)
+            + groundOffset;
+
+        // =========================
+        // SHADOWS
+        // =========================
+
+        model.traverse((child)=>{
+
+            if(child.isMesh){
+
+                child.castShadow = true;
+
+                child.receiveShadow = true;
+
+            }
+
+        });
+
+        scene.add(model);
+
+        if(onLoaded){
+
+            onLoaded(
+                model,
+                gltf,
+                groundOffset
+            );
+
+        }
+
+    }, undefined, function(error) {
+        console.error('Error loading 3D model:', url, error);
+    });
+
+}
