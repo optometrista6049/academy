@@ -11,11 +11,14 @@ import { snap } from '../utils/snap.js';
 import { collidables } from '../entities/collisions.js';
 
 import {
-
     registerWorldObject
+} from '../systems/visibilitySystem.js';
 
-}
-from '../systems/visibilitySystem.js';
+import {
+    LAKE_CENTER_X,
+    LAKE_CENTER_Z,
+    LAKE_RADIUS
+} from '../terrain/terrainHeight.js';
 
 function createTree(x,z){
 
@@ -526,6 +529,12 @@ export function createForest(){
             Math.abs(z)<20
 
         ) continue;
+
+        // Exclusión del área del Gran Lago
+        const distToLake = Math.hypot(x - LAKE_CENTER_X, z - LAKE_CENTER_Z);
+        if(distToLake < LAKE_RADIUS + 4) {
+            continue;
+        }
 
         createTree(x,z);
 

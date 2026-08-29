@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {
+  GLTFLoader
+} from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
 
 
 // ======================================================
@@ -155,6 +157,12 @@ import {
 
 }
 from './environment/rocks.js';
+
+import {
+    createLake,
+    updateLake
+} from './environment/lake.js';
+
 
 
 //========================================
@@ -342,11 +350,12 @@ function startGame(){
    
     createForest();
 
-    
     createRockField();
 
-    
+    createLake();
+
     generateMountainRange();
+
 
     
     loadPlayer();
@@ -381,6 +390,8 @@ function startGame(){
             updateInteractionSystem,
 
             updatePandaReminder,
+
+            updateLake,
 
             updateClouds,
 

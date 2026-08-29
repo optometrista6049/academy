@@ -13,8 +13,8 @@ import { getHeightAt } from './terrainHeight.js';
 const geo = new THREE.PlaneGeometry(
     WORLD_SIZE,
     WORLD_SIZE,
-    160,
-    160
+    200,
+    200
 );
 
 geo.rotateX(-Math.PI / 2);

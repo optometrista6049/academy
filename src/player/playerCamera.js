@@ -5,9 +5,8 @@ import { fixCameraCollision }
 from './playerCameraCollision.js';
 
 import {
-
-    getHeightAt
-
+    getHeightAt,
+    LAKE_WATER_Y
 } from '../terrain/terrainHeight.js';
 
 import {
@@ -56,7 +55,7 @@ addEventListener("mousemove",e=>{
 
     cam.ay = Math.max(
 
-        -0.8,
+        -0.40,
 
         Math.min(1.2,cam.ay)
 
@@ -194,7 +193,7 @@ addEventListener("touchmove",(e)=>{
 
         cam.ay = Math.max(
 
-            -0.8,
+            -0.40,
 
             Math.min(1.2,cam.ay)
 
@@ -315,7 +314,7 @@ export function updateCamera(){
         Math.sin(cam.ay);
 
     // =====================================================
-    // GROUND LIMIT
+    // GROUND & WATER SURFACE LIMIT
     // =====================================================
 
     const groundCam =
@@ -325,11 +324,14 @@ export function updateCamera(){
             camera.position.x,
             camera.position.z
 
-        ) + 2;
+        ) + 1.2;
 
-    if(camera.position.y < groundCam){
+    const minWaterCam = LAKE_WATER_Y + 0.8;
+    const minCamY = Math.max(groundCam, minWaterCam);
 
-        camera.position.y = groundCam;
+    if(camera.position.y < minCamY){
+
+        camera.position.y = minCamY;
 
     }
 

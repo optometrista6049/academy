@@ -21,11 +21,16 @@ import { collidables }
 from '../entities/collisions.js';
 
 import {
-
     registerWorldObject
-
 }
 from '../systems/visibilitySystem.js';
+
+import {
+    LAKE_CENTER_X,
+    LAKE_CENTER_Z,
+    LAKE_RADIUS
+} from '../terrain/terrainHeight.js';
+
 
 // =====================================
 // CREATE ROCK
@@ -224,6 +229,12 @@ function createScatteredRocks(){
             Math.abs(z)<25
 
         ) continue;
+
+        // Exclusión del área del Gran Lago
+        const distToLake = Math.hypot(x - LAKE_CENTER_X, z - LAKE_CENTER_Z);
+        if(distToLake < LAKE_RADIUS + 3) {
+            continue;
+        }
 
         createRock(
 
