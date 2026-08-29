@@ -15,12 +15,6 @@ from '../systems/collisionSystem.js';
 import { applyWorldBounds }
 from '../systems/worldBounds.js';
 
-import { checkWaterAndBridgeMovement }
-from '../systems/waterBounds.js';
-
-import { getBridgeInteraction }
-from '../environment/bridges.js';
-
 import {
 
     getJoystickInput
@@ -128,39 +122,24 @@ if(isInputLocked()){
 
     applyWorldBounds(nextPos);
 
-    const waterBridgeCheck =
-        checkWaterAndBridgeMovement(player.position, nextPos);
-
-    if(waterBridgeCheck.allowed && !collide(nextPos)){
+    if(!collide(nextPos)){
 
         player.position.copy(nextPos);
 
     }
 
     // =========================
-    // ALTURA TERRENO / PUENTE
+    // ALTURA TERRENO
     // =========================
 
-    const curBridge =
-        getBridgeInteraction(player.position.x, player.position.z);
+    player.position.y =
 
-    if(curBridge.onBridge && curBridge.walkHeight !== null){
+        getHeightAt(
+            player.position.x,
+            player.position.z
+        )
 
-        player.position.y =
-            curBridge.walkHeight + runtimeState.playerHeightOffset;
-
-    } else {
-
-        player.position.y =
-
-            getHeightAt(
-                player.position.x,
-                player.position.z
-            )
-
-            + runtimeState.playerHeightOffset;
-
-    }
+        + runtimeState.playerHeightOffset;
 
     return true;
 

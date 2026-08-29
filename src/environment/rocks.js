@@ -27,9 +27,6 @@ import {
 }
 from '../systems/visibilitySystem.js';
 
-import { getWaterInfluence } from './waterSystem.js';
-import { getPathInfluence } from './paths.js';
-
 // =====================================
 // CREATE ROCK
 // =====================================
@@ -227,12 +224,6 @@ function createScatteredRocks(){
             Math.abs(z)<25
 
         ) continue;
-
-        const waterInfo = getWaterInfluence(x, z);
-        if(waterInfo.inWater || waterInfo.bankFactor > 0.7) continue;
-
-        const pathFactor = getPathInfluence(x, z);
-        if(pathFactor > 0.4) continue;
 
         createRock(
 

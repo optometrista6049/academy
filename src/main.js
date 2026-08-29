@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 
 // ======================================================
@@ -149,20 +150,11 @@ import {
 
 
 import {
+
     createRockField
+
 }
 from './environment/rocks.js';
-
-import {
-    createWater,
-    updateWater
-}
-from './environment/waterMesh.js';
-
-import {
-    createBridges
-}
-from './environment/bridges.js';
 
 
 //========================================
@@ -350,12 +342,10 @@ function startGame(){
    
     createForest();
 
+    
     createRockField();
 
-    createWater();
-
-    createBridges();
-
+    
     generateMountainRange();
 
     
@@ -406,9 +396,7 @@ function startGame(){
 
             updateworldEditor,
 
-            updateVisibilitySystem,
-
-            updateWater
+            updateVisibilitySystem
 
         ]
 

@@ -31,7 +31,7 @@ export function loadPlayer(){
 
     loadModel(
 
-        './assets/models/RobotAnimado.glb',
+        'assets/models/RobotAnimado.glb',
 
         0,
         0,

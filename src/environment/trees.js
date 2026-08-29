@@ -17,9 +17,6 @@ import {
 }
 from '../systems/visibilitySystem.js';
 
-import { getWaterInfluence } from './waterSystem.js';
-import { getPathInfluence } from './paths.js';
-
 function createTree(x,z){
 
     const tree = new THREE.Group();
@@ -515,7 +512,7 @@ leaves.position.y =
 
 export function createForest(){
 
-    for(let i=0;i<120;i++){
+    for(let i=0;i<90;i++){
 
         const x =
             (rand()-0.5)*WORLD_SIZE;
@@ -525,16 +522,10 @@ export function createForest(){
 
         if(
 
-            Math.abs(x)<22 &&
-            Math.abs(z)<22
+            Math.abs(x)<20 &&
+            Math.abs(z)<20
 
         ) continue;
-
-        const waterInfo = getWaterInfluence(x, z);
-        if(waterInfo.inWater || waterInfo.bankFactor > 0.6) continue;
-
-        const pathFactor = getPathInfluence(x, z);
-        if(pathFactor > 0.4) continue;
 
         createTree(x,z);
 

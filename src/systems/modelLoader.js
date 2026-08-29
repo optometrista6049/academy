@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import { scene } from '../core/scene.js';
 
@@ -19,9 +20,7 @@ export function loadModel(
 
     const loader = new GLTFLoader();
 
-    loader.load(
-        url,
-        function(gltf){
+    loader.load(url, function(gltf){
 
         const model = gltf.scene;
 
@@ -85,8 +84,6 @@ export function loadModel(
 
         }
 
-    }, undefined, function(error) {
-        console.error('Error loading 3D model:', url, error);
     });
 
 }
