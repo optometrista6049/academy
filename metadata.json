@@ -1,0 +1,6 @@
+{
+  "name": "Juego 3D Base",
+  "description": "Juego 3D interactivo ACADEMY.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
