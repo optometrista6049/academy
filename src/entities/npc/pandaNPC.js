@@ -1,3 +1,4 @@
+// Monteserin Academy - NPC sync update
 import * as THREE from 'three';
 
 import { loadModel }
