@@ -1,14 +1,43 @@
 import * as THREE from 'three';
 import { WORLD_LIMIT } from '../core/config.js';
+import { LAKE_CENTER_X, LAKE_CENTER_Z, getLakeBasinRadius, getShoreRatio } from '../terrain/terrainHeight.js';
+import { isPointInRiverWater } from '../terrain/riverPath.js';
 
 export const collidables = [];
 
 const PLAYER_RADIUS = 0.6;
 
+export function isWaterCollision(px, pz) {
+    // 1. Lago principal
+    const dx = px - LAKE_CENTER_X;
+    const dz = pz - LAKE_CENTER_Z;
+    const distToLake = Math.hypot(dx, dz);
+    if (distToLake < 80) {
+        const theta = Math.atan2(dz, dx);
+        const basinR = getLakeBasinRadius(theta);
+        const shoreR = basinR * getShoreRatio(theta);
+        if (distToLake < shoreR - 0.5) {
+            return true;
+        }
+    }
+
+    // 2. Afluente / Río
+    if (isPointInRiverWater(px, pz)) {
+        return true;
+    }
+
+    return false;
+}
+
 export function collide(nextPosition){
 
     const px = nextPosition.x;
     const pz = nextPosition.z;
+
+    // Bloqueo de entrada en agua (Lago y Río)
+    if (isWaterCollision(px, pz)) {
+        return true;
+    }
 
     for(const o of collidables){
 

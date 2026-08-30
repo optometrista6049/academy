@@ -1,7 +1,6 @@
 import {
-
-    collidables
-
+    collidables,
+    isWaterCollision
 } from '../entities/collisions.js';
 
 const PLAYER_RADIUS = 0.6;
@@ -10,6 +9,11 @@ export function collide(nextPosition){
 
     const px = nextPosition.x;
     const pz = nextPosition.z;
+
+    // Bloqueo de entrada en agua (Lago y Río)
+    if (isWaterCollision(px, pz)) {
+        return true;
+    }
 
     for(const o of collidables){
 

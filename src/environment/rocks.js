@@ -31,6 +31,10 @@ import {
     LAKE_RADIUS
 } from '../terrain/terrainHeight.js';
 
+import {
+    isPointNearRiver
+} from '../terrain/riverPath.js';
+
 
 // =====================================
 // CREATE ROCK
@@ -236,6 +240,11 @@ function createScatteredRocks(){
         // Exclusión del área del Gran Lago
         const distToLake = Math.hypot(x - LAKE_CENTER_X, z - LAKE_CENTER_Z);
         if(distToLake < LAKE_RADIUS + 3) {
+            continue;
+        }
+
+        // Exclusión del cauce del río
+        if(isPointNearRiver(x, z, 9.2)) {
             continue;
         }
 

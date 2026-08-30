@@ -163,6 +163,11 @@ import {
     updateLake
 } from './environment/lake.js';
 
+import {
+    createRiver,
+    updateRiver
+} from './environment/river.js';
+
 
 
 //========================================
@@ -354,6 +359,8 @@ function startGame(){
 
     createLake();
 
+    createRiver();
+
     generateMountainRange();
 
 
@@ -392,6 +399,8 @@ function startGame(){
             updatePandaReminder,
 
             updateLake,
+
+            updateRiver,
 
             updateClouds,
 

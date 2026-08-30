@@ -10,6 +10,10 @@ import {
 } from '../terrain/terrainHeight.js';
 
 import {
+    getWaterSurfaceLevel
+} from '../terrain/riverPath.js';
+
+import {
 
     runtimeState
 
@@ -326,7 +330,8 @@ export function updateCamera(){
 
         ) + 1.2;
 
-    const minWaterCam = LAKE_WATER_Y + 0.8;
+    const localWaterY = getWaterSurfaceLevel(camera.position.x, camera.position.z);
+    const minWaterCam = (localWaterY !== null ? localWaterY : LAKE_WATER_Y) + 0.8;
     const minCamY = Math.max(groundCam, minWaterCam);
 
     if(camera.position.y < minCamY){

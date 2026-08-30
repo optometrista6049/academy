@@ -4,7 +4,15 @@ import { scene } from '../core/scene.js';
 
 import { WORLD_SIZE } from '../core/config.js';
 
-import { getHeightAt } from './terrainHeight.js';
+import {
+    getHeightAt,
+    LAKE_CENTER_X,
+    LAKE_CENTER_Z,
+    getLakeBasinRadius,
+    getShoreRatio,
+    LAKE_WATER_Y
+} from './terrainHeight.js';
+import { getRiverInfo, RIVER_HALF_WIDTH, RIVER_BANK_WIDTH } from './riverPath.js';
 
 // ======================================================
 // GEOMETRY
@@ -127,12 +135,14 @@ const rockGravel = new THREE.Color(0x726b5c);     // Cascajo y grava suelta
 const rockSlate = new THREE.Color(0x504f4a);      // Pizarra / roca compacta
 const snowPeak = new THREE.Color(0xf2f7fa);       // Nieve de alta cumbre
 
-// Vegetación templada y bosque (amplia transición con tierras)
+// Vegetación templada, bosque y riberas húmedas (amplia transición con tierras)
 const grassDeep = new THREE.Color(0x284724);      // Bosque umbrío / sotobosque
 const grassMeadow = new THREE.Color(0x3f6e33);    // Pradera suave y natural
 const grassForestFloor = new THREE.Color(0x4b6630); // Suelo de bosque con acículas
 const grassSunlit = new THREE.Color(0x5d7f3a);    // Césped templado
 const grassDry = new THREE.Color(0x747e3c);       // Hierba seca / pastizal árido
+const grassWetland = new THREE.Color(0x345b2b);   // Hierba ribereña húmeda / juncal
+const mossWaterEdge = new THREE.Color(0x475e2b);  // Musgo de orilla inundable
 
 // ======================================================
 // TERRAIN COLORING (Mezcla Continua Ponderada por Biomas)
@@ -177,47 +187,92 @@ for (let i = 0; i < pos.count; i++) {
     );
 
     // B. BIOMA ARENOSO / GRAVILLA (Acotado a orillas de agua, cuencas y pequeños lechos)
-    // - Playas y orilla de agua en cráter
-    const shoreBeach = smootherstep(1.5, -4.5, y + warpMacro * 2.5); // Fuerte solo en cotas bajas de agua
-    // - Pequeños claros de arena/grava acotados (reducida su extensión para evitar manchas gigantes)
-    const sandPlains = smootherstep(0.42, 0.78, warpedNoise2D(z * 1.15 - 80.0, x * 1.15 + 90.0, 0.022, 28.0));
+    // - Distancia polar a la orilla del lago para zonificación de ribera
+    const dxLake = x - LAKE_CENTER_X;
+    const dzLake = z - LAKE_CENTER_Z;
+    const distLakeCenter = Math.hypot(dxLake, dzLake);
+    const thetaLake = Math.atan2(dzLake, dxLake);
+    const basinRadius = getLakeBasinRadius(thetaLake);
+    const shoreRadius = basinRadius * getShoreRatio(thetaLake);
+    const distFromWaterEdge = distLakeCenter - shoreRadius; // <0 sumergido, 0 orilla, >0 tierra firme
+
+    // Zona de rompiente inmediata (0 a 3m sobre el agua / lecho sumergido)
+    const waterEdgeWetSand = (1.0 - smootherstep(-2.0, 4.0, distFromWaterEdge)) * smootherstep(-7.0, -2.5, y);
+    // Calas arenosas orgánicas con ruido (evita que toda la ribera sea 100% igual)
+    const sandyCoveNoise = smootherstep(0.40, 0.75, warpedNoise2D(x * 1.3 - 40.0, z * 1.3 + 50.0, 0.035, 18.0));
+    const shoreBeach = waterEdgeWetSand * (0.50 + sandyCoveNoise * 0.70);
+
+    // - Pequeños claros de arena/grava acotados en el resto del mapa
+    const sandPlains = smootherstep(0.44, 0.80, warpedNoise2D(z * 1.15 - 80.0, x * 1.15 + 90.0, 0.022, 28.0));
     // - Arena y polvo fino en el halo de las rocas centrales
     const rockSandHalo = rockSanctuaryAura * (1.0 - rockSanctuaryCore) * 0.45;
 
     let wSand = (
-        shoreBeach * 0.80 +
-        sandPlains * 0.35 +
-        rockSandHalo * 0.40
+        shoreBeach * 0.75 +
+        sandPlains * 0.30 +
+        rockSandHalo * 0.35
     );
 
-    // C. BIOMA TERROSO / ARCILLOSO / HUMUS DE BOSQUE (Ampliado para crear ricos suelos arbolados)
+    // C. BIOMA TERROSO / ARCILLOSO / HUMUS DE BOSQUE Y HUMEDAL
     // - Suelo fértil, arcilla, humus y suelo de bosque repartido ampliamente
     const earthPlains = smootherstep(0.08, 0.52, warpedNoise2D(x * 1.05 + 60.0, z * 1.05 - 60.0, 0.024, 30.0));
     const dirtRoads = smootherstep(0.24, 0.68, warpedNoise2D(z * 0.95 + 15.0, (x + z) * 0.65, 0.035, 20.0));
     const transitionalEarth = smootherstep(-1.5, 4.0, y + warpMeso * 2.0) * (1.0 - smootherstep(5.5, 8.5, y));
+    
+    // Limo y tierra húmeda de ribera alrededor del lago (2m a 16m del borde del agua)
+    const lakeShoreHumus = (1.0 - smootherstep(1.0, 18.0, Math.abs(distFromWaterEdge))) * smootherstep(-4.6, 1.0, y);
 
     let wEarth = (
         earthPlains * 0.85 +
         dirtRoads * 0.60 +
         transitionalEarth * 0.55 +
+        lakeShoreHumus * 0.70 +
         rockSanctuaryAura * 0.45
     );
 
-    // D. BIOMA VEGETAL / HIERBA Y SOTOBOSQUE (Se funde con la tierra de los árboles)
-    // - Humedad y fertilidad: crea transiciones suaves entre verdosos y marrones en zonas con árboles
-    const moisture = clamp(0.40 + warpMacro * 0.45 + warpMeso * 0.25, 0.0, 1.0);
-    const lushPockets = smootherstep(0.28, 0.76, moisture);
+    // D. BIOMA VEGETAL / HIERBA, SOTOBOSQUE Y VEGETACIÓN RIBEREÑA HÚMEDA
+    // - Humedad y fertilidad: aumentada orgánicamente cerca del lago y del río
+    const lakeMoistureBonus = (1.0 - smootherstep(0.0, 32.0, Math.max(0.0, distFromWaterEdge))) * 0.45;
+    const moisture = clamp(0.40 + warpMacro * 0.45 + warpMeso * 0.25 + lakeMoistureBonus, 0.0, 1.0);
+    const lushPockets = smootherstep(0.25, 0.72, moisture);
     // La vegetación abarca valles y llanuras medias
-    const altitudeGrass = smootherstep(-1.5, 1.0, y) * (1.0 - smootherstep(4.5, 7.5, y));
+    const altitudeGrass = smootherstep(-3.8, 0.5, y) * (1.0 - smootherstep(4.5, 7.5, y));
     const slopePenalty = 1.0 - smootherstep(0.07, 0.24, slope);
 
-    let wGrass = lushPockets * altitudeGrass * slopePenalty * 0.90;
+    // Hierba y juncos que crecen vigorosamente en la orilla húmeda del lago (llegando a 1.5m del agua)
+    const lakeRiparianGrass = (1.0 - smootherstep(1.5, 25.0, Math.max(0.0, distFromWaterEdge))) * 
+                              smootherstep(-4.4, 0.0, y) * 
+                              (0.6 + 0.4 * warpMicro);
+
+    let wGrass = (lushPockets * altitudeGrass * slopePenalty * 0.90) + (lakeRiparianGrass * 0.95);
+
+    // E. CORREDOR DEL AFLUENTE / RÍO (Lecho arenoso, guijarros y ribera frondosa)
+    if (x >= 120 && x <= 275 && z >= 115 && z <= 275) {
+        const river = getRiverInfo(x, z);
+        if (river.t <= 0.98 && river.distance < 16.0) {
+            const riverBedMask = 1.0 - smootherstep(1.5, 4.5, river.distance);
+            const riverBankMask = 1.0 - smootherstep(4.2, 11.5, river.distance);
+
+            wSand += riverBedMask * 1.40;
+            wRock += riverBedMask * 0.90;
+            wEarth += riverBankMask * 0.90;
+            wGrass += riverBankMask * 0.60;
+        }
+    }
 
     // ----------------------------------------------------
     // 3. NORMALIZACIÓN DE PESOS (Garantiza difuminado perfecto)
     // ----------------------------------------------------
-    // Garantizamos que siempre haya sustrato base para evitar división por cero
-    const totalWeight = wRock + wSand + wEarth + wGrass + 0.0001;
+    // Garantizamos que en cualquier elevación o loma intermedia siempre haya sustrato vegetal/tierra
+    // evitando sumas nulas que generaban artefactos oscuros
+    const rawWeight = wRock + wSand + wEarth + wGrass;
+    if (rawWeight < 0.35) {
+        const deficit = 0.35 - rawWeight;
+        wGrass += deficit * 0.70;
+        wEarth += deficit * 0.30;
+    }
+
+    const totalWeight = wRock + wSand + wEarth + wGrass;
     const nRock = wRock / totalWeight;
     const nSand = wSand / totalWeight;
     const nEarth = wEarth / totalWeight;
@@ -247,11 +302,15 @@ for (let i = 0; i < pos.count; i++) {
     const drySoilMix = blendColor(clayMix, dirtDrySoil, 0.4 + warpMicro * 0.3);
     const finalEarthColor = blendColor(soilWithMoss, drySoilMix, 0.50);
 
-    // Color del Bioma Vegetal (pradera natural, suelo de bosque y sotobosque)
+    // Color del Bioma Vegetal (pradera natural, sotobosque, y vegetación ribereña húmeda)
     const meadowMix = blendColor(grassMeadow, grassSunlit, 0.5 + warpMicro * 0.25);
     const forestFloorMix = blendColor(grassDeep, grassForestFloor, moisture);
     const deepOrDryGrass = blendColor(forestFloorMix, grassDry, 1.0 - moisture);
-    const finalGrassColor = blendColor(meadowMix, deepOrDryGrass, 0.40);
+    const standardGrass = blendColor(meadowMix, deepOrDryGrass, 0.40);
+    // Tonalidad más verde-musgosa y fresca para zonas de ribera húmeda
+    const riparianWetGrass = blendColor(grassWetland, mossWaterEdge, 0.5 + warpMicro * 0.3);
+    const wetGrassFactor = (1.0 - smootherstep(0.0, 24.0, Math.max(0.0, distFromWaterEdge))) * smootherstep(-4.5, 0.5, y);
+    const finalGrassColor = blendColor(standardGrass, riparianWetGrass, wetGrassFactor * 0.75);
 
     // ----------------------------------------------------
     // 5. SUMA PONDERADA CONTINUA (Cero aristas, transiciones 100% orgánicas)
