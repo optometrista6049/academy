@@ -13,13 +13,25 @@ import { getHeightAt } from './terrainHeight.js';
 const geo = new THREE.PlaneGeometry(
     WORLD_SIZE,
     WORLD_SIZE,
-    200,
-    200
+    280,
+    280
 );
 
 geo.rotateX(-Math.PI / 2);
 
 const pos = geo.attributes.position;
+
+// Aplicar alturas primero
+for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const h = getHeightAt(x, z);
+    pos.setY(i, h);
+}
+
+// Calcular normales precisas para conocer la inclinación (pendiente) en cada vértice
+geo.computeVertexNormals();
+const normals = geo.attributes.normal;
 
 const colors = [];
 
@@ -27,174 +39,243 @@ const colors = [];
 // HELPERS
 // ======================================================
 
-function lerp(a,b,t){
-
-    return a + (b - a) * t;
-
+function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
 }
 
-function blendColor(c1,c2,t){
+function smoothstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
 
+function smootherstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+    return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * clamp(t, 0.0, 1.0);
+}
+
+function blendColor(c1, c2, t) {
+    const clampedT = clamp(t, 0.0, 1.0);
     return new THREE.Color(
-
-        lerp(c1.r,c2.r,t),
-        lerp(c1.g,c2.g,t),
-        lerp(c1.b,c2.b,t)
-
+        lerp(c1.r, c2.r, clampedT),
+        lerp(c1.g, c2.g, clampedT),
+        lerp(c1.b, c2.b, clampedT)
     );
-
 }
 
 // ======================================================
-// BASE COLORS
+// NOISE & DOMAIN WARPING (Curvas suaves sin líneas rectas)
 // ======================================================
 
-const grassDark = new THREE.Color(0x355e3b);
+function rawNoise2D(nx, nz) {
+    const a = Math.sin(nx * 1.37 + nz * 0.91 + 1.4);
+    const b = Math.cos(nx * 0.83 - nz * 1.51 + 2.7);
+    const c = Math.sin((nx + nz) * 1.15 + a * 0.5);
+    return (a + b + c) / 3.0; // Rango aprox -1 a 1
+}
 
-const grass = new THREE.Color(0x4c8f4c);
+function fbmNoise2D(nx, nz) {
+    let total = 0;
+    let amp = 0.52;
+    let freq = 1.0;
+    for (let o = 0; o < 4; o++) {
+        total += rawNoise2D(nx * freq, nz * freq) * amp;
+        freq *= 2.07;
+        amp *= 0.46;
+    }
+    return total;
+}
 
-const grassLight = new THREE.Color(0x6aa84f);
+// Domain Warping: perturba fuertemente las coordenadas para crear curvas sinuosas, meandros y manchas redondeadas
+function warpedNoise2D(x, z, scale, warpStrength = 36.0) {
+    const qx = fbmNoise2D(x * scale * 0.6 + 12.4, z * scale * 0.6 - 7.1);
+    const qz = fbmNoise2D((x - 48.3) * scale * 0.6, (z + 82.5) * scale * 0.6);
 
-const dirt = new THREE.Color(0x7a6a4f);
+    const rx = (x + qx * warpStrength) * scale;
+    const rz = (z + qz * warpStrength) * scale;
 
-const rock = new THREE.Color(0x707070);
-
-const rockLight = new THREE.Color(0x9a9a9a);
-
-const snow = new THREE.Color(0xffffff);
+    return fbmNoise2D(rx, rz);
+}
 
 // ======================================================
-// TERRAIN COLORING
+// PALETA BIOMAS ORGÁNICOS (Ricos en Rocas, Tierras, Arenas y Vegetación)
 // ======================================================
 
-for(let i = 0; i < pos.count; i++){
+// Arenas, riberas y lechos secos (tonos más cálidos, apagados y terrosos, sin amarillos chillones/blanquecinos)
+const sandWet = new THREE.Color(0x765e38);        // Arena húmeda / limo
+const sandDry = new THREE.Color(0xa9905d);        // Arena cálida apagada / gravilla
+const sandDust = new THREE.Color(0x9a8355);       // Polvo arcilloso suave
+const sandGravel = new THREE.Color(0x8c7853);     // Grava arenosa suave
 
+// Tierras, humus, senderos y arcillas (ricos en transiciones orgánicas)
+const dirtHumus = new THREE.Color(0x422f1a);      // Humus fértil oscuro
+const dirtClay = new THREE.Color(0x694b2e);       // Arcilla marrón templada
+const dirtRedClay = new THREE.Color(0x784e30);    // Arcilla rojiza natural
+const dirtDrySoil = new THREE.Color(0x86704d);    // Tierra compacta / camino
+const dirtLoam = new THREE.Color(0x564127);       // Tierra vegetal franca
+const dirtMossy = new THREE.Color(0x505732);      // Tierra con musgo / transición bosque
+
+// Rocas, granito, losas y pedregales
+const rockGranite = new THREE.Color(0x686660);    // Granito gris neutro
+const rockLight = new THREE.Color(0x827e74);      // Roca caliza clara erosionada
+const rockDark = new THREE.Color(0x44423e);       // Roca profunda / sombra
+const rockMossy = new THREE.Color(0x5a6048);      // Piedra con líquenes / musgo
+const rockGravel = new THREE.Color(0x726b5c);     // Cascajo y grava suelta
+const rockSlate = new THREE.Color(0x504f4a);      // Pizarra / roca compacta
+const snowPeak = new THREE.Color(0xf2f7fa);       // Nieve de alta cumbre
+
+// Vegetación templada y bosque (amplia transición con tierras)
+const grassDeep = new THREE.Color(0x284724);      // Bosque umbrío / sotobosque
+const grassMeadow = new THREE.Color(0x3f6e33);    // Pradera suave y natural
+const grassForestFloor = new THREE.Color(0x4b6630); // Suelo de bosque con acículas
+const grassSunlit = new THREE.Color(0x5d7f3a);    // Césped templado
+const grassDry = new THREE.Color(0x747e3c);       // Hierba seca / pastizal árido
+
+// ======================================================
+// TERRAIN COLORING (Mezcla Continua Ponderada por Biomas)
+// ======================================================
+
+for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
-
+    const y = pos.getY(i);
     const z = pos.getZ(i);
 
-    const h = getHeightAt(x,z);
+    // Normal e inclinación (pendiente)
+    const ny = normals.getY(i);
+    const slope = 1.0 - ny; // 0 = plano horizontal, >0.15 ladera, >0.35 acantilado
 
-    pos.setY(i,h);
+    // 1. Ruido fractal continuo y sinuoso (Domain Warping multiescala)
+    const warpMacro = warpedNoise2D(x, z, 0.012, 48.0);         // Macro flujo geológico (~80m)
+    const warpMeso = warpedNoise2D(x + 51.3, z - 73.1, 0.032, 26.0); // Meso biomas (~30m)
+    const warpMicro = rawNoise2D(x * 0.15, z * 0.15);           // Micro detalle granular (~6m)
 
-    // =========================================
-    // NOISE EXTRA PARA VARIAR COLOR
-    // =========================================
+    // ----------------------------------------------------
+    // 2. CÁLCULO DE PESOS DE BIOMAS (Splatting Continuo)
+    // ----------------------------------------------------
 
-    const noise =
+    // A. BIOMA ROCOSO / PEDREGOSO
+    // - Afloramientos geológicos en praderas y valles
+    const rockVessels = smootherstep(0.24, 0.70, warpedNoise2D(x * 1.2 - 110.0, z * 1.2 + 85.0, 0.022, 35.0));
+    // - Zona Central de Rocas en (66, 9) y alrededores (78, 14): Núcleo geológico muy rico y visible
+    const distToRocksCenter = Math.hypot(x - 67.0, z - 9.5);
+    // Efecto geológico masivo en radio de hasta 45 metros con bordes sinuosos
+    const rockSanctuaryCore = 1.0 - smootherstep(5.0, 22.0, distToRocksCenter + warpMeso * 12.0);
+    const rockSanctuaryAura = 1.0 - smootherstep(18.0, 44.0, distToRocksCenter + warpMacro * 16.0);
+    // - Rocas en laderas empinadas y cumbres altas
+    const slopeRock = smootherstep(0.09, 0.30, slope);
+    const highAltitudeRock = smootherstep(4.8, 9.2, y + warpMacro * 3.0);
 
-        Math.sin(x * 0.08) * 0.5 +
-
-        Math.cos(z * 0.08) * 0.5 +
-
-        Math.sin((x + z) * 0.03);
-
-    let color;
-
-    // =========================================
-    // AGUA / HUMEDAD
-    // =========================================
-
-    if(h < -1){
-
-        color = blendColor(
-
-            grassDark,
-            dirt,
-            0.5 + noise * 0.1
-
-        );
-
-    }
-
-    // =========================================
-    // HIERBA OSCURA
-    // =========================================
-
-    else if(h < 1){
-
-        color = blendColor(
-
-            grassDark,
-            grass,
-            0.4 + noise * 0.15
-
-        );
-
-    }
-
-    // =========================================
-    // HIERBA NORMAL
-    // =========================================
-
-    else if(h < 3){
-
-        color = blendColor(
-
-            grass,
-            grassLight,
-            0.5 + noise * 0.2
-
-        );
-
-    }
-
-    // =========================================
-    // TIERRA / TRANSICIÓN
-    // =========================================
-
-    else if(h < 5){
-
-        color = blendColor(
-
-            grassLight,
-            dirt,
-            0.4 + noise * 0.2
-
-        );
-
-    }
-
-    // =========================================
-    // ROCA
-    // =========================================
-
-    else if(h < 8){
-
-        color = blendColor(
-
-            rock,
-            rockLight,
-            0.5 + noise * 0.15
-
-        );
-
-    }
-
-    // =========================================
-    // NIEVE
-    // =========================================
-
-    else{
-
-        color = blendColor(
-
-            rockLight,
-            snow,
-            0.6 + noise * 0.1
-
-        );
-
-    }
-
-    colors.push(
-
-        color.r,
-        color.g,
-        color.b
-
+    let wRock = (
+        rockVessels * 0.40 +
+        rockSanctuaryCore * 0.95 +
+        rockSanctuaryAura * 0.45 +
+        slopeRock * 0.85 +
+        highAltitudeRock * 0.75
     );
 
+    // B. BIOMA ARENOSO / GRAVILLA (Acotado a orillas de agua, cuencas y pequeños lechos)
+    // - Playas y orilla de agua en cráter
+    const shoreBeach = smootherstep(1.5, -4.5, y + warpMacro * 2.5); // Fuerte solo en cotas bajas de agua
+    // - Pequeños claros de arena/grava acotados (reducida su extensión para evitar manchas gigantes)
+    const sandPlains = smootherstep(0.42, 0.78, warpedNoise2D(z * 1.15 - 80.0, x * 1.15 + 90.0, 0.022, 28.0));
+    // - Arena y polvo fino en el halo de las rocas centrales
+    const rockSandHalo = rockSanctuaryAura * (1.0 - rockSanctuaryCore) * 0.45;
+
+    let wSand = (
+        shoreBeach * 0.80 +
+        sandPlains * 0.35 +
+        rockSandHalo * 0.40
+    );
+
+    // C. BIOMA TERROSO / ARCILLOSO / HUMUS DE BOSQUE (Ampliado para crear ricos suelos arbolados)
+    // - Suelo fértil, arcilla, humus y suelo de bosque repartido ampliamente
+    const earthPlains = smootherstep(0.08, 0.52, warpedNoise2D(x * 1.05 + 60.0, z * 1.05 - 60.0, 0.024, 30.0));
+    const dirtRoads = smootherstep(0.24, 0.68, warpedNoise2D(z * 0.95 + 15.0, (x + z) * 0.65, 0.035, 20.0));
+    const transitionalEarth = smootherstep(-1.5, 4.0, y + warpMeso * 2.0) * (1.0 - smootherstep(5.5, 8.5, y));
+
+    let wEarth = (
+        earthPlains * 0.85 +
+        dirtRoads * 0.60 +
+        transitionalEarth * 0.55 +
+        rockSanctuaryAura * 0.45
+    );
+
+    // D. BIOMA VEGETAL / HIERBA Y SOTOBOSQUE (Se funde con la tierra de los árboles)
+    // - Humedad y fertilidad: crea transiciones suaves entre verdosos y marrones en zonas con árboles
+    const moisture = clamp(0.40 + warpMacro * 0.45 + warpMeso * 0.25, 0.0, 1.0);
+    const lushPockets = smootherstep(0.28, 0.76, moisture);
+    // La vegetación abarca valles y llanuras medias
+    const altitudeGrass = smootherstep(-1.5, 1.0, y) * (1.0 - smootherstep(4.5, 7.5, y));
+    const slopePenalty = 1.0 - smootherstep(0.07, 0.24, slope);
+
+    let wGrass = lushPockets * altitudeGrass * slopePenalty * 0.90;
+
+    // ----------------------------------------------------
+    // 3. NORMALIZACIÓN DE PESOS (Garantiza difuminado perfecto)
+    // ----------------------------------------------------
+    // Garantizamos que siempre haya sustrato base para evitar división por cero
+    const totalWeight = wRock + wSand + wEarth + wGrass + 0.0001;
+    const nRock = wRock / totalWeight;
+    const nSand = wSand / totalWeight;
+    const nEarth = wEarth / totalWeight;
+    const nGrass = wGrass / totalWeight;
+
+    // ----------------------------------------------------
+    // 4. COLOR DE CADA COMPONENTE CON MICRO-VARIACIÓN
+    // ----------------------------------------------------
+
+    // Color del Bioma Rocoso
+    const graniteMix = blendColor(rockGranite, rockLight, 0.5 + warpMicro * 0.3);
+    const mossOrGravel = blendColor(rockMossy, rockGravel, 0.5 + warpMeso * 0.3);
+    const baseRockColor = blendColor(graniteMix, mossOrGravel, 0.4 + warpMacro * 0.3);
+    // Si la altura es muy alta, añadir nieve en cumbre
+    const snowFactor = smootherstep(7.8, 11.5, y + warpMacro * 2.0);
+    const finalRockColor = blendColor(baseRockColor, snowPeak, snowFactor);
+
+    // Color del Bioma Arenoso (tonos cálidos y orgánicos sin blanco chillón)
+    const goldenSand = blendColor(sandDry, sandDust, 0.5 + warpMicro * 0.25);
+    const wetOrGravelSand = blendColor(sandWet, sandGravel, smootherstep(0.0, -5.0, y));
+    const finalSandColor = blendColor(goldenSand, wetOrGravelSand, smootherstep(0.5, -3.0, y));
+
+    // Color del Bioma Terroso (humus rico, tierra arcillosa y parches musgosos)
+    const clayMix = blendColor(dirtClay, dirtRedClay, 0.5 + warpMeso * 0.3);
+    const humusMix = blendColor(dirtHumus, dirtLoam, moisture);
+    const soilWithMoss = blendColor(humusMix, dirtMossy, moisture * 0.6);
+    const drySoilMix = blendColor(clayMix, dirtDrySoil, 0.4 + warpMicro * 0.3);
+    const finalEarthColor = blendColor(soilWithMoss, drySoilMix, 0.50);
+
+    // Color del Bioma Vegetal (pradera natural, suelo de bosque y sotobosque)
+    const meadowMix = blendColor(grassMeadow, grassSunlit, 0.5 + warpMicro * 0.25);
+    const forestFloorMix = blendColor(grassDeep, grassForestFloor, moisture);
+    const deepOrDryGrass = blendColor(forestFloorMix, grassDry, 1.0 - moisture);
+    const finalGrassColor = blendColor(meadowMix, deepOrDryGrass, 0.40);
+
+    // ----------------------------------------------------
+    // 5. SUMA PONDERADA CONTINUA (Cero aristas, transiciones 100% orgánicas)
+    // ----------------------------------------------------
+    const finalR = (
+        finalRockColor.r * nRock +
+        finalSandColor.r * nSand +
+        finalEarthColor.r * nEarth +
+        finalGrassColor.r * nGrass
+    );
+    const finalG = (
+        finalRockColor.g * nRock +
+        finalSandColor.g * nSand +
+        finalEarthColor.g * nEarth +
+        finalGrassColor.g * nGrass
+    );
+    const finalB = (
+        finalRockColor.b * nRock +
+        finalSandColor.b * nSand +
+        finalEarthColor.b * nEarth +
+        finalGrassColor.b * nGrass
+    );
+
+    colors.push(finalR, finalG, finalB);
 }
 
 // ======================================================
@@ -216,13 +297,10 @@ geo.computeVertexNormals();
 // ======================================================
 
 const material = new THREE.MeshStandardMaterial({
-
-    vertexColors:true,
-
-    roughness:1,
-
-    metalness:0
-
+    vertexColors: true,
+    roughness: 0.88,
+    metalness: 0.05,
+    flatShading: false
 });
 
 // ======================================================

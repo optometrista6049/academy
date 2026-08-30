@@ -29,12 +29,37 @@ export function getShoreRatio(theta) {
  */
 export const LAKE_RADIUS = 80;
 
+/**
+ * Función de ruido pseudo-aleatorio continuo y suave basado en ondas armónicas multiescala
+ */
+function getOrganicNoise(x, z) {
+    // 1. Colinas amplias y suaves (macro relieve)
+    const macro1 = Math.sin(x * 0.009 + 0.5) * Math.cos(z * 0.009 + 0.3) * 4.2;
+    const macro2 = Math.cos((x * 0.013) - (z * 0.011) + 1.2) * 2.8;
+
+    // 2. Ondulaciones medias (lomas y vaguadas naturales)
+    const meso1 = Math.sin(x * 0.027 + Math.cos(z * 0.022)) * 1.5;
+    const meso2 = Math.cos(z * 0.031 + Math.sin(x * 0.025)) * 1.2;
+
+    // 3. Micro-relieve sutil (rugosidad orgánica del suelo)
+    const micro1 = Math.sin(x * 0.073 + z * 0.061) * 0.4;
+    const micro2 = Math.cos(x * 0.11 - z * 0.09) * 0.2;
+
+    return macro1 + macro2 + meso1 + meso2 + micro1 + micro2;
+}
+
 export function getHeightAt(x, z) {
-    const meadowHeight = (
-        Math.sin(x * 0.02) * 2 +
-        Math.cos(z * 0.02) * 2 +
-        Math.sin((x + z) * 0.01) * 3
-    );
+    // Relieve base orgánico
+    let baseElevation = getOrganicNoise(x, z);
+
+    // Suavizado del área inicial de spawn del jugador y los NPCs principales (alrededor de 0,0)
+    const distToSpawn = Math.sqrt(x * x + z * z);
+    if (distToSpawn < 28) {
+        // Atenuación suave para que la plaza central sea cómoda y estable
+        const spawnBlend = Math.min(1, distToSpawn / 28);
+        const smoothSpawn = spawnBlend * spawnBlend * (3 - 2 * spawnBlend);
+        baseElevation = baseElevation * (0.35 + smoothSpawn * 0.65);
+    }
 
     // Deformación orgánica del cráter en (85, 110)
     const dx = x - LAKE_CENTER_X;
@@ -51,10 +76,10 @@ export function getHeightAt(x, z) {
 
             if (distToLake >= shoreR) {
                 // Ladera accesible del cráter (de basinR a shoreR):
-                // Interpola suavemente desde meadowHeight hasta LAKE_WATER_Y exactamente en shoreR
+                // Interpola suavemente desde baseElevation hasta LAKE_WATER_Y exactamente en shoreR
                 const t = (basinR - distToLake) / (basinR - shoreR); // 0 en borde de pradera, 1 en la orilla
                 const smoothT = t * t * (3 - 2 * t);
-                return meadowHeight * (1 - smoothT) + LAKE_WATER_Y * smoothT;
+                return baseElevation * (1 - smoothT) + LAKE_WATER_Y * smoothT;
             } else {
                 // Fondo sumergido bajo el agua (de 0 a shoreR):
                 // Desciende de LAKE_WATER_Y (-4.5m) en la orilla a -6.3m en el centro (profundidad de ~1.8m)
@@ -65,7 +90,7 @@ export function getHeightAt(x, z) {
         }
     }
 
-    return meadowHeight;
+    return baseElevation;
 }
 
 
