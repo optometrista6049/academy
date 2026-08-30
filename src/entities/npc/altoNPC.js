@@ -29,7 +29,7 @@ export function loadAltoNPC(){
 
     loadModel(
 
-        './assets/models/npc/AltoNPC.glb',
+        'assets/models/npc/AltoNPC.glb',
 
         4,
         2,

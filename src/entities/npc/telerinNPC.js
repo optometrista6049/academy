@@ -29,7 +29,7 @@ export function loadTelerinNPC(){
 
     loadModel(
 
-        './assets/models/npc/TelerinNPC.glb',
+        'assets/models/npc/TelerinNPC.glb',
 
         -4,
         2,

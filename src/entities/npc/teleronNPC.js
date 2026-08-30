@@ -29,7 +29,7 @@ export function loadTeleronNPC(){
 
     loadModel(
 
-        './assets/models/npc/TeleronNPC.glb',
+        'assets/models/npc/TeleronNPC.glb',
 
         0,
         5,

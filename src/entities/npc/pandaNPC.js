@@ -35,7 +35,7 @@ export function loadPandaNPC(){
 
     loadModel(
 
-        './assets/models/npc/PandaNPC.glb',
+        'assets/models/npc/PandaNPC.glb',
 
         16,   // X
 

@@ -129,6 +129,12 @@ export function updateVisibilitySystem(){
 
             ){
 
+                if(opacity < 1){
+
+                    child.material.transparent = true;
+
+                }
+
                 child.material.opacity =
 
                     opacity;
