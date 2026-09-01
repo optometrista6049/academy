@@ -202,6 +202,38 @@ void main() {
     // Opacidad de la masa de agua
     float alpha = mix(uOpacity * 0.88, uOpacity, fresnel * 0.4);
 
+    // Nacimiento del afluente en la montaña (vUv.y < 0.22):
+    // Borboteo turbulento con dominancia de azul zafiro, turquesa caribeño, micro-ondas concéntricas y finas crestas blancas
+    if (uIsRiver > 0.5 && vUv.y < 0.24) {
+        float headwaterFactor = 1.0 - smoothstep(0.0, 0.24, vUv.y);
+
+        // Múltiples frecuencias de ebullición y ondas de borbotón
+        float boil1 = sin(vUv.x * 24.0 + uTime * 7.5) * cos(vUv.y * 38.0 - uTime * 9.0);
+        float boil2 = cos(vUv.x * 36.0 - uTime * 11.0) * sin(vUv.y * 26.0 + uTime * 6.5);
+        float boilCombined = (boil1 + boil2 * 0.65) * 0.5 + 0.5;
+
+        // Ondas concéntricas de perturbación en el punto de aterrizaje (vUv.y ≈ 0.16 a 0.22)
+        vec2 impactCenter = vec2(0.5, 0.17);
+        vec2 deltaUv = (vUv - impactCenter) * vec2(2.5, 1.0);
+        float distToImpact = length(deltaUv);
+        float impactRipples = sin(distToImpact * 45.0 - uTime * 12.0) * exp(-distToImpact * 8.0);
+        boilCombined += impactRipples * 0.28;
+
+        // Paleta en 3 capas cromáticas saturadas:
+        vec3 deepSpringBlue = vec3(0.02, 0.40, 0.72); // Azul zafiro / cobalto (#0369a1)
+        vec3 turquoiseFoam  = vec3(0.08, 0.75, 0.92); // Turquesa / cian vibrante (#06b6d4)
+        vec3 whiteCap       = vec3(0.95, 0.99, 1.0);  // Cresta de espuma blanca fina
+
+        // Gradiente cromático: predomina el azul profundo y turquesa
+        vec3 surgeColor = mix(deepSpringBlue, turquoiseFoam, smoothstep(0.15, 0.60, boilCombined));
+        // El blanco solo entra en las crestas más altas del borbotón
+        surgeColor = mix(surgeColor, whiteCap, smoothstep(0.72, 0.96, boilCombined) * 0.65 * headwaterFactor);
+
+        float blendIntensity = clamp(headwaterFactor * 1.2, 0.0, 1.0);
+        finalColor = mix(finalColor, surgeColor, blendIntensity * 0.95);
+        alpha = mix(alpha, 1.0, headwaterFactor);
+    }
+
     // Desvanecimiento suave en la unión río-lago para evitar oscurecimiento
     if (uIsRiver > 0.5 && vUv.y > 0.78) {
         float riverFade = 1.0 - smoothstep(0.78, 0.98, vUv.y);
