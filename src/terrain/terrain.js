@@ -249,13 +249,13 @@ for (let i = 0; i < pos.count; i++) {
     // E. CORREDOR DEL AFLUENTE / RÍO (Lecho arenoso, guijarros y ribera frondosa)
     if (x >= 120 && x <= 275 && z >= 115 && z <= 275) {
         const river = getRiverInfo(x, z);
-        if (river.t <= 0.98 && river.distance < 16.0) {
+        if (river.t <= 0.96 && river.distance < 16.0) {
             const riverBedMask = 1.0 - smootherstep(1.5, 4.5, river.distance);
-            const riverBankMask = 1.0 - smootherstep(4.2, 11.5, river.distance);
+            const riverBankMask = 1.0 - smootherstep(3.8, 11.5, river.distance);
 
             wSand += riverBedMask * 1.40;
-            wRock += riverBedMask * 0.90;
-            wEarth += riverBankMask * 0.90;
+            wRock += riverBedMask * 0.70;
+            wEarth += riverBankMask * 0.85;
             wGrass += riverBankMask * 0.60;
         }
     }

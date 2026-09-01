@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { scene } from '../core/scene.js';
 import { LAKE_CENTER_X, LAKE_CENTER_Z, LAKE_WATER_Y, getLakeBasinRadius, getShoreRatio } from '../terrain/terrainHeight.js';
+import { createWaterMaterial, registerWaterMaterial } from './waterSystem.js';
 
 let lakeWaterMesh = null;
 let lakeWaterMaterial = null;
@@ -9,8 +10,8 @@ export function createLake() {
     // Generamos una malla polar con deformaciones orgánicas para la lámina de agua
     // Su radio se extiende más allá de la orilla (shoreR + 10m), enterrándose profundamente
     // dentro de los taludes de tierra del cráter para que ningún borde quede al aire.
-    const rings = 32;
-    const segments = 120;
+    const rings = 36;
+    const segments = 128;
     const geometry = new THREE.BufferGeometry();
 
     const positions = [];
@@ -68,15 +69,19 @@ export function createLake() {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    lakeWaterMaterial = new THREE.MeshStandardMaterial({
-        color: 0x196e9f,
-        roughness: 0.12,
-        metalness: 0.8,
-        transparent: true,
-        opacity: 0.88,
-        side: THREE.DoubleSide,
-        depthWrite: false
+    lakeWaterMaterial = createWaterMaterial({
+        isRiver: false,
+        shallowColor: 0x38bdf8, // Turquesa cristalino luminoso en orilla
+        deepColor: 0x0284c7,    // Azul profundo luminoso y natural (no oscuro/opaco)
+        foamColor: 0xffffff,
+        flowSpeed: 0.85,
+        flowDirection: new THREE.Vector2(0.4, 0.6).normalize(),
+        waveHeight: 0.045,
+        waveFrequency: 0.14,
+        opacity: 0.86,
+        foamIntensity: 0.55
     });
+    registerWaterMaterial(lakeWaterMaterial);
 
     lakeWaterMesh = new THREE.Mesh(geometry, lakeWaterMaterial);
     lakeWaterMesh.position.set(LAKE_CENTER_X, LAKE_WATER_Y, LAKE_CENTER_Z);
@@ -86,10 +91,7 @@ export function createLake() {
 }
 
 export function updateLake(delta) {
-    if (!lakeWaterMesh) return;
-    // Sutil ondulación vertical en la cota de agua
-    const time = performance.now() * 0.0015;
-    lakeWaterMesh.position.y = LAKE_WATER_Y + Math.sin(time) * 0.025;
+    // La animación de ondas y cáusticas se procesa dinámicamente en el shader
 }
 
 

@@ -168,6 +168,10 @@ import {
     updateRiver
 } from './environment/river.js';
 
+import {
+    updateWaterMaterials
+} from './environment/waterSystem.js';
+
 
 
 //========================================
@@ -401,6 +405,8 @@ function startGame(){
             updateLake,
 
             updateRiver,
+
+            () => updateWaterMaterials(performance.now() * 0.001),
 
             updateClouds,
 

@@ -8,7 +8,7 @@ export const LAKE_WATER_LEVEL = -4.5;
 // ======================================================
 
 export const RIVER_START = { x: 258, z: 258, y: -1.6 };
-export const RIVER_END = { x: 141, z: 136, y: LAKE_WATER_LEVEL };
+export const RIVER_END = { x: 138, z: 124, y: LAKE_WATER_LEVEL };
 
 // Curva serpenteante natural que nace directamente en la base rocosa de las montañas
 const RIVER_WAYPOINTS = [
@@ -21,8 +21,9 @@ const RIVER_WAYPOINTS = [
     new THREE.Vector3(192, -4.0, 172),  // Vado medio
     new THREE.Vector3(175, -4.2, 168),  // Meandro 2
     new THREE.Vector3(158, -4.35, 150), // Bajada al valle del lago
-    new THREE.Vector3(141, LAKE_WATER_LEVEL, 136), // Desembocadura en orilla del lago (-4.5m)
-    new THREE.Vector3(122, LAKE_WATER_LEVEL, 122)  // Guía tangencial interior
+    new THREE.Vector3(146, LAKE_WATER_LEVEL, 134), // Tramo de desembocadura a nivel de agua
+    new THREE.Vector3(138, LAKE_WATER_LEVEL, 124), // Entrada continua en el borde del lago (-4.5m)
+    new THREE.Vector3(128, LAKE_WATER_LEVEL, 118)  // Guía tangencial interior
 ];
 
 // Spline 3D continuo para la trayectoria del río

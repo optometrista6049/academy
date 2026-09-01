@@ -4,13 +4,14 @@ import {
     riverSpline,
     RIVER_HALF_WIDTH
 } from '../terrain/riverPath.js';
+import { createWaterMaterial, registerWaterMaterial } from './waterSystem.js';
 
 let riverMesh = null;
 let riverMaterial = null;
 
 export function createRiver() {
-    const lengthSegments = 140;
-    const widthSegments = 8;
+    const lengthSegments = 160;
+    const widthSegments = 12;
     const geometry = new THREE.BufferGeometry();
 
     const positions = [];
@@ -18,9 +19,9 @@ export function createRiver() {
     const normals = [];
     const indices = [];
 
-    // Tramos a lo largo del spline (desde t=0.0 dentro de las montañas hasta t=0.96 lago)
+    // Tramos a lo largo del spline (desde t=0.0 dentro de las montañas hasta t=0.94 dentro del borde del lago)
     const tStart = 0.0;
-    const tEnd = 0.96;
+    const tEnd = 0.94;
 
     for (let i = 0; i <= lengthSegments; i++) {
         const uFraction = i / lengthSegments;
@@ -32,8 +33,9 @@ export function createRiver() {
         // Vector normal perpendicular a la dirección del flujo en el plano XZ
         const normalXZ = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-        // Ancho del agua con ligera variación orgánica
-        const halfWidth = RIVER_HALF_WIDTH + 0.5 + Math.sin(t * 18.0) * 0.35;
+        // Ancho del agua con ensanchamiento suave en la llegada al lago
+        const deltaSpread = t > 0.75 ? 1.0 + (t - 0.75) * 1.5 : 1.0;
+        const halfWidth = (RIVER_HALF_WIDTH + 0.4 + Math.sin(t * 18.0) * 0.25) * deltaSpread;
 
         for (let j = 0; j <= widthSegments; j++) {
             const vFraction = j / widthSegments; // 0 (orilla izquierda) a 1 (orilla derecha)
@@ -45,7 +47,7 @@ export function createRiver() {
             const vy = centerPt.y;
 
             positions.push(vx, vy, vz);
-            uvs.push(vFraction, uFraction * 16.0); // 16 repeticiones a lo largo del cauce
+            uvs.push(vFraction, uFraction); // UV normalizadas (0.0 en origen, 1.0 en desembocadura)
             normals.push(0, 1, 0);
         }
     }
@@ -69,15 +71,18 @@ export function createRiver() {
     geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geometry.setIndex(indices);
 
-    riverMaterial = new THREE.MeshStandardMaterial({
-        color: 0x196e9f,
-        roughness: 0.12,
-        metalness: 0.8,
-        transparent: true,
+    riverMaterial = createWaterMaterial({
+        isRiver: true,
+        shallowColor: 0x38bdf8, // Turquesa cristalino luminoso
+        deepColor: 0x0284c7,    // Azul fresco y fluido
+        foamColor: 0xffffff,
+        flowSpeed: 1.45,        // Corriente más rápida en el río
+        waveHeight: 0.035,
+        waveFrequency: 0.22,
         opacity: 0.88,
-        side: THREE.DoubleSide,
-        depthWrite: false
+        foamIntensity: 0.70     // Espuma en los rápidos del afluente
     });
+    registerWaterMaterial(riverMaterial);
 
     riverMesh = new THREE.Mesh(geometry, riverMaterial);
     riverMesh.receiveShadow = true;
@@ -85,19 +90,5 @@ export function createRiver() {
 }
 
 export function updateRiver(delta) {
-    if (!riverMesh) return;
-
-    // Sutil ondulación de flujo en la corriente
-    const time = performance.now() * 0.002;
-    const posAttr = riverMesh.geometry.attributes.position;
-    
-    // Animar sutilmente la micro-ondulación de la superficie
-    const count = posAttr.count;
-    for (let i = 0; i < count; i++) {
-        const vx = posAttr.getX(i);
-        const vz = posAttr.getZ(i);
-        // Pequeña oscilación senoidal continua del agua fluyendo
-        const wave = Math.sin(vx * 0.5 + vz * 0.5 + time * 3.0) * 0.02;
-        // Solo perturbación temporal sin acumular
-    }
+    // La animación de corriente, ondas longitudinales y cáusticas se procesa en el shader
 }
