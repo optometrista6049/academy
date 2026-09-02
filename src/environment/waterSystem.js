@@ -193,6 +193,16 @@ void main() {
     // Color del cuerpo de agua (gradiente de profundidad translúcido)
     vec3 waterBody = mix(uShallowColor, uDeepColor, 0.45);
 
+    // En el afluente, transición cromática imperceptible hacia la paleta exacta del lago antes de la desembocadura
+    // De este modo, en vistas cenitales/altas, el afluente ya tiene la tonalidad exacta del lago al encontrarse con él.
+    if (uIsRiver > 0.5 && vUv.y > 0.40) {
+        float lakeTransition = smoothstep(0.40, 0.95, vUv.y);
+        vec3 lakeTargetShallow = vec3(0.22, 0.74, 0.97); // #38bdf8 (Shallow del lago)
+        vec3 lakeTargetDeep    = vec3(0.008, 0.518, 0.780); // #0284c7 (Deep del lago)
+        vec3 targetWaterBody   = mix(lakeTargetShallow, lakeTargetDeep, 0.45);
+        waterBody = mix(waterBody, targetWaterBody, lakeTransition);
+    }
+
     // Mezcla física: refracción del fondo + reflexión del cielo por Fresnel
     vec3 finalColor = mix(waterBody, skyReflection, fresnel * 0.85);
 
@@ -234,9 +244,9 @@ void main() {
         alpha = mix(alpha, 1.0, headwaterFactor);
     }
 
-    // Desvanecimiento suave en la unión río-lago para evitar oscurecimiento
-    if (uIsRiver > 0.5 && vUv.y > 0.78) {
-        float riverFade = 1.0 - smoothstep(0.78, 0.98, vUv.y);
+    // Desvanecimiento suave y progresivo en el extremo del río sumergido en el lago
+    if (uIsRiver > 0.5 && vUv.y > 0.90) {
+        float riverFade = 1.0 - smoothstep(0.90, 1.0, vUv.y);
         alpha *= riverFade;
     }
 

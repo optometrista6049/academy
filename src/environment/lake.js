@@ -86,6 +86,8 @@ export function createLake() {
     lakeWaterMesh = new THREE.Mesh(geometry, lakeWaterMaterial);
     lakeWaterMesh.position.set(LAKE_CENTER_X, LAKE_WATER_Y, LAKE_CENTER_Z);
     lakeWaterMesh.receiveShadow = true;
+    lakeWaterMesh.renderOrder = 1;
+    lakeWaterMesh.frustumCulled = false;
 
     scene.add(lakeWaterMesh);
 }
