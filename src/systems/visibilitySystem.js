@@ -1,178 +1,58 @@
-import { runtimeState }
-from '../state/runtimeState.js';
+import { runtimeState } from '../state/runtimeState.js';
+import { updateChunkSystem } from './chunkSystem.js';
 
 const worldObjects = [];
 
 let lastVisibilityUpdate = 0;
 
 export function registerWorldObject(
-
     object,
-
     type = 'generic'
-
 ){
-
+    if(!object) return;
     worldObjects.push({
-
         object,
-
         type,
-
-        originalScale:
-
-            object.scale.clone()
-
+        originalScale: object.scale ? object.scale.clone() : null
     });
-
 }
 
 export function updateVisibilitySystem(){
+    // 1. Actualización de visibilidad espacial por chunks (O(1))
+    updateChunkSystem();
 
     const now = performance.now();
-
-    if(
-
-        now - lastVisibilityUpdate < 200
-
-    ){
-
+    if(now - lastVisibilityUpdate < 200){
         return;
-
     }
-
     lastVisibilityUpdate = now;
 
-    if(
+    if(!runtimeState.player || worldObjects.length === 0) return;
 
-        !runtimeState.player
-
-    ) return;
-
-    const playerPos =
-
-        runtimeState.player.position;
+    const playerPos = runtimeState.player.position;
 
     worldObjects.forEach((entry)=>{
+        const object = entry.object;
+        if(!object || !object.position) return;
 
-        const object =
-
-            entry.object;
-
-        const distance =
-
-            playerPos.distanceTo(
-
-                object.position
-
-            );
-
-        // =====================================
-        // DISTANCIA DE FADE
-        // =====================================
+        const distance = playerPos.distanceTo(object.position);
 
         const fadeStart = 150;
-
         const fadeEnd = 180;
 
-        // =====================================
-        // MUY LEJOS
-        // =====================================
-
         if(distance >= fadeEnd){
-
             object.visible = false;
-
             return;
-
         }
 
         object.visible = true;
 
-        // =====================================
-        // CALCULAR OPACIDAD
-        // =====================================
-
-        let opacity = 1;
-
-        if(distance > fadeStart){
-
-            opacity =
-
-                1 -
-
-                (
-
-                    (distance - fadeStart)
-
-                    /
-
-                    (fadeEnd - fadeStart)
-
-                );
-
-        }
-
-        // =====================================
-        // APLICAR OPACIDAD
-        // =====================================
-
-        object.traverse((child)=>{
-
-            if(
-
-                child.isMesh
-
-                &&
-
-                child.material
-
-            ){
-
-                if(opacity < 1){
-
-                    child.material.transparent = true;
-
-                }
-
-                child.material.opacity =
-
-                    opacity;
-
+        if(entry.originalScale){
+            if(distance > 60){
+                object.scale.copy(entry.originalScale).multiplyScalar(0.85);
+            } else {
+                object.scale.copy(entry.originalScale);
             }
-
-        });
-
-        // =====================================
-        // LOD SIMPLE
-        // =====================================
-
-        if(distance > 60){
-
-            object.scale.copy(
-
-                entry.originalScale
-
-            );
-
-            object.scale.multiplyScalar(
-
-                0.85
-
-            );
-
         }
-
-        else{
-
-            object.scale.copy(
-
-                entry.originalScale
-
-            );
-
-        }
-
     });
-
 }

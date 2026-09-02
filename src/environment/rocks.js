@@ -3,7 +3,7 @@ import { scene } from '../core/scene.js';
 import { WORLD_SIZE } from '../core/config.js';
 import { rand } from '../utils/random.js';
 import { getHeightAt } from '../terrain/terrainHeight.js';
-import { collidables, cameraObstacles } from '../entities/collisions.js';
+import { addCollidable, cameraObstacles } from '../entities/collisions.js';
 import {
     LAKE_CENTER_X,
     LAKE_CENTER_Z,
@@ -44,8 +44,8 @@ function recordRock(x, z, scale = 1) {
         radius: scale
     });
 
-    // Colisión física
-    collidables.push({
+    // Colisión física indexada en Spatial Hash Grid
+    addCollidable({
         position: new THREE.Vector3(x, y, z),
         userData: {
             radius: scale
@@ -106,7 +106,7 @@ function buildRockInstancedMeshes() {
     const icosaList = rockList.filter(r => r.geoType === 1);
 
     const rockMaterial = new THREE.MeshStandardMaterial({
-        color: 0x666666,
+        color: 0xffffff,
         roughness: 0.85,
         metalness: 0.1
     });

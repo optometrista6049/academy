@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { scene } from '../core/scene.js';
-import { collidables } from './collisions.js';
+import { addCollidable } from './collisions.js';
 import { snap } from '../utils/snap.js';
 
 function addEntity(mesh,type,x,z,offset=1){
@@ -13,7 +13,7 @@ function addEntity(mesh,type,x,z,offset=1){
 
     scene.add(mesh);
 
-    collidables.push(mesh);
+    addCollidable(mesh);
 }
 
 

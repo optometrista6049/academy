@@ -3,7 +3,7 @@ import { scene } from '../core/scene.js';
 import { WORLD_SIZE } from '../core/config.js';
 import { rand } from '../utils/random.js';
 import { getHeightAt } from '../terrain/terrainHeight.js';
-import { collidables, cameraObstacles } from '../entities/collisions.js';
+import { addCollidable, cameraObstacles } from '../entities/collisions.js';
 import {
     LAKE_CENTER_X,
     LAKE_CENTER_Z,
@@ -229,9 +229,9 @@ export function createForest() {
             color: leafColor
         });
 
-        // Registro de colisión física individual
+        // Registro de colisión física individual indexada en el Spatial Hash Grid
         const radius = archetypes[variant].radius * scale;
-        collidables.push({
+        addCollidable({
             position: new THREE.Vector3(x, y, z),
             userData: {
                 radius

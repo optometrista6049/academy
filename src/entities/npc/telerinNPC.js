@@ -4,7 +4,7 @@ import { loadModel }
 
 from '../../systems/modelLoader.js';
 
-import { collidables }
+import { addCollidable }
 
 from '../collisions.js';
 
@@ -62,7 +62,7 @@ export function loadTelerinNPC(){
 
             TelerinNPC.userData.radius = 0.9;
 
-            collidables.push(TelerinNPC);
+            addCollidable(TelerinNPC);
 
             mixer =
                 new THREE.AnimationMixer(

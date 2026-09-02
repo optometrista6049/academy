@@ -2,9 +2,15 @@ import * as THREE from 'three';
 import { WORLD_LIMIT } from '../core/config.js';
 import { LAKE_CENTER_X, LAKE_CENTER_Z, getLakeBasinRadius, getShoreRatio } from '../terrain/terrainHeight.js';
 import { isPointInRiverWater } from '../terrain/riverPath.js';
+import { getNearbyCollidables, registerCollidableInGrid } from '../systems/chunkSystem.js';
 
 export const collidables = [];
 export const cameraObstacles = [];
+
+export function addCollidable(item) {
+    collidables.push(item);
+    registerCollidableInGrid(item);
+}
 
 const PLAYER_RADIUS = 0.6;
 
@@ -40,7 +46,13 @@ export function collide(nextPosition){
         return true;
     }
 
-    for(const o of collidables){
+    // Consulta espacial O(1) por chunks
+    const nearby = getNearbyCollidables(px, pz);
+    const targetList = nearby.length > 0 ? nearby : collidables;
+
+    for(let i = 0; i < targetList.length; i++){
+        const o = targetList[i];
+        if (!o || !o.position) continue;
 
         const ox = o.position.x;
         const oz = o.position.z;
@@ -50,7 +62,7 @@ export function collide(nextPosition){
 
         const distSq = dx*dx + dz*dz;
 
-        const radius = o.userData.radius || 1.2;
+        const radius = o.userData?.radius || 1.2;
 
         const minDist = PLAYER_RADIUS + radius;
 
