@@ -246,17 +246,12 @@ for (let i = 0; i < pos.count; i++) {
 
     let wGrass = (lushPockets * altitudeGrass * slopePenalty * 0.90) + (lakeRiparianGrass * 0.95);
 
-    // E. CORREDOR DE LOS RÍOS (Lecho arenoso, guijarros y ribera frondosa)
-    const inRiverBBox1 = (x >= 120 && x <= 275 && z >= 115 && z <= 275);
-    const inRiverBBox2 = (x >= 15 && x <= 200 && z >= -285 && z <= 95);
-    if (inRiverBBox1 || inRiverBBox2) {
+    // E. CORREDOR DEL AFLUENTE / RÍO (Lecho arenoso, guijarros y ribera frondosa)
+    if (x >= 120 && x <= 275 && z >= 115 && z <= 275) {
         const river = getRiverInfo(x, z);
-        if (river && river.active && river.distance < (river.bankWidth + 5.0)) {
-            const hw = river.halfWidth || RIVER_HALF_WIDTH;
-            const bw = river.bankWidth || RIVER_BANK_WIDTH;
-
-            const riverBedMask = 1.0 - smootherstep(hw * 0.35, hw * 1.1, river.distance);
-            const riverBankMask = 1.0 - smootherstep(hw * 0.9, bw * 1.15, river.distance);
+        if (river.t <= 0.96 && river.distance < 16.0) {
+            const riverBedMask = 1.0 - smootherstep(1.5, 4.5, river.distance);
+            const riverBankMask = 1.0 - smootherstep(3.8, 11.5, river.distance);
 
             wSand += riverBedMask * 1.40;
             wRock += riverBedMask * 0.70;

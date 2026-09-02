@@ -100,42 +100,36 @@ export function getHeightAt(x, z) {
     }
 
     // ----------------------------------------------------
-    // Excavación del cauce y surco en U de los ríos (Afluente noreste y Emisario sur)
+    // Excavación del cauce y surco en U del Afluente / Río
+    // (Desde las montañas en 268, 268 hasta su unión con el lago)
     // ----------------------------------------------------
     let riverElevation = baseElevation;
-    const river = getRiverInfo(x, z);
+    if (x >= 120 && x <= 275 && z >= 115 && z <= 275) {
+        const river = getRiverInfo(x, z);
 
-    if (river && river.active && river.distance < river.bankWidth) {
-        const halfWidth = river.halfWidth || RIVER_HALF_WIDTH;
-        const bankWidth = river.bankWidth || RIVER_BANK_WIDTH;
-        const depth = river.depth || RIVER_DEPTH;
-        const bankWallH = river.bankWallHeight !== undefined ? river.bankWallHeight : BANK_WALL_HEIGHT;
+        if (river.distance < RIVER_BANK_WIDTH && river.t <= 0.96) {
+            let targetElevation;
+            if (river.distance <= RIVER_HALF_WIDTH) {
+                // Lecho del río en U bien excavado y profundo bajo la lámina de agua
+                const u = river.distance / RIVER_HALF_WIDTH;
+                const bedDepth = (1.0 - u * u) * RIVER_DEPTH;
+                targetElevation = river.y - bedDepth;
+            } else {
+                // Talud en U con orilla visible que arranca desde el agua y se eleva hacia la pradera
+                const v = (river.distance - RIVER_HALF_WIDTH) / (RIVER_BANK_WIDTH - RIVER_HALF_WIDTH);
+                const bankProfile = Math.pow(v, 0.65);
+                const bankTop = Math.max(river.y + BANK_WALL_HEIGHT, baseElevation);
+                const wallElev = river.y * (1.0 - bankProfile) + bankTop * bankProfile;
+                
+                // Transición suave hacia el relieve exterior al llegar al borde del valle
+                const smoothOuter = v * v * (3.0 - 2.0 * v);
+                targetElevation = wallElev * (1.0 - smoothOuter) + baseElevation * smoothOuter;
+            }
 
-        let targetElevation;
-        if (river.distance <= halfWidth) {
-            // Lecho del río en U excavado suavemente bajo la lámina de agua
-            const u = river.distance / halfWidth;
-            const bedDepth = (1.0 - u * u) * depth;
-            targetElevation = river.y - bedDepth;
-        } else {
-            // Talud suave hacia la orilla que arranca exactamente al nivel de agua en river.distance = halfWidth
-            const v = (river.distance - halfWidth) / (bankWidth - halfWidth);
-            // v = 0 en el borde del agua, v = 1 en la pradera exterior
-            const smoothV = v * v * (3.0 - 2.0 * v); // S-curve orgánica sin bordes afilados
-            const shoreHeight = river.y + bankWallH;
-            
-            // Interpola suavemente desde shoreHeight hasta el terreno base
-            targetElevation = shoreHeight * (1.0 - smoothV) + baseElevation * smoothV;
-            // Asegura que en la orilla inmediata el terreno nunca caiga por debajo del agua ni cree un foso extraño
-            targetElevation = Math.max(river.y + (v * bankWallH), targetElevation);
+            riverElevation = targetElevation;
         }
-
-        riverElevation = targetElevation;
     }
 
     // Fusión armónica entre el relieve base, la cuenca del lago y el lecho del río
     return Math.min(lakeElevation, riverElevation);
 }
-
-
-
