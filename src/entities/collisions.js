@@ -4,6 +4,7 @@ import { LAKE_CENTER_X, LAKE_CENTER_Z, getLakeBasinRadius, getShoreRatio } from 
 import { isPointInRiverWater } from '../terrain/riverPath.js';
 
 export const collidables = [];
+export const cameraObstacles = [];
 
 const PLAYER_RADIUS = 0.6;
 
@@ -109,8 +110,11 @@ export function fixCameraCollision(camera, targetPos, camDistance){
 
     raycaster.set(targetPos, dir);
 
+    const validObstacles = cameraObstacles.filter(o => o && o.isObject3D);
+    if(validObstacles.length === 0) return;
+
     const intersects =
-        raycaster.intersectObjects(collidables, true);
+        raycaster.intersectObjects(validObstacles, true);
 
     if(intersects.length > 0){
 
@@ -120,7 +124,7 @@ export function fixCameraCollision(camera, targetPos, camDistance){
 
             camera.position.copy(
                 targetPos.clone().add(
-                    dir.multiplyScalar(dist - 0.5)
+                    dir.multiplyScalar(Math.max(dist - 0.5, 0.5))
                 )
             );
 

@@ -1,6 +1,4 @@
-import { collidables }
-
-from '../entities/collisions.js';
+import { collidables, cameraObstacles } from '../entities/collisions.js';
 
 import {
 
@@ -72,6 +70,7 @@ export function createDecoration(
                     size * 0.6;
 
                 collidables.push(model);
+                cameraObstacles.push(model);
 
             }
 

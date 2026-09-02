@@ -16,9 +16,8 @@ import {
 } from '../utils/random.js';
 
 import {
-
-    collidables
-
+    collidables,
+    cameraObstacles
 } from '../entities/collisions.js';
 
 function createMountain(x, z){
@@ -64,6 +63,7 @@ function createMountain(x, z){
     mountain.userData.solid = true;
 
     collidables.push(mountain);
+    cameraObstacles.push(mountain);
 
     scene.add(mountain);
 

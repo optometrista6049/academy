@@ -1,8 +1,6 @@
 import * as THREE from 'three';
-
 import { camera } from '../core/camera.js';
-
-import { collidables } from '../entities/collisions.js';
+import { cameraObstacles } from '../entities/collisions.js';
 
 const raycaster = new THREE.Raycaster();
 
@@ -14,8 +12,11 @@ export function fixCameraCollision(targetPos, camDistance){
 
     raycaster.set(targetPos, dir);
 
+    const validObstacles = cameraObstacles.filter(o => o && o.isObject3D);
+    if(validObstacles.length === 0) return;
+
     const intersects = raycaster.intersectObjects(
-        collidables,
+        validObstacles,
         true
     );
 
@@ -26,11 +27,9 @@ export function fixCameraCollision(targetPos, camDistance){
         if(dist < camDistance){
 
             camera.position.copy(
-
                 targetPos.clone().add(
-                    dir.multiplyScalar(dist - 0.5)
+                    dir.multiplyScalar(Math.max(dist - 0.5, 0.5))
                 )
-
             );
 
         }
