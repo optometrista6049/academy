@@ -71,12 +71,15 @@ export function createLake() {
 
     lakeWaterMaterial = createWaterMaterial({
         isRiver: false,
-        shallowColor: 0x38d2d8, // Aguamarina cristalina pura y luminosa
-        deepColor: 0x0369a1,    // Azul zafiro puro y limpio
+        shallowColor: 0x38bdf8, // Turquesa cristalino luminoso en orilla
+        deepColor: 0x0284c7,    // Azul profundo luminoso y natural (no oscuro/opaco)
+        foamColor: 0xffffff,
         flowSpeed: 0.85,
-        waveHeight: 0.038,
-        waveFrequency: 0.16,
-        opacity: 0.80
+        flowDirection: new THREE.Vector2(0.4, 0.6).normalize(),
+        waveHeight: 0.045,
+        waveFrequency: 0.14,
+        opacity: 0.86,
+        foamIntensity: 0.55
     });
     registerWaterMaterial(lakeWaterMaterial);
 

@@ -112,8 +112,8 @@ function createSpringSplash(tStart, tEnd, tangentDir, normalDir) {
     const springMat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0.0 },
-            uDeepColor: { value: new THREE.Color(0x0369a1) },
-            uCyanColor: { value: new THREE.Color(0x38d2d8) },
+            uDeepColor: { value: new THREE.Color(0x0284c7) },
+            uCyanColor: { value: new THREE.Color(0x38bdf8) },
             uFoamColor: { value: new THREE.Color(0xf8fafc) }
         },
         vertexShader: `
@@ -398,8 +398,8 @@ function createEstuarySplash(pStart, pEnd, tangentDir, normalDir) {
     const estuaryMat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0.0 },
-            uDeepColor: { value: new THREE.Color(0x0369a1) },
-            uCyanColor: { value: new THREE.Color(0x38d2d8) },
+            uDeepColor: { value: new THREE.Color(0x0284c7) },
+            uCyanColor: { value: new THREE.Color(0x38bdf8) },
             uFoamColor: { value: new THREE.Color(0xf8fafc) }
         },
         vertexShader: `
@@ -550,8 +550,8 @@ function createEstuaryFoamDecal(tStart, tEnd) {
     const foamMat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0.0 },
-            uDeepColor: { value: new THREE.Color(0x0369a1) },
-            uCyanColor: { value: new THREE.Color(0x38d2d8) },
+            uDeepColor: { value: new THREE.Color(0x0284c7) },
+            uCyanColor: { value: new THREE.Color(0x38bdf8) },
             uFoamColor: { value: new THREE.Color(0xffffff) }
         },
         vertexShader: `
@@ -672,12 +672,14 @@ export function createRiver() {
         isRiver: true,
         riverFadeStart: true,
         riverFadeEnd: true,
-        shallowColor: 0x38d2d8, // Aguamarina cristalina pura y luminosa
-        deepColor: 0x0369a1,    // Azul zafiro puro y limpio
-        flowSpeed: 1.35,        // Corriente fluida y natural
-        waveHeight: 0.038,
-        waveFrequency: 0.16,
-        opacity: 0.80
+        shallowColor: 0x38bdf8, // Turquesa cristalino luminoso
+        deepColor: 0x0284c7,    // Azul fresco y fluido
+        foamColor: 0xffffff,
+        flowSpeed: 1.45,        // Corriente más rápida en el río
+        waveHeight: 0.035,
+        waveFrequency: 0.22,
+        opacity: 0.88,
+        foamIntensity: 0.70     // Espuma en los rápidos del afluente
     });
     registerWaterMaterial(riverMaterial);
 
@@ -758,8 +760,8 @@ function createRiver2Mesh() {
     const normals = [];
     const indices = [];
 
-    // tStart=0.040 (nace exactamente en el umbral de las piedras deflectoras, sin invadir el lago) a tEnd=0.98
-    const tStart = 0.040;
+    // tStart=0.005 (nace adentrado dentro de la lámina del lago) a tEnd=0.98 (adentrándose en el cañón)
+    const tStart = 0.005;
     const tEnd = 0.98;
 
     for (let i = 0; i <= lengthSegments; i++) {
@@ -812,15 +814,16 @@ function createRiver2Mesh() {
 
     river2Material = createWaterMaterial({
         isRiver: true,
-        riverFadeStart: false, // El emisario no se desvanece a transparente: fluye continuo desde la lámina del lago
+        riverFadeStart: true, // Desvanecimiento suave en el origen del afluente dentro del lago
         riverFadeEnd: false, // El emisario fluye continuo por todo el cauce sin desvanecerse
-        riverLakeStart: true, // Fundido cromático continuo con la masa del lago en el nacimiento
-        shallowColor: 0x38d2d8, // Aguamarina cristalina pura y luminosa
-        deepColor: 0x0369a1,    // Azul zafiro puro y limpio
-        flowSpeed: 1.35,
-        waveHeight: 0.038,
-        waveFrequency: 0.16,
-        opacity: 0.80
+        shallowColor: 0x38bdf8,
+        deepColor: 0x0284c7,
+        foamColor: 0xffffff,
+        flowSpeed: 1.40,
+        waveHeight: 0.032,
+        waveFrequency: 0.21,
+        opacity: 0.88,
+        foamIntensity: 0.65
     });
     registerWaterMaterial(river2Material);
 
@@ -912,9 +915,9 @@ function createRiver2OutflowDecal() {
     const uvs = [];
     const indices = [];
 
-    // tStart=0.026 (umbral de aproximación en las rocas) a tEnd=0.105 (primeros rápidos del canal)
-    const tStart = 0.026;
-    const tEnd = 0.105;
+    // tStart=0.003 (profundo dentro del lago) a tEnd=0.15 (adentrado en el cauce)
+    const tStart = 0.003;
+    const tEnd = 0.15;
 
     for (let i = 0; i <= lengthSegments; i++) {
         const uFrac = i / lengthSegments;
@@ -924,9 +927,9 @@ function createRiver2OutflowDecal() {
         const tangent = riverOutflowSpline.getTangent(t).normalize();
         const normalXZ = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-        // Expansión suave hacia el umbral de las rocas cubriendo la totalidad del ancho del río y orillas
-        const intakeSpread = 1.05 + Math.pow(1.0 - uFrac, 1.2) * 0.45;
-        const halfWidth = 6.4 * intakeSpread;
+        // Expansión gradual y asimétrica hacia la lámina del lago
+        const intakeSpread = 1.0 + Math.pow(1.0 - uFrac, 1.3) * 1.65;
+        const halfWidth = (5.5 + 0.5) * intakeSpread;
 
         for (let j = 0; j <= widthSegments; j++) {
             const vFrac = j / widthSegments;
@@ -962,8 +965,8 @@ function createRiver2OutflowDecal() {
     const foamMat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0.0 },
-            uDeepColor: { value: new THREE.Color(0x0369a1) },
-            uCyanColor: { value: new THREE.Color(0x38d2d8) },
+            uDeepColor: { value: new THREE.Color(0x0284c7) },
+            uCyanColor: { value: new THREE.Color(0x38bdf8) },
             uFoamColor: { value: new THREE.Color(0xffffff) }
         },
         vertexShader: `
@@ -985,9 +988,9 @@ function createRiver2OutflowDecal() {
             varying vec3 vWorldPos;
 
             void main() {
-                // Desvanecimiento orgánico amplio en las riberas para cubrir los márgenes completos hasta la orilla
-                float bankFade = smoothstep(0.0, 0.12, vUv.x) * (1.0 - smoothstep(0.88, 1.0, vUv.x));
-                float flowFade = smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.85, 1.0, vUv.y));
+                // Desvanecimiento suave en las riberas y extremos (suave transición sin bordes duros)
+                float bankFade = smoothstep(0.0, 0.28, vUv.x) * (1.0 - smoothstep(0.72, 1.0, vUv.x));
+                float flowFade = smoothstep(0.0, 0.18, vUv.y) * (1.0 - smoothstep(0.82, 1.0, vUv.y));
                 float borderMask = bankFade * flowFade;
 
                 // Ondas longitudinales orgánicas de corriente convergente
@@ -1002,27 +1005,18 @@ function createRiver2OutflowDecal() {
                 // Estelas orgánicas en V provocadas por la atracción hacia el canal
                 float vPattern = abs(vUv.x - 0.5) * 2.0;
                 float suctionStreaks = sin(vPattern * 14.0 - vUv.y * 16.0 + uTime * 2.2) * 0.5 + 0.5;
-                suctionStreaks = smoothstep(0.38, 0.88, suctionStreaks * (0.35 + vUv.y * 0.65));
+                suctionStreaks = smoothstep(0.40, 0.90, suctionStreaks * (0.3 + vUv.y * 0.7));
 
-                // Remolinos y corrientes curvadas asimétricas en la captación
-                vec2 centerDiff = vec2(vUv.x - 0.5, vUv.y - 0.20);
-                float rDist = length(centerDiff);
-                float swirlAngle = atan(centerDiff.y, centerDiff.x) + rDist * 5.0 - uTime * 1.8;
-                float swirlLines = sin(swirlAngle * 3.0) * 0.5 + 0.5;
-                float swirlFoam = smoothstep(0.42, 0.85, swirlLines * smoothstep(0.55, 0.05, rDist));
-
-                // Perturbación asimétrica en el paso del umbral
+                // Perturbación asimétrica tipo estuario (ondulaciones suaves en la entrada)
                 float entryRipple = sin(length(vec2(vUv.x - 0.5, vUv.y * 0.5)) * 20.0 - uTime * 2.8) * 0.5 + 0.5;
-                float rippleMask = smoothstep(0.40, 0.86, entryRipple * (1.0 - vUv.y * 0.55));
+                float rippleMask = smoothstep(0.42, 0.88, entryRipple * (1.0 - vUv.y * 0.55));
 
-                float totalFoam = clamp(waveCurrent * 0.52 + suctionStreaks * 0.44 + swirlFoam * 0.38 + rippleMask * 0.28, 0.0, 1.0);
-                float foamFactor = smoothstep(0.16, 0.78, totalFoam);
+                float totalFoam = clamp(waveCurrent * 0.55 + suctionStreaks * 0.45 + rippleMask * 0.35, 0.0, 1.0);
+                vec3 waterBase = mix(uDeepColor, uCyanColor, 0.55);
+                vec3 col = mix(waterBase, uFoamColor, smoothstep(0.12, 0.88, totalFoam));
 
-                // Decal 100% de espuma pura y efervescente (sin fondo oscuro que manche el lago)
-                vec3 col = mix(vec3(0.72, 0.94, 1.0), uFoamColor, foamFactor);
-
-                // La transparencia es nula donde no hay espuma, evitando cualquier mancha o lengua sobre el agua
-                float alpha = borderMask * foamFactor * 0.84;
+                // Opacidad natural enriquecida que unifica las masas de agua sin bordes duros
+                float alpha = borderMask * (totalFoam * 0.76 + 0.16);
                 gl_FragColor = vec4(col, alpha);
             }
         `,
@@ -1048,7 +1042,7 @@ function createRiver2OutflowDecal() {
  * Distribución orgánica continua a lo largo del spline con caída suave (sin bordes delimitados) e invarianza de cámara 3D.
  */
 function createRiver2OutflowSplash() {
-    const count = 1180;
+    const count = 360;
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array(count * 3);
     const aParams = new Float32Array(count * 4); // x: phase, y: speed, z: size, w: type (0: flow, 1: fan, 2: rock splash, 3: mist)
@@ -1063,22 +1057,14 @@ function createRiver2OutflowSplash() {
         new THREE.Vector3(108.2, -4.4, 74.5),
         new THREE.Vector3(107.8, -4.4, 82.2),
         new THREE.Vector3(110.8, -4.45, 72.8),
-        new THREE.Vector3(109.2, -4.35, 84.5),
-        new THREE.Vector3(112.5, -4.4, 85.0),
-        new THREE.Vector3(105.4, -4.2, 81.0),
-        new THREE.Vector3(106.0, -4.2, 73.0),
-        new THREE.Vector3(104.2, -4.3, 76.5),
-        new THREE.Vector3(115.2, -4.35, 87.5),
-        new THREE.Vector3(118.5, -4.4, 73.2),
-        new THREE.Vector3(109.8, -4.3, 87.0)
+        new THREE.Vector3(109.2, -4.35, 84.5)
     ];
 
-    // Rango concentrado en el umbral rocoso y boca de aceleración del cauce
-    const tStartSpline = 0.026;
-    const tEndSpline = 0.088;
+    const tStartSpline = 0.005;
+    const tEndSpline = 0.135;
 
     for (let i = 0; i < count; i++) {
-        if (i < 420) {
+        if (i < 140) {
             // ============================================================
             // CAPA 0: Corriente longitudinal turbulenta (Chorros hacia el río)
             // ============================================================
@@ -1088,20 +1074,20 @@ function createRiver2OutflowSplash() {
             const tangent = riverOutflowSpline.getTangent(t).normalize();
             const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-            // Embudo orgánico ensanchado para cubrir toda la lámina de agua hasta las orillas
-            const funnelSpread = 1.10 + Math.pow(1.0 - tSpan, 1.2) * 0.85;
-            const halfW = 6.4 * funnelSpread;
+            // Embudo orgánico: más amplio dentro del lago, concentrándose en el canal
+            const funnelSpread = 1.0 + Math.pow(1.0 - tSpan, 1.3) * 1.5;
+            const halfW = 4.8 * funnelSpread;
 
-            // Muestreo triangular centrado en el lecho con extensión completa a riberas
+            // Muestreo triangular centrado en el lecho para densidad central y borde suave
             const u = Math.random() + Math.random() - 1.0;
             const lateralOffset = u * halfW;
             const forwardOffset = (Math.random() - 0.5) * 1.8;
 
             positions[i * 3 + 0] = centerPt.x + normal.x * lateralOffset + tangent.x * forwardOffset;
-            positions[i * 3 + 1] = centerPt.y + 0.035;
+            positions[i * 3 + 1] = centerPt.y + 0.02;
             positions[i * 3 + 2] = centerPt.z + normal.z * lateralOffset + tangent.z * forwardOffset;
 
-            const dirSpread = (Math.random() - 0.5) * 0.38;
+            const dirSpread = (Math.random() - 0.5) * 0.45;
             const dirX = tangent.x + normal.x * dirSpread;
             const dirZ = tangent.z + normal.z * dirSpread;
             const len = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1.0;
@@ -1111,37 +1097,37 @@ function createRiver2OutflowSplash() {
             aDirections[i * 3 + 2] = dirZ / len;
 
             aParams[i * 4 + 0] = Math.random() * 8.0;
-            aParams[i * 4 + 1] = 1.3 + Math.random() * 1.5;
-            aParams[i * 4 + 2] = 3.6 + Math.random() * 3.4;
+            aParams[i * 4 + 1] = 1.2 + Math.random() * 1.4;
+            aParams[i * 4 + 2] = 3.2 + Math.random() * 3.2;
             aParams[i * 4 + 3] = 0.0; // Tipo 0: Flujo longitudinal
 
-            const edgeFade = 1.0 - Math.min(Math.max((Math.abs(u) - 0.78) / 0.22, 0.0), 1.0);
-            const endFade = Math.min(Math.max(tSpan / 0.10, 0.0), 1.0) * (1.0 - Math.min(Math.max((tSpan - 0.82) / 0.18, 0.0), 1.0));
+            const edgeFade = 1.0 - Math.min(Math.max((Math.abs(u) - 0.60) / 0.40, 0.0), 1.0);
+            const endFade = Math.min(Math.max(tSpan / 0.12, 0.0), 1.0) * (1.0 - Math.min(Math.max((tSpan - 0.85) / 0.15, 0.0), 1.0));
             aFalloff[i] = edgeFade * endFade;
 
-        } else if (i < 760) {
+        } else if (i < 230) {
             // ============================================================
-            // CAPA 1: Abanico transversal convergente desde el umbral
+            // CAPA 1: Abanico transversal convergente desde el lago
             // ============================================================
-            const tSpan = Math.random() * 0.75;
+            const tSpan = Math.random() * 0.65;
             const t = tStartSpline + tSpan * (tEndSpline - tStartSpline);
             const centerPt = riverOutflowSpline.getPoint(t);
             const tangent = riverOutflowSpline.getTangent(t).normalize();
             const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-            const funnelSpread = 1.15 + Math.pow(1.0 - tSpan, 1.2) * 0.95;
-            const halfW = 6.8 * funnelSpread;
+            const funnelSpread = 1.1 + Math.pow(1.0 - tSpan, 1.2) * 1.8;
+            const halfW = 5.2 * funnelSpread;
 
             const u = Math.random() + Math.random() - 1.0;
             const lateralOffset = u * halfW;
-            const forwardOffset = (Math.random() - 0.5) * 2.0;
+            const forwardOffset = (Math.random() - 0.5) * 2.2;
 
             positions[i * 3 + 0] = centerPt.x + normal.x * lateralOffset + tangent.x * forwardOffset;
-            positions[i * 3 + 1] = centerPt.y + 0.040;
+            positions[i * 3 + 1] = centerPt.y + 0.025;
             positions[i * 3 + 2] = centerPt.z + normal.z * lateralOffset + tangent.z * forwardOffset;
 
             // Ángulos convergentes orientados hacia el centro del cauce
-            const fanAngle = -u * Math.PI * 0.35 + (Math.random() - 0.5) * 0.30;
+            const fanAngle = -u * Math.PI * 0.32 + (Math.random() - 0.5) * 0.35;
             const cosA = Math.cos(fanAngle);
             const sinA = Math.sin(fanAngle);
             const dirX = cosA * tangent.x - sinA * tangent.z;
@@ -1152,32 +1138,32 @@ function createRiver2OutflowSplash() {
             aDirections[i * 3 + 2] = dirZ;
 
             aParams[i * 4 + 0] = Math.random() * 8.0;
-            aParams[i * 4 + 1] = 1.1 + Math.random() * 1.3;
-            aParams[i * 4 + 2] = 3.8 + Math.random() * 3.8;
+            aParams[i * 4 + 1] = 1.0 + Math.random() * 1.2;
+            aParams[i * 4 + 2] = 3.6 + Math.random() * 3.6;
             aParams[i * 4 + 3] = 1.0; // Tipo 1: Abanico convergente
 
-            const edgeFade = 1.0 - Math.min(Math.max((Math.abs(u) - 0.80) / 0.20, 0.0), 1.0);
-            const endFade = 1.0 - Math.min(Math.max((tSpan / 0.75 - 0.75) / 0.25, 0.0), 1.0);
+            const edgeFade = 1.0 - Math.min(Math.max((Math.abs(u) - 0.65) / 0.35, 0.0), 1.0);
+            const endFade = 1.0 - Math.min(Math.max((tSpan / 0.65 - 0.75) / 0.25, 0.0), 1.0);
             aFalloff[i] = edgeFade * endFade;
 
-        } else if (i < 1040) {
+        } else if (i < 300) {
             // ============================================================
-            // CAPA 2: Salpicaduras dinámicas y crestas blancas vivas en ROCAS Y ORILLAS
+            // CAPA 2: Salpicaduras dinámicas y crestas blancas en las ROCAS
             // ============================================================
-            const rock = rockPositions[(i - 760) % rockPositions.length];
+            const rock = rockPositions[(i - 230) % rockPositions.length];
             const angleAroundRock = Math.random() * Math.PI * 2.0;
-            const distFromRock = 0.20 + Math.random() * 1.55;
+            const distFromRock = 0.25 + Math.random() * 1.2;
 
             positions[i * 3 + 0] = rock.x + Math.cos(angleAroundRock) * distFromRock;
-            positions[i * 3 + 1] = -4.5 + 0.040;
+            positions[i * 3 + 1] = -4.5 + 0.03;
             positions[i * 3 + 2] = rock.z + Math.sin(angleAroundRock) * distFromRock;
 
             const flowDir = new THREE.Vector3(0.85, 0, -0.52).normalize();
-            const sprayAngle = (Math.random() - 0.5) * Math.PI * 0.90;
+            const sprayAngle = (Math.random() - 0.5) * Math.PI * 0.85;
             const cosS = Math.cos(sprayAngle);
             const sinS = Math.sin(sprayAngle);
-            const spX = cosS * flowDir.x - sinS * flowDir.z + (Math.random() - 0.5) * 0.35;
-            const spZ = sinS * flowDir.x + cosS * flowDir.z + (Math.random() - 0.5) * 0.35;
+            const spX = cosS * flowDir.x - sinS * flowDir.z + (Math.random() - 0.5) * 0.3;
+            const spZ = sinS * flowDir.x + cosS * flowDir.z + (Math.random() - 0.5) * 0.3;
             const len = Math.sqrt(spX * spX + spZ * spZ) || 1.0;
 
             aDirections[i * 3 + 0] = spX / len;
@@ -1185,11 +1171,11 @@ function createRiver2OutflowSplash() {
             aDirections[i * 3 + 2] = spZ / len;
 
             aParams[i * 4 + 0] = Math.random() * 8.0;
-            aParams[i * 4 + 1] = 1.5 + Math.random() * 1.6; // Dinámica efervescente viva
-            aParams[i * 4 + 2] = 3.2 + Math.random() * 3.4; // Gotas y crestas luminosas
-            aParams[i * 4 + 3] = 2.0; // Tipo 2: Salpicadura en rocas y orillas
+            aParams[i * 4 + 1] = 1.4 + Math.random() * 1.5; // Dinámica viva y efervescente
+            aParams[i * 4 + 2] = 2.6 + Math.random() * 2.8; // Gotas y crestas luminosas
+            aParams[i * 4 + 3] = 2.0; // Tipo 2: Salpicadura en rocas
 
-            aFalloff[i] = 1.0; // Plena nitidez e intensidad focal en los peñascos y orillas
+            aFalloff[i] = 1.0; // Plena nitidez e intensidad focal en los peñascos
 
         } else {
             // ============================================================
@@ -1201,15 +1187,15 @@ function createRiver2OutflowSplash() {
             const tangent = riverOutflowSpline.getTangent(t).normalize();
             const normal = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
 
-            const funnelSpread = 1.15 + Math.pow(1.0 - tSpan, 1.2) * 0.85;
-            const halfW = 6.5 * funnelSpread;
+            const funnelSpread = 1.1 + Math.pow(1.0 - tSpan, 1.2) * 1.6;
+            const halfW = 5.0 * funnelSpread;
 
             const u = Math.random() + Math.random() - 1.0;
             const lateralOffset = u * halfW;
-            const forwardOffset = (Math.random() - 0.5) * 2.2;
+            const forwardOffset = (Math.random() - 0.5) * 2.8;
 
             positions[i * 3 + 0] = centerPt.x + normal.x * lateralOffset + tangent.x * forwardOffset;
-            positions[i * 3 + 1] = centerPt.y + 0.045;
+            positions[i * 3 + 1] = centerPt.y + 0.04;
             positions[i * 3 + 2] = centerPt.z + normal.z * lateralOffset + tangent.z * forwardOffset;
 
             aDirections[i * 3 + 0] = (Math.random() - 0.5) * 0.4;
@@ -1217,12 +1203,12 @@ function createRiver2OutflowSplash() {
             aDirections[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
 
             aParams[i * 4 + 0] = Math.random() * 8.0;
-            aParams[i * 4 + 1] = 0.55 + Math.random() * 0.45; // Flotación lenta
-            aParams[i * 4 + 2] = 9.5 + Math.random() * 7.0;  // Gotículas de vapor suaves
+            aParams[i * 4 + 1] = 0.5 + Math.random() * 0.4; // Flotación lenta
+            aParams[i * 4 + 2] = 8.5 + Math.random() * 6.5; // Gotículas de vapor suaves
             aParams[i * 4 + 3] = 3.0; // Tipo 3: Micro-bruma volumétrica
 
-            const edgeFade = 1.0 - Math.min(Math.max((Math.abs(u) - 0.78) / 0.22, 0.0), 1.0);
-            const endFade = Math.min(Math.max(tSpan / 0.12, 0.0), 1.0) * (1.0 - Math.min(Math.max((tSpan - 0.82) / 0.18, 0.0), 1.0));
+            const edgeFade = 1.0 - Math.min(Math.max((Math.abs(u) - 0.60) / 0.40, 0.0), 1.0);
+            const endFade = Math.min(Math.max(tSpan / 0.15, 0.0), 1.0) * (1.0 - Math.min(Math.max((tSpan - 0.80) / 0.20, 0.0), 1.0));
             aFalloff[i] = edgeFade * endFade;
         }
     }
@@ -1235,7 +1221,7 @@ function createRiver2OutflowSplash() {
     const mat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0.0 },
-            uCyanColor: { value: new THREE.Color(0x38d2d8) },
+            uCyanColor: { value: new THREE.Color(0x38bdf8) },
             uFoamColor: { value: new THREE.Color(0xf8fafc) }
         },
         vertexShader: `
@@ -1291,11 +1277,11 @@ function createRiver2OutflowSplash() {
                 float dist = length(mvPosition.xyz);
                 float distFade = smoothstep(280.0, 45.0, dist);
 
-                float baseAlpha = (pType > 2.5) ? 0.58 : ((pType > 1.5) ? 0.98 : 0.88);
+                float baseAlpha = (pType > 2.5) ? 0.55 : ((pType > 1.5) ? 0.95 : 0.82);
                 vAlpha = sin(progress * 3.14159) * baseAlpha * aFalloff * distFade;
 
-                gl_PointSize = pSize * (270.0 / max(dist, 1.0)) * distFade;
-                gl_PointSize = clamp(gl_PointSize, 1.0, 175.0);
+                gl_PointSize = pSize * (230.0 / max(dist, 1.0)) * distFade;
+                gl_PointSize = clamp(gl_PointSize, 1.0, 160.0);
                 gl_Position = projectionMatrix * mvPosition;
             }
         `,
