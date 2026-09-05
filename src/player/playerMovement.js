@@ -9,6 +9,9 @@ from '../state/runtimeState.js';
 import { getHeightAt }
 from '../terrain/terrainHeight.js';
 
+import { getBridgeHeight }
+from '../environment/bridgeSystem.js';
+
 import { collide }
 from '../systems/collisionSystem.js';
 
@@ -100,9 +103,8 @@ if(isInputLocked()){
 
     move.normalize();
 
-    const speed = 6 * delta;
-
-    move.multiplyScalar(speed);
+    const totalDistance = 6 * delta;
+    move.multiplyScalar(totalDistance);
 
     // =========================
     // ROTACION
@@ -114,32 +116,57 @@ if(isInputLocked()){
     player.rotation.y = angle;
 
     // =========================
-    // NUEVA POSICION
+    // SUB-STEPPING FÍSICO DE SEGURIDAD
     // =========================
+    // Si la distancia supera 15 cm por frame, se divide en micro-pasos
+    // para evitar tunelación a través de obstáculos o pilares.
 
-    const nextPos =
-        player.position.clone().add(move);
+    const MAX_SUBSTEP = 0.15;
+    const steps = Math.max(1, Math.ceil(totalDistance / MAX_SUBSTEP));
+    const stepMove = move.clone().multiplyScalar(1 / steps);
 
-    applyWorldBounds(nextPos);
+    for (let s = 0; s < steps; s++) {
+        const nextPos = player.position.clone().add(stepMove);
+        applyWorldBounds(nextPos);
 
-    if(!collide(nextPos)){
-
-        player.position.copy(nextPos);
-
+        if (!collide(nextPos, player.position)) {
+            player.position.copy(nextPos);
+        } else {
+            // Deslizamiento sobre superficies (componente X y Z independientes)
+            const nextPosX = player.position.clone();
+            nextPosX.x += stepMove.x;
+            applyWorldBounds(nextPosX);
+            if (Math.abs(stepMove.x) > 0.001 && !collide(nextPosX, player.position)) {
+                player.position.copy(nextPosX);
+            } else {
+                const nextPosZ = player.position.clone();
+                nextPosZ.z += stepMove.z;
+                applyWorldBounds(nextPosZ);
+                if (Math.abs(stepMove.z) > 0.001 && !collide(nextPosZ, player.position)) {
+                    player.position.copy(nextPosZ);
+                }
+            }
+        }
     }
 
     // =========================
-    // ALTURA TERRENO
+    // ALTURA TERRENO / PUENTE
     // =========================
 
-    player.position.y =
+    const bridgeHeight = getBridgeHeight(
+        player.position.x,
+        player.position.z,
+        player.position.y
+    );
 
-        getHeightAt(
-            player.position.x,
-            player.position.z
-        )
+    const groundHeight = getHeightAt(
+        player.position.x,
+        player.position.z
+    );
 
-        + runtimeState.playerHeightOffset;
+    const surfaceHeight = (bridgeHeight !== null) ? bridgeHeight : groundHeight;
+
+    player.position.y = surfaceHeight + runtimeState.playerHeightOffset;
 
     return true;
 

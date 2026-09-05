@@ -3,6 +3,7 @@ import { WORLD_LIMIT } from '../core/config.js';
 import { LAKE_CENTER_X, LAKE_CENTER_Z, getLakeBasinRadius, getShoreRatio } from '../terrain/terrainHeight.js';
 import { isPointInRiverWater } from '../terrain/riverPath.js';
 import { getNearbyCollidables, registerCollidableInGrid } from '../systems/chunkSystem.js';
+import { isPointOnAnyBridge, checkBridgeRailCollision, checkBridgePierCollision } from '../environment/bridgeSystem.js';
 
 export const collidables = [];
 export const cameraObstacles = [];
@@ -14,7 +15,12 @@ export function addCollidable(item) {
 
 const PLAYER_RADIUS = 0.6;
 
-export function isWaterCollision(px, pz) {
+export function isWaterCollision(px, pz, currentY = null) {
+    // Si el jugador está sobre el tablero de un puente (y no abajo en el cauce), no colisiona con el agua debajo
+    if (isPointOnAnyBridge(px, pz, currentY)) {
+        return false;
+    }
+
     // 1. Lago principal
     const dx = px - LAKE_CENTER_X;
     const dz = pz - LAKE_CENTER_Z;
@@ -36,13 +42,24 @@ export function isWaterCollision(px, pz) {
     return false;
 }
 
-export function collide(nextPosition){
+export function collide(nextPosition, currentPosition = null){
 
     const px = nextPosition.x;
     const pz = nextPosition.z;
+    const currY = currentPosition ? currentPosition.y : null;
+
+    // Barandillas laterales y límites físicos del puente (con verificación 3D)
+    if (currentPosition && checkBridgeRailCollision(currentPosition.x, currentPosition.z, px, pz, currY)) {
+        return true;
+    }
+
+    // Pilares de piedra del puente (OBB 3D - cubre caras anchas y estrechas bajo el tablero)
+    if (checkBridgePierCollision(px, pz, currY)) {
+        return true;
+    }
 
     // Bloqueo de entrada en agua (Lago y Río)
-    if (isWaterCollision(px, pz)) {
+    if (isWaterCollision(px, pz, currY)) {
         return true;
     }
 
@@ -53,6 +70,14 @@ export function collide(nextPosition){
     for(let i = 0; i < targetList.length; i++){
         const o = targetList[i];
         if (!o || !o.position) continue;
+
+        // Comprobación de altura vertical 3D si el obstáculo define límites Y
+        if (currY !== null) {
+            const minY = o.userData?.minVerticalY;
+            const maxY = o.userData?.maxVerticalY;
+            if (minY !== undefined && currY < minY) continue;
+            if (maxY !== undefined && currY > maxY) continue;
+        }
 
         const ox = o.position.x;
         const oz = o.position.z;
@@ -65,8 +90,18 @@ export function collide(nextPosition){
         const radius = o.userData?.radius || 1.2;
 
         const minDist = PLAYER_RADIUS + radius;
+        const minDistSq = minDist * minDist;
 
-        if(distSq < minDist * minDist){
+        if(distSq < minDistSq){
+            // Si el jugador ya se encuentra solapado, permitir el movimiento si lo aleja del centro
+            if (currentPosition) {
+                const currDx = currentPosition.x - ox;
+                const currDz = currentPosition.z - oz;
+                const currDistSq = currDx * currDx + currDz * currDz;
+                if (currDistSq < minDistSq && distSq > currDistSq) {
+                    continue;
+                }
+            }
 
             return true;
 

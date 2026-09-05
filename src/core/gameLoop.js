@@ -14,9 +14,10 @@ export function animate({
         requestAnimationFrame(loop);
 
         // =========================
-        // DELTA TIME
+        // DELTA TIME (Con límite de seguridad de 50ms para evitar teletransportes o tirones)
         // =========================
-        const delta = clock.getDelta();
+        const rawDelta = clock.getDelta();
+        const delta = Math.min(rawDelta, 0.05);
 
         // =========================
         // UPDATE SYSTEMS
