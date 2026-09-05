@@ -33,6 +33,10 @@ import {
 
 const cam = runtimeState.camera;
 
+// Ángulos objetivo para interpolación suave (elimina tirones de ráfagas de ratón/touch)
+let targetAx = cam.ax;
+let targetAy = cam.ay;
+
 // =====================================================
 // DESKTOP CAMERA
 // =====================================================
@@ -57,15 +61,15 @@ addEventListener("mousemove",e=>{
 
     if(!drag) return;
 
-    cam.ax -= e.movementX * 0.005;
+    targetAx -= e.movementX * 0.005;
 
-    cam.ay -= e.movementY * 0.005;
+    targetAy -= e.movementY * 0.005;
 
-    cam.ay = Math.max(
+    targetAy = Math.max(
 
         -0.40,
 
-        Math.min(1.2,cam.ay)
+        Math.min(1.2, targetAy)
 
     );
 
@@ -195,15 +199,15 @@ addEventListener("touchmove",(e)=>{
         const dy =
             cameraTouch.clientY - lastTouchY;
 
-        cam.ax -= dx * 0.005;
+        targetAx -= dx * 0.005;
 
-        cam.ay -= dy * 0.005;
+        targetAy -= dy * 0.005;
 
-        cam.ay = Math.max(
+        targetAy = Math.max(
 
             -0.40,
 
-            Math.min(1.2,cam.ay)
+            Math.min(1.2, targetAy)
 
         );
 
@@ -283,11 +287,16 @@ function updateZoom(){
 // UPDATE CAMERA
 // =====================================================
 
-export function updateCamera(){
+export function updateCamera(delta = 0.016){
 
     if(!runtimeState.player) return;
 
     updateZoom();
+
+    // Suavizado reactivo independiente del framerate (elimina micro-tirones sin añadir lag perceptible)
+    const smoothFactor = 1.0 - Math.exp(-22.0 * delta);
+    cam.ax += (targetAx - cam.ax) * smoothFactor;
+    cam.ay += (targetAy - cam.ay) * smoothFactor;
 
     const p = runtimeState.player.position;
 
@@ -345,7 +354,7 @@ export function updateCamera(){
     // CAMERA COLLISION
     // =====================================================
 
-    fixCameraCollision(p);
+    fixCameraCollision(p, r);
 
     // =====================================================
     // LOOK PLAYER

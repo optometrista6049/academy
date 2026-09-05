@@ -22,7 +22,7 @@ export function updatePlayer(delta){
     const moving = updateMovement(delta);
 
     // cámara
-    updateCamera();
+    updateCamera(delta);
 
     // animaciones
     updatePlayerAnimation(moving, delta);

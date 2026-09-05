@@ -54,13 +54,16 @@ export function rebuildSpatialGrid(collidablesList) {
     }
 }
 
+// Buffer preasignado reutilizable para consultas espaciales (Zero-Allocation)
+const nearbyBuffer = [];
+
 /**
  * Obtiene solo los colisionables situados en la celda del jugador y las 8 celdas adyacentes (3x3).
  */
 export function getNearbyCollidables(px, pz) {
     const centerCx = getChunkCoord(px);
     const centerCz = getChunkCoord(pz);
-    const nearby = [];
+    nearbyBuffer.length = 0;
 
     for (let dx = -1; dx <= 1; dx++) {
         for (let dz = -1; dz <= 1; dz++) {
@@ -68,13 +71,13 @@ export function getNearbyCollidables(px, pz) {
             const bucket = spatialGrid.get(key);
             if (bucket && bucket.length > 0) {
                 for (let i = 0; i < bucket.length; i++) {
-                    nearby.push(bucket[i]);
+                    nearbyBuffer.push(bucket[i]);
                 }
             }
         }
     }
 
-    return nearby;
+    return nearbyBuffer;
 }
 
 // ======================================================

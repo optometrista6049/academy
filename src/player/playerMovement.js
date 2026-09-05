@@ -28,6 +28,16 @@ import {
     isInputLocked
 } from '../systems/inputLockSystem.js';
 
+// Vectores reutilizables para cálculo de movimiento (Zero-Allocation por frame)
+const _forward = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const _move = new THREE.Vector3();
+const _stepMove = new THREE.Vector3();
+const _nextPos = new THREE.Vector3();
+const _nextPosX = new THREE.Vector3();
+const _nextPosZ = new THREE.Vector3();
+
 export function updateMovement(delta){
 
     const player = runtimeState.player;
@@ -44,54 +54,39 @@ if(isInputLocked()){
     // DIRECCIONES CAMARA
     // =========================
 
-    const forward = new THREE.Vector3();
+    camera.getWorldDirection(_forward);
+    _forward.y = 0;
+    _forward.normalize();
 
-    camera.getWorldDirection(forward);
-
-    forward.y = 0;
-
-    forward.normalize();
-
-    const right = new THREE.Vector3()
-        .crossVectors(
-            forward,
-            new THREE.Vector3(0,1,0)
-        );
+    _right.crossVectors(_forward, _up);
 
     // =========================
     // INPUT
     // =========================
 
-    const move = new THREE.Vector3();
+    _move.set(0, 0, 0);
 
     const keys = runtimeState.keys;
 
     // teclado
-    if(keys.w) move.add(forward);
-    if(keys.s) move.add(forward.clone().multiplyScalar(-1));
-    if(keys.a) move.add(right.clone().multiplyScalar(-1));
-    if(keys.d) move.add(right);
+    if(keys.w) _move.add(_forward);
+    if(keys.s) _move.addScaledVector(_forward, -1);
+    if(keys.a) _move.addScaledVector(_right, -1);
+    if(keys.d) _move.add(_right);
 
     // joystick móvil
     const joy = getJoystickInput();
 
     if(joy.active){
-
-        move.add(
-            forward.clone().multiplyScalar(joy.y)
-        );
-
-        move.add(
-            right.clone().multiplyScalar(joy.x)
-        );
-
+        _move.addScaledVector(_forward, joy.y);
+        _move.addScaledVector(_right, joy.x);
     }
 
     // =========================
     // SIN MOVIMIENTO
     // =========================
 
-    if(move.length() <= 0){
+    if(_move.lengthSq() <= 0.000001){
 
         return false;
 
@@ -101,17 +96,17 @@ if(isInputLocked()){
     // VELOCIDAD
     // =========================
 
-    move.normalize();
+    _move.normalize();
 
     const totalDistance = 6 * delta;
-    move.multiplyScalar(totalDistance);
+    _move.multiplyScalar(totalDistance);
 
     // =========================
     // ROTACION
     // =========================
 
     const angle =
-        Math.atan2(move.x, move.z);
+        Math.atan2(_move.x, _move.z);
 
     player.rotation.y = angle;
 
@@ -123,27 +118,27 @@ if(isInputLocked()){
 
     const MAX_SUBSTEP = 0.15;
     const steps = Math.max(1, Math.ceil(totalDistance / MAX_SUBSTEP));
-    const stepMove = move.clone().multiplyScalar(1 / steps);
+    _stepMove.copy(_move).multiplyScalar(1 / steps);
 
     for (let s = 0; s < steps; s++) {
-        const nextPos = player.position.clone().add(stepMove);
-        applyWorldBounds(nextPos);
+        _nextPos.copy(player.position).add(_stepMove);
+        applyWorldBounds(_nextPos);
 
-        if (!collide(nextPos, player.position)) {
-            player.position.copy(nextPos);
+        if (!collide(_nextPos, player.position)) {
+            player.position.copy(_nextPos);
         } else {
             // Deslizamiento sobre superficies (componente X y Z independientes)
-            const nextPosX = player.position.clone();
-            nextPosX.x += stepMove.x;
-            applyWorldBounds(nextPosX);
-            if (Math.abs(stepMove.x) > 0.001 && !collide(nextPosX, player.position)) {
-                player.position.copy(nextPosX);
+            _nextPosX.copy(player.position);
+            _nextPosX.x += _stepMove.x;
+            applyWorldBounds(_nextPosX);
+            if (Math.abs(_stepMove.x) > 0.001 && !collide(_nextPosX, player.position)) {
+                player.position.copy(_nextPosX);
             } else {
-                const nextPosZ = player.position.clone();
-                nextPosZ.z += stepMove.z;
-                applyWorldBounds(nextPosZ);
-                if (Math.abs(stepMove.z) > 0.001 && !collide(nextPosZ, player.position)) {
-                    player.position.copy(nextPosZ);
+                _nextPosZ.copy(player.position);
+                _nextPosZ.z += _stepMove.z;
+                applyWorldBounds(_nextPosZ);
+                if (Math.abs(_stepMove.z) > 0.001 && !collide(_nextPosZ, player.position)) {
+                    player.position.copy(_nextPosZ);
                 }
             }
         }

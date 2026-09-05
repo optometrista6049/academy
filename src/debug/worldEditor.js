@@ -97,6 +97,9 @@ export function initworldEditor(){
 // UPDATE
 // =====================================================
 
+let lastPanelUpdateTime = 0;
+let lastCoordString = '';
+
 export function updateworldEditor(){
 
     if(
@@ -106,19 +109,21 @@ export function updateworldEditor(){
         return;
     }
 
+    const now = performance.now();
+    // Actualizar solo 5 veces por segundo (cada 200 ms) para evitar forzar reflows en el DOM a 60 FPS
+    if (now - lastPanelUpdateTime < 200) {
+        return;
+    }
+    lastPanelUpdateTime = now;
+
     const p =
         runtimeState.player.position;
 
-    panel.innerHTML =
+    const newString = `X : ${p.x.toFixed(2)}<br>Y : ${p.y.toFixed(2)}<br>Z : ${p.z.toFixed(2)}`;
 
-        `
-
-        X : ${p.x.toFixed(2)}<br>
-
-        Y : ${p.y.toFixed(2)}<br>
-
-        Z : ${p.z.toFixed(2)}
-
-        `;
+    if (newString !== lastCoordString) {
+        lastCoordString = newString;
+        panel.innerHTML = newString;
+    }
 
 }
