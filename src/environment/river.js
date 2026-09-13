@@ -1985,10 +1985,10 @@ function createRiver3OutflowRocks() {
         { x: 37.5, y: -4.25, z: 98.2, scaleX: 1.7, scaleY: 1.1, scaleZ: 1.6, rotY: 2.4, geo: 0 },
         { x: 33.5, y: -4.38, z: 99.0, scaleX: 1.3, scaleY: 0.85, scaleZ: 1.2, rotY: 1.2, geo: 1 },
 
-        // Deflectores de umbral sumergidos en el canal
-        { x: 40.2, y: -4.62, z: 104.2, scaleX: 1.6, scaleY: 0.75, scaleZ: 1.5, rotY: 0.8, geo: 1 },
-        { x: 36.8, y: -4.68, z: 102.8, scaleX: 1.4, scaleY: 0.70, scaleZ: 1.3, rotY: 2.1, geo: 0 },
-        { x: 32.2, y: -4.72, z: 103.5, scaleX: 1.2, scaleY: 0.60, scaleZ: 1.1, rotY: 1.4, geo: 1 }
+        // Deflectores de umbral en el canal de agua (emergen como escollos entre los troncos)
+        { x: 40.2, y: -4.42, z: 104.2, scaleX: 1.7, scaleY: 1.10, scaleZ: 1.6, rotY: 0.8, geo: 1 },
+        { x: 36.8, y: -4.38, z: 102.8, scaleX: 1.6, scaleY: 1.15, scaleZ: 1.5, rotY: 2.1, geo: 0 },
+        { x: 32.2, y: -4.45, z: 103.5, scaleX: 1.4, scaleY: 0.95, scaleZ: 1.3, rotY: 1.4, geo: 1 }
     ];
 
     rockDefinitions.forEach((def, index) => {
@@ -2006,15 +2006,271 @@ function createRiver3OutflowRocks() {
         river3OutflowRocksGroup.add(mesh);
         cameraObstacles.push(mesh);
 
-        if (def.y > -4.5) {
+        // Registrar colisión física para todas las rocas que emergen sobre la lámina de agua (-4.5m)
+        if (def.y + def.scaleY * 0.4 > -4.5) {
             addCollidable({
                 position: new THREE.Vector3(def.x, def.y, def.z),
-                userData: { radius: Math.max(def.scaleX, def.scaleZ) * 0.8 }
+                userData: { radius: Math.max(def.scaleX, def.scaleZ) * 0.85 }
             });
         }
     });
 
+    // Añadir dique natural de troncos y madera a la deriva en el curso de agua
+    createRiver3OutflowDriftwood(river3OutflowRocksGroup);
+
     scene.add(river3OutflowRocksGroup);
+}
+
+/**
+ * Añade un dique natural de troncos y madera a la deriva (natural river logjam)
+ * directamente en el curso de agua en la unión del Lago con el Río 3.
+ *
+ * Los troncos reposan semisumergidos en la lámina de agua (y ≈ -4.50m / -4.25m),
+ * encallados y atascados transversal y longitudinalmente entre los escollos rocosos
+ * emergentes y las márgenes ribereñas. Cortan el paso del cauce con una disposición
+ * orgánica, asimétrica y lógica según el flujo de la corriente, diferenciando esta
+ * confluencia de la del Río 2 (que solo tiene rocas).
+ */
+function createRiver3OutflowDriftwood(parentGroup) {
+    const upVector = new THREE.Vector3(0, 1, 0);
+
+    // Materiales orgánicos: madera empapada oscura, corteza semi-húmeda, duramen y musgo
+    const wetBarkMat = new THREE.MeshStandardMaterial({
+        color: 0x302116,
+        roughness: 0.62,
+        metalness: 0.08,
+        flatShading: true
+    });
+
+    const semiWetBarkMat = new THREE.MeshStandardMaterial({
+        color: 0x483424,
+        roughness: 0.78,
+        metalness: 0.04,
+        flatShading: true
+    });
+
+    const strippedWoodMat = new THREE.MeshStandardMaterial({
+        color: 0xa88758,
+        roughness: 0.70,
+        metalness: 0.02,
+        flatShading: true
+    });
+
+    const innerWoodMat = new THREE.MeshStandardMaterial({
+        color: 0xbfa070,
+        roughness: 0.80,
+        metalness: 0.02,
+        flatShading: true
+    });
+
+    const wetMossMat = new THREE.MeshStandardMaterial({
+        color: 0x3d5a26,
+        roughness: 0.95,
+        metalness: 0.0,
+        flatShading: true
+    });
+
+    // Helper para orientar y posicionar cilindros entre dos puntos 3D en el agua con tapas interiores
+    function createRiverLog(start, end, radiusTop, radiusBottom, material) {
+        const s = new THREE.Vector3(start.x, start.y, start.z);
+        const e = new THREE.Vector3(end.x, end.y, end.z);
+        const dir = new THREE.Vector3().subVectors(e, s);
+        const len = dir.length();
+        const mid = new THREE.Vector3().addVectors(s, e).multiplyScalar(0.5);
+
+        const geo = new THREE.CylinderGeometry(radiusTop, radiusBottom, len, 8, 1, false);
+        const mesh = new THREE.Mesh(geo, material);
+        mesh.position.copy(mid);
+        mesh.quaternion.setFromUnitVectors(upVector, dir.normalize());
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.renderOrder = 3;
+
+        // Tapas de corte con color de corazón de madera / anillos
+        const capTopGeo = new THREE.CircleGeometry(radiusTop * 0.95, 8);
+        const topCap = new THREE.Mesh(capTopGeo, innerWoodMat);
+        topCap.position.set(0, len * 0.5 + 0.005, 0);
+        topCap.rotation.x = -Math.PI / 2;
+        mesh.add(topCap);
+
+        const capBotGeo = new THREE.CircleGeometry(radiusBottom * 0.95, 8);
+        const botCap = new THREE.Mesh(capBotGeo, innerWoodMat);
+        botCap.position.set(0, -len * 0.5 - 0.005, 0);
+        botCap.rotation.x = Math.PI / 2;
+        mesh.add(botCap);
+
+        parentGroup.add(mesh);
+        cameraObstacles.push(mesh);
+
+        return { mesh, start: s, end: e, mid, dir, len };
+    }
+
+    // =========================================================================
+    // 1. GRAN TRONCO TRANSVERSAL SUR-CENTRO (Atravesado sobre el cauce de agua)
+    // Se apoya en la roca ribereña sur (37.4, 98.4) y la roca central del canal (36.6, 103.0)
+    // Reposa a cota y: -4.23m (semisumergido en el agua a -4.50m)
+    // =========================================================================
+    const log1 = createRiverLog(
+        { x: 37.4, y: -4.18, z: 98.4 },
+        { x: 36.6, y: -4.28, z: 103.0 },
+        0.36,
+        0.48,
+        wetBarkMat
+    );
+
+    // Ramas rotas y muñones saliendo hacia arriba / aguas arriba
+    const b1Geo = new THREE.CylinderGeometry(0.10, 0.16, 1.3, 6);
+    const b1 = new THREE.Mesh(b1Geo, wetBarkMat);
+    b1.position.set(0.18, 0.6, 0.35);
+    b1.rotation.set(0.5, 0.3, 0.9);
+    b1.castShadow = true;
+    log1.mesh.add(b1);
+
+    const b2Geo = new THREE.CylinderGeometry(0.08, 0.13, 1.0, 6);
+    const b2 = new THREE.Mesh(b2Geo, wetBarkMat);
+    b2.position.set(-0.20, -0.9, -0.25);
+    b2.rotation.set(-0.6, 0.4, -0.7);
+    b2.castShadow = true;
+    log1.mesh.add(b2);
+
+    // Parche de madera pelada pulida por el roce constante de la corriente
+    const strippedPatch1 = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.485, 0.45, 1.1, 8, 1, true, 0, Math.PI),
+        strippedWoodMat
+    );
+    strippedPatch1.position.set(0.0, -0.2, 0.0);
+    strippedPatch1.rotation.y = 0.8;
+    log1.mesh.add(strippedPatch1);
+
+    // =========================================================================
+    // 2. TRONCO COMPLEMENTARIO CANAL NORTE (Cruza desde la roca central a la orilla norte)
+    // Encajado entre la roca central (36.8, 103.2) y la roca norte (35.2, 107.6)
+    // Completa la barrera física continua de agua junto al Tronco 1
+    // =========================================================================
+    const log2 = createRiverLog(
+        { x: 36.8, y: -4.26, z: 103.2 },
+        { x: 35.2, y: -4.18, z: 107.6 },
+        0.32,
+        0.42,
+        wetBarkMat
+    );
+
+    const b3Geo = new THREE.CylinderGeometry(0.09, 0.14, 1.1, 6);
+    const b3 = new THREE.Mesh(b3Geo, wetBarkMat);
+    b3.position.set(0.15, -0.3, 0.3);
+    b3.rotation.set(0.4, -0.5, 0.8);
+    b3.castShadow = true;
+    log2.mesh.add(b3);
+
+    // Capa de musgo húmedo en la cresta superior emergida
+    const mossPatch2 = new THREE.Mesh(new THREE.BoxGeometry(0.25, 1.4, 0.08), wetMossMat);
+    mossPatch2.position.set(0.0, 0.2, 0.34);
+    log2.mesh.add(mossPatch2);
+
+    // =========================================================================
+    // 3. TRONCO A LA DERIVA ATASCADO EN EL REMOLINO (Aguas arriba / entrada desde el lago)
+    // Empujado en diagonal por el vórtice de succión hacia el embudo de rocas
+    // =========================================================================
+    const log3 = createRiverLog(
+        { x: 42.2, y: -4.38, z: 102.6 },
+        { x: 38.4, y: -4.32, z: 100.4 },
+        0.28,
+        0.38,
+        semiWetBarkMat
+    );
+
+    const b4Geo = new THREE.CylinderGeometry(0.07, 0.12, 0.8, 6);
+    const b4 = new THREE.Mesh(b4Geo, semiWetBarkMat);
+    b4.position.set(-0.15, 0.4, 0.25);
+    b4.rotation.set(-0.3, 0.6, -0.5);
+    b4.castShadow = true;
+    log3.mesh.add(b4);
+
+    // =========================================================================
+    // 4. MADERO ATASCADO AGUAS ABAJO ENTRE ESCOLLOS (Canal de salida)
+    // Prensado entre la roca central y el deflector de salida aguas abajo
+    // =========================================================================
+    const log4 = createRiverLog(
+        { x: 36.2, y: -4.30, z: 102.6 },
+        { x: 32.8, y: -4.42, z: 103.6 },
+        0.24,
+        0.34,
+        wetBarkMat
+    );
+
+    // =========================================================================
+    // 5. TRONCO VARADO EN LA ENSENADA SUR DEL REMOLINO (A flor de agua entre rocas)
+    // =========================================================================
+    const log5 = createRiverLog(
+        { x: 41.5, y: -4.25, z: 97.2 },
+        { x: 45.0, y: -4.35, z: 99.4 },
+        0.28,
+        0.38,
+        semiWetBarkMat
+    );
+
+    // =========================================================================
+    // PARCHES DE ESPUMA NATURAL EN EL AGUA ALREDEDOR DE LOS TRONCOS
+    // =========================================================================
+    const foamMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.38,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+
+    const foamPositions = [
+        { x: 37.3, z: 100.8, scaleX: 1.8, scaleZ: 0.7, rot: 0.15 },
+        { x: 36.5, z: 104.8, scaleX: 1.6, scaleZ: 0.6, rot: -0.2 },
+        { x: 39.8, z: 101.8, scaleX: 1.4, scaleZ: 0.5, rot: 0.6 }
+    ];
+
+    const foamPlaneGeo = new THREE.PlaneGeometry(1, 1);
+    foamPositions.forEach(fp => {
+        const foamMesh = new THREE.Mesh(foamPlaneGeo, foamMaterial);
+        foamMesh.position.set(fp.x, -4.48, fp.z);
+        foamMesh.rotation.x = -Math.PI / 2;
+        foamMesh.rotation.z = fp.rot;
+        foamMesh.scale.set(fp.scaleX, fp.scaleZ, 1);
+        foamMesh.renderOrder = 11;
+        parentGroup.add(foamMesh);
+    });
+
+    // =========================================================================
+    // COLISIONES FÍSICAS SÓLIDAS EN EL AGUA (Spatial Hash Grid)
+    // =========================================================================
+    // Puntos de colisión distribuidos que impiden el paso a través del dique de troncos en el agua
+    const waterLogCollidables = [
+        // Tronco 1 (Sur a Centro)
+        { x: 37.3, y: -4.20, z: 99.2, radius: 0.80 },
+        { x: 37.0, y: -4.23, z: 100.7, radius: 0.80 },
+        { x: 36.7, y: -4.26, z: 102.2, radius: 0.80 },
+
+        // Tronco 2 (Centro a Norte)
+        { x: 36.4, y: -4.24, z: 104.3, radius: 0.80 },
+        { x: 35.8, y: -4.21, z: 105.8, radius: 0.80 },
+        { x: 35.3, y: -4.19, z: 107.2, radius: 0.80 },
+
+        // Tronco 3 (Remolino aguas arriba)
+        { x: 41.3, y: -4.36, z: 102.0, radius: 0.75 },
+        { x: 39.5, y: -4.33, z: 101.0, radius: 0.75 },
+
+        // Tronco 4 (Aguas abajo)
+        { x: 34.5, y: -4.36, z: 103.1, radius: 0.75 },
+        { x: 33.2, y: -4.40, z: 103.5, radius: 0.75 },
+
+        // Tronco 5 (Ensenada sur)
+        { x: 42.5, y: -4.27, z: 97.8, radius: 0.75 },
+        { x: 44.0, y: -4.32, z: 98.8, radius: 0.75 }
+    ];
+
+    waterLogCollidables.forEach(c => {
+        addCollidable({
+            position: new THREE.Vector3(c.x, c.y, c.z),
+            userData: { radius: c.radius }
+        });
+    });
 }
 
 /**

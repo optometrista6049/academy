@@ -65,7 +65,7 @@ export function collide(nextPosition, currentPosition = null){
 
     // Consulta espacial O(1) por chunks
     const nearby = getNearbyCollidables(px, pz);
-    const targetList = nearby.length > 0 ? nearby : collidables;
+    const targetList = nearby;
 
     for(let i = 0; i < targetList.length; i++){
         const o = targetList[i];

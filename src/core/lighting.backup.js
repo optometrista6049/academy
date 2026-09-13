@@ -14,19 +14,18 @@ sunLight.castShadow = true;
 // Añadir el target del sol a la escena para poder desplazarlo dinámicamente
 scene.add(sunLight.target);
 
-// Configuración optimizada de sombras suaves y ancladas al suelo (anti-Peter Panning)
+// Configuración optimizada de sombras suaves
 sunLight.shadow.mapSize.width = 2048;
 sunLight.shadow.mapSize.height = 2048;
-sunLight.shadow.camera.near = 15;
-sunLight.shadow.camera.far = 180;
-const d = 48; // Cobertura enfocada alrededor del jugador (96m de diámetro, ~4.6cm/texel)
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 250;
+const d = 75; // Cobertura generosa alrededor del jugador
 sunLight.shadow.camera.left = -d;
 sunLight.shadow.camera.right = d;
 sunLight.shadow.camera.top = d;
 sunLight.shadow.camera.bottom = -d;
-sunLight.shadow.normalBias = 0.04; // Evita el acné proyectando según las normales
-sunLight.shadow.bias = -0.00005;   // Sesgo mínimo para pegar la sombra directamente al objeto
-sunLight.shadow.radius = 1.2;      // Penumbra suave natural con contacto definido
+sunLight.shadow.bias = -0.0005;
+sunLight.shadow.radius = 1.5; // Penumbra suave natural
 
 scene.add(sunLight);
 
@@ -88,5 +87,3 @@ export function updateSunLighting(targetPosition, isMoving = false) {
 // Luz ambiental de relleno suave para sombras luminosas y coloridas
 const ambientLight = new THREE.AmbientLight(0xfffdf5, 0.45);
 scene.add(ambientLight);
-
-

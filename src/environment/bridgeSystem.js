@@ -1194,7 +1194,7 @@ export function createBridges() {
         });
 
         bridgeMasterGroup.add(bridgeGroup);
-        cameraObstacles.push(bridgeGroup);
+        // Los puentes se gestionan analíticamente con getBridgeHeight(x, z) en playerCamera para evitar colisiones de rayos contra las tablas
     });
 
     scene.add(bridgeMasterGroup);

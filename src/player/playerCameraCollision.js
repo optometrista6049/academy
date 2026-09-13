@@ -6,16 +6,22 @@ const raycaster = new THREE.Raycaster();
 const _dir = new THREE.Vector3();
 const _tempObstacles = [];
 const _tempPos = new THREE.Vector3();
+const _focusPos = new THREE.Vector3();
 
 export function fixCameraCollision(targetPos, camDistance){
-    if (!camDistance || camDistance <= 0.5) return;
+    if (!camDistance || camDistance <= 0.5 || !targetPos) return;
 
-    _dir.subVectors(camera.position, targetPos);
+    // Asegurar que el punto de origen del rayo esté a la altura del pecho/cabeza (nunca en los pies)
+    _focusPos.copy(targetPos);
+    // Si la posición objetivo viene en la base (pies), elevar al centro de masa / torso
+    _focusPos.y += 1.3;
+
+    _dir.subVectors(camera.position, _focusPos);
     const currentLen = _dir.length();
     if (currentLen < 0.001) return;
     _dir.multiplyScalar(1 / currentLen);
 
-    raycaster.set(targetPos, _dir);
+    raycaster.set(_focusPos, _dir);
     raycaster.far = camDistance;
 
     // Solo comprobar obstáculos que estén a tiro de cámara (radio camDistance + 3m de margen)
@@ -25,13 +31,17 @@ export function fixCameraCollision(targetPos, camDistance){
     for (let i = 0; i < cameraObstacles.length; i++) {
         const o = cameraObstacles[i];
         if (!o || !o.isObject3D) continue;
-        const ox = o.position ? o.position.x : 0;
-        const oz = o.position ? o.position.z : 0;
-        const dx = targetPos.x - ox;
-        const dz = targetPos.z - oz;
-        if (dx * dx + dz * dz < maxCheckDistSq) {
-            _tempObstacles.push(o);
+
+        // Si el objeto tiene una posición explícita en el mundo, filtrar por distancia inmediata
+        if (o.position && (o.position.x !== 0 || o.position.z !== 0)) {
+            const dx = _focusPos.x - o.position.x;
+            const dz = _focusPos.z - o.position.z;
+            if (dx * dx + dz * dz > maxCheckDistSq) {
+                continue;
+            }
         }
+
+        _tempObstacles.push(o);
     }
 
     if (_tempObstacles.length === 0) return;
@@ -44,8 +54,9 @@ export function fixCameraCollision(targetPos, camDistance){
     if (intersects.length > 0) {
         const dist = intersects[0].distance;
         if (dist < camDistance) {
-            const safeDist = Math.max(dist - 0.4, 0.5);
-            _tempPos.copy(targetPos).addScaledVector(_dir, safeDist);
+            // Mantener al menos 1.0m para no meter la cámara dentro del cuerpo del personaje
+            const safeDist = Math.max(dist - 0.35, 1.0);
+            _tempPos.copy(_focusPos).addScaledVector(_dir, safeDist);
             camera.position.copy(_tempPos);
         }
     }

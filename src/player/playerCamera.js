@@ -356,6 +356,18 @@ export function updateCamera(delta = 0.016){
 
     fixCameraCollision(p, r);
 
+    // Reaplicar límite inferior para garantizar que ninguna corrección de obstáculos
+    // hunda la cámara por debajo del suelo, puente o superficie de agua
+    const postBridgeH = getBridgeHeight(camera.position.x, camera.position.z);
+    const postGroundH = getHeightAt(camera.position.x, camera.position.z);
+    const postBaseH = (postBridgeH !== null) ? Math.max(postGroundH, postBridgeH) : postGroundH;
+    const postWaterY = getWaterSurfaceLevel(camera.position.x, camera.position.z);
+    const postMinCamY = Math.max(postBaseH + 1.2, (postWaterY !== null ? postWaterY : LAKE_WATER_Y) + 0.8);
+
+    if(camera.position.y < postMinCamY){
+        camera.position.y = postMinCamY;
+    }
+
     // =====================================================
     // LOOK PLAYER
     // =====================================================

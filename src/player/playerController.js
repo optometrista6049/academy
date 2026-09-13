@@ -28,6 +28,6 @@ export function updatePlayer(delta){
     updatePlayerAnimation(moving, delta);
 
     // sincronizar sombras y luz solar con la posición del jugador
-    updateSunLighting(runtimeState.player.position);
+    updateSunLighting(runtimeState.player.position, moving);
 
 }
