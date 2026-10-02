@@ -23,6 +23,13 @@ export const gameState = {
 
     inventory:[],
 
+    dialogueIndices:{
+        panda:0,
+        alto:0,
+        telerin:0,
+        teleron:0
+    },
+
     npcRelations:{},
 
     discoveredLocations:[],

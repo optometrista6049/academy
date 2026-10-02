@@ -41,6 +41,21 @@ export function loadTeleronNPC(){
             console.log('TELERON MODEL LOADED');
 
             TeleronNPC = model;
+
+            // Personalizar color de pelo: Pelirrojo (#d05e26)
+            TeleronNPC.traverse((child)=>{
+                if(child.isMesh && child.name === 'Hair'){
+                    const hairMat = child.material.clone();
+                    hairMat.map = null;
+                    hairMat.color.set('#d05e26');
+                    hairMat.roughness = 0.8;
+                    hairMat.metalness = 0.1;
+                    hairMat.skinning = true;
+                    hairMat.needsUpdate = true;
+                    child.material = hairMat;
+                }
+            });
+
 			registerWorldObject(
 
             TeleronNPC,

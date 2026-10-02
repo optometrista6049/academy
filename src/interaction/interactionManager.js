@@ -48,54 +48,57 @@ import {
 }
 from '../entities/npc/teleronNPC.js';
 
+import {
+
+    getMuebleObject
+
+}
+from '../entities/objects/muebleObject.js';
+
 let interactionTarget = null;
 
 import { dialogueState }
 from '../dialogue/dialogueState.js';
 
-// =====================================
-// PANDA
-// =====================================
+import { dismissPandaReminder }
+from '../ui/pandaReminder.js';
 
-const pandaIntroDialogue = {
+import {
+    pandaIntroDialogue,
+    montyWaitingDialogue
+} from '../dialogue/dialogues/pandaIntro.js';
 
-    speaker:'Panda',
-	
-	 portrait:
-        './assets/ui/portraits/panda.png',
+import { getNextNeutralDialogue }
+from '../dialogue/neutralDialogues.js';
 
-    pages:[
+import {
+    startMissionFromData,
+    isMissionActive,
+    isObjectiveCompleted
+} from '../systems/missionManager.js';
 
-        'Hola. Bienvenido a Monteserin Academy.',
-
-        'Me alegra mucho verte por aquí.',
-
-        'Pronto necesitaré tu ayuda para una pequeña tarea.'
-
-    ]
-
-};
+import { mission001 }
+from '../systems/missions/missionData.js';
 
 
 // =====================================
-// ALTO
+// ALTO (Analítico y Curioso)
 // =====================================
 
 const altoBusyDialogue = {
 
-    speaker:'Senor Alto',
+    speaker:'Señor Alto',
 	
 	portrait:
         './assets/ui/portraits/alto.png',
 
-
     pages:[
 
-        'Bienvenido a Monteserin Academy.',
+        'Bienvenido a Monteserín Academy.',
 
-        'Ahora mismo estoy organizando algunas cosas.',
+        'Ahora mismo estoy analizando algunos datos y sistemas del entorno.',
 
-        'Creo que Panda queria hablar contigo.'
+        'Creo que Panda quería hablar contigo.'
 
     ]
 
@@ -103,12 +106,12 @@ const altoBusyDialogue = {
 
 
 // =====================================
-// TELERIN
+// TELERIN (Ordenada y Organizada)
 // =====================================
 
 const telerinBusyDialogue = {
 
-    speaker:'Telerin',
+    speaker:'Telerín',
 	
 	 portrait:
         './assets/ui/portraits/telerin.png',
@@ -117,9 +120,9 @@ const telerinBusyDialogue = {
 
        'Hola.',
 
-        'Creo que Panda te puede ayudar mejor que yo ahora.',
+        'Ahora mismo estoy organizando algunas cosas por aquí.',
 
-        'Habla primero con Panda.'
+        'Habla primero con Panda, seguro que te puede orientar mejor.'
 
     ]
 
@@ -132,20 +135,18 @@ const telerinBusyDialogue = {
 
 const teleronBusyDialogue = {
 
-    speaker:'Teleron',
+    speaker:'Telerón',
 	
 	portrait:
         './assets/ui/portraits/teleron.png',
-
 
     pages:[
 
         'Buenas.',
 
-        'Panda te esta buscando.',
+        'Panda te está buscando.',
 
         'Seguro que tiene algo importante que contarte.'
-
 
     ]
 
@@ -216,7 +217,7 @@ export function updateInteractionSystem(){
                 'panda';
 
             showInteraction(
-                'Hablar'
+                gameState.flags.metPanda ? 'Hablar con Monty' : 'Hablar'
             );
 
             return;
@@ -246,7 +247,7 @@ export function updateInteractionSystem(){
                 'alto';
 
             showInteraction(
-                'Hablar'
+                'Hablar con Señor Alto'
             );
 
             return;
@@ -276,7 +277,7 @@ export function updateInteractionSystem(){
                 'telerin';
 
             showInteraction(
-                'Hablar'
+                'Hablar con Telerín'
             );
 
             return;
@@ -306,7 +307,39 @@ export function updateInteractionSystem(){
                 'teleron';
 
             showInteraction(
-                'Hablar'
+                'Hablar con Telerón'
+            );
+
+            return;
+
+        }
+
+    }
+
+
+    // ==========================
+    // MUEBLE
+    // ==========================
+
+    const mueble = getMuebleObject();
+
+    if(mueble){
+
+        const distance =
+
+            player.position.distanceTo(
+
+                mueble.position
+
+            );
+
+        if(distance < 2.8){
+
+            interactionTarget =
+                'mueble';
+
+            showInteraction(
+                'Examinar'
             );
 
             return;
@@ -346,34 +379,52 @@ export function tryInteraction(){
 
         case 'panda':
 
-            startDialogue(
+            gameState.flags.talkedToPanda = true;
+            dismissPandaReminder();
 
-                pandaIntroDialogue
+            if (!gameState.flags.metPanda) {
 
-            );
+                // Callback cuando el jugador completa la presentacion y encargo de Monty
+                pandaIntroDialogue.onComplete = () => {
+                    gameState.flags.metPanda = true;
+                    gameState.flags.metMonty = true;
+                    gameState.quests.mission_001 = 'active';
+                    startMissionFromData(mission001);
+                    setPandaIdle();
+                };
 
-            gameState.flags.metPanda =
-                true;
+                startDialogue(
+                    pandaIntroDialogue
+                );
 
-            setPandaIdle();
+            } else {
+
+                // Si la mision 1 esta activa y aun no se ha entregado la caja, dar recordatorio
+                if (isMissionActive('mission001') && !isObjectiveCompleted('deliverBadgeBox')) {
+                    startDialogue(montyWaitingDialogue);
+                } else {
+                    const next = getNextNeutralDialogue('panda');
+                    if (next) {
+                        startDialogue(next);
+                    } else {
+                        startDialogue(montyWaitingDialogue);
+                    }
+                }
+
+            }
 
             break;
 
 
         case 'alto':
 
-            if(
-
-                !gameState.flags.metPanda
-
-            ){
-
-                startDialogue(
-
-                    altoBusyDialogue
-
-                );
-
+            if (!gameState.flags.metPanda) {
+                startDialogue(altoBusyDialogue);
+            } else {
+                const next = getNextNeutralDialogue('alto');
+                if (next) {
+                    startDialogue(next);
+                }
             }
 
             break;
@@ -381,18 +432,13 @@ export function tryInteraction(){
 
         case 'telerin':
 
-            if(
-
-                !gameState.flags.metPanda
-
-            ){
-
-                startDialogue(
-
-                    telerinBusyDialogue
-
-                );
-
+            if (!gameState.flags.metPanda) {
+                startDialogue(telerinBusyDialogue);
+            } else {
+                const next = getNextNeutralDialogue('telerin');
+                if (next) {
+                    startDialogue(next);
+                }
             }
 
             break;
@@ -400,19 +446,35 @@ export function tryInteraction(){
 
         case 'teleron':
 
-            if(
-
-                !gameState.flags.metPanda
-
-            ){
-
-                startDialogue(
-
-                    teleronBusyDialogue
-
-                );
-
+            if (!gameState.flags.metPanda) {
+                startDialogue(teleronBusyDialogue);
+            } else {
+                const next = getNextNeutralDialogue('teleron');
+                if (next) {
+                    startDialogue(next);
+                }
             }
+
+            break;
+
+
+        case 'mueble':
+
+            startDialogue({
+
+                speaker: 'Mueble',
+
+                portrait: null,
+
+                pages: [
+
+                    'Una cómoda de madera noble con vetas naturales y varios cajones.',
+
+                    'Por ahora los cajones están cerrados.'
+
+                ]
+
+            });
 
             break;
 

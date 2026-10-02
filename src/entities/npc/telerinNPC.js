@@ -41,6 +41,20 @@ export function loadTelerinNPC(){
             console.log('TELERIN MODEL LOADED');
 
             TelerinNPC = model;
+
+            // Personalizar color de pelo: Castaño (#5a3825)
+            TelerinNPC.traverse((child)=>{
+                if(child.isMesh && child.name === 'Hair'){
+                    const hairMat = child.material.clone();
+                    hairMat.map = null;
+                    hairMat.color.set('#5a3825');
+                    hairMat.roughness = 0.8;
+                    hairMat.metalness = 0.1;
+                    hairMat.skinning = true;
+                    hairMat.needsUpdate = true;
+                    child.material = hairMat;
+                }
+            });
 			
 			registerWorldObject(
 

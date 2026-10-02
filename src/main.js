@@ -247,6 +247,13 @@ import {
 }
 from './entities/npc/teleronNPC.js';
 
+import {
+
+    loadMuebleObject
+
+}
+from './entities/objects/muebleObject.js';
+
 // ======================================================
 // MOBILE
 // ======================================================
@@ -391,6 +398,8 @@ function startGame(){
 
     
     loadTeleronNPC();
+
+    loadMuebleObject();
 
     
 

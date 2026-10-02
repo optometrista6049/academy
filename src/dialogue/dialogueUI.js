@@ -256,9 +256,15 @@ function updateDialogue(){
     // SPEAKER
     // ------------------------------------------
 
-    speakerLabel.innerText =
+    let currentSpeaker = dialogue.speaker;
+    if (typeof dialogue.speakerByPage === 'function') {
+        currentSpeaker = dialogue.speakerByPage(dialogueState.currentPage);
+    } else if (Array.isArray(dialogue.speakers) && dialogue.speakers[dialogueState.currentPage]) {
+        currentSpeaker = dialogue.speakers[dialogueState.currentPage];
+    }
 
-        dialogue.speaker;
+    speakerLabel.innerText =
+        currentSpeaker || 'Panda';
 
     // ------------------------------------------
     // PORTRAIT
@@ -303,6 +309,18 @@ function updateDialogue(){
     textLabel.scrollTop =
 
         0;
+
+    // ------------------------------------------
+    // BUTTON TEXT
+    // ------------------------------------------
+
+    if (continueButton) {
+        if (dialogueState.currentPage >= dialogue.pages.length - 1) {
+            continueButton.innerText = 'Entendido';
+        } else {
+            continueButton.innerText = 'Continuar';
+        }
+    }
 
 }
 
@@ -352,6 +370,8 @@ function nextDialoguePage(){
 
 export function closeDialogue(){
 
+    const finishedDialogue = dialogueState.currentDialogue;
+
     dialogueState.active =
 
         false;
@@ -367,6 +387,14 @@ export function closeDialogue(){
     root.style.display =
 
         'none';
+
+    if (finishedDialogue && typeof finishedDialogue.onComplete === 'function') {
+        try {
+            finishedDialogue.onComplete();
+        } catch (e) {
+            console.error('Error in dialogue onComplete:', e);
+        }
+    }
 
 }
 

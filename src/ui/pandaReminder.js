@@ -1,6 +1,9 @@
 import { gameState }
 from '../state/gameState.js';
 
+import { dialogueState }
+from '../dialogue/dialogueState.js';
+
 import {
 
     isMobileDevice
@@ -13,6 +16,21 @@ let reminderRoot = null;
 let visible = false;
 
 let timer = 0;
+
+export function dismissPandaReminder(){
+
+    visible = false;
+
+    timer = 0;
+
+    if(reminderRoot){
+
+        reminderRoot.style.display =
+            'none';
+
+    }
+
+}
 
 export function createPandaReminder(){
 
@@ -181,12 +199,19 @@ export function createPandaReminder(){
 
 export function updatePandaReminder(delta){
 
+    if(!reminderRoot) return;
+
     if(
-        gameState.flags.metPanda
+        gameState.flags.metPanda ||
+        gameState.flags.talkedToPanda ||
+        gameState.flags.metMonty ||
+        dialogueState.active
     ){
 
         reminderRoot.style.display =
             'none';
+
+        visible = false;
 
         return;
 

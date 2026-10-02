@@ -69,7 +69,7 @@ export function showInteraction(text){
         root.style.display =
             'none';
 
-        showMobileInteractionButton();
+        showMobileInteractionButton(text);
 
         return;
 
