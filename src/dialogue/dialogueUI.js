@@ -3,6 +3,12 @@ import {
 }
 from './dialogueState.js';
 
+import {
+    lockInput,
+    unlockInput
+}
+from '../systems/inputLockSystem.js';
+
 
 
 let root = null;
@@ -14,6 +20,8 @@ let portraitContainer = null;
 let portraitImage = null;
 
 let speakerLabel = null;
+
+let scrollHintBadge = null;
 
 let body = null;
 
@@ -40,6 +48,19 @@ export function createDialogueUI(){
 
     root.className =
         'dialogue';
+
+    // Aislar eventos táctiles dentro del cuadro de diálogo
+    root.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
+
+    root.addEventListener('touchmove', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
+
+    root.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
 
     // ------------------------------------------
     // HEADER
@@ -108,6 +129,36 @@ export function createDialogueUI(){
     );
 
     // ------------------------------------------
+    // SCROLL HINT BADGE
+    // ------------------------------------------
+
+    scrollHintBadge =
+        document.createElement(
+            'div'
+        );
+
+    scrollHintBadge.className =
+        'dialogue-scroll-hint';
+
+    scrollHintBadge.innerHTML =
+        '<span class="scroll-hint-icon">📜</span> Desliza para leer más <span class="scroll-hint-arrow">↓</span>';
+
+    scrollHintBadge.title =
+        'Desliza para ver más texto';
+
+    scrollHintBadge.onclick = () => {
+        if(textLabel){
+            textLabel.scrollBy({ top: 50, behavior: 'smooth' });
+        }
+    };
+
+    header.appendChild(
+
+        scrollHintBadge
+
+    );
+
+    // ------------------------------------------
     // BODY
     // ------------------------------------------
 
@@ -130,6 +181,14 @@ export function createDialogueUI(){
 
     textLabel.className =
         'dialogue-text';
+
+    textLabel.addEventListener('scroll', checkScrollHint, { passive: true });
+
+    window.addEventListener('resize', () => {
+        if(dialogueState.active){
+            checkScrollHint();
+        }
+    });
 
     body.appendChild(
 
@@ -216,6 +275,8 @@ export function showDialogue(
 
 ){
 
+    lockInput('dialogue');
+
     dialogueState.active =
         true;
 
@@ -229,6 +290,42 @@ export function showDialogue(
         'flex';
 
     updateDialogue();
+
+}
+
+// ======================================================
+// SCROLL HINT CHECK
+// ======================================================
+
+function checkScrollHint(){
+
+    if(!scrollHintBadge || !textLabel) return;
+
+    // Verificar si el texto desborda la altura visible
+    const hasScroll = textLabel.scrollHeight > (textLabel.clientHeight + 4);
+
+    if(!hasScroll){
+
+        scrollHintBadge.style.opacity = '0';
+        scrollHintBadge.style.pointerEvents = 'none';
+        return;
+
+    }
+
+    // Ocultar si el usuario ya se desplazó casi hasta el final (margen de 8px)
+    const isAtBottom = (textLabel.scrollTop + textLabel.clientHeight) >= (textLabel.scrollHeight - 8);
+
+    if(isAtBottom){
+
+        scrollHintBadge.style.opacity = '0';
+        scrollHintBadge.style.pointerEvents = 'none';
+
+    }else{
+
+        scrollHintBadge.style.opacity = '1';
+        scrollHintBadge.style.pointerEvents = 'auto';
+
+    }
 
 }
 
@@ -310,6 +407,10 @@ function updateDialogue(){
 
         0;
 
+    requestAnimationFrame(() => {
+        checkScrollHint();
+    });
+
     // ------------------------------------------
     // BUTTON TEXT
     // ------------------------------------------
@@ -369,6 +470,13 @@ function nextDialoguePage(){
 // ======================================================
 
 export function closeDialogue(){
+
+    unlockInput('dialogue');
+
+    if(scrollHintBadge){
+        scrollHintBadge.style.opacity = '0';
+        scrollHintBadge.style.pointerEvents = 'none';
+    }
 
     const finishedDialogue = dialogueState.currentDialogue;
 

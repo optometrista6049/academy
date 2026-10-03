@@ -385,7 +385,7 @@ GAME UI
 
     margin:0;
 
-    padding:.45rem 0;
+    padding:.45rem .45rem .45rem 0;
 
     line-height:1.45;
 
@@ -396,6 +396,12 @@ GAME UI
     overflow-x:hidden;
 
     scrollbar-width:thin;
+
+    scrollbar-color:#ffd54f rgba(255,255,255,0.12);
+
+    touch-action:pan-y;
+
+    -webkit-overflow-scrolling:touch;
 
     max-height:14vh;
 
@@ -445,47 +451,121 @@ GAME UI
 
 .dialogue-text::-webkit-scrollbar{
 
-    width:6px;
+    width:8px;
 
 }
 
 .dialogue-text::-webkit-scrollbar-track{
 
-    background:transparent;
+    background:rgba(255,255,255,0.12);
+
+    border-radius:10px;
+
+    margin:2px 0;
 
 }
 
 .dialogue-text::-webkit-scrollbar-thumb{
 
-    background:rgba(
-
-        214,
-
-        176,
-
-        106,
-
-        .65
-
-    );
+    background:#ffd54f;
 
     border-radius:20px;
+
+    box-shadow:0 0 6px rgba(255,213,79,0.55);
 
 }
 
 .dialogue-text::-webkit-scrollbar-thumb:hover{
 
-    background:rgba(
+    background:#ffe082;
 
-        214,
+}
 
-        176,
+/* =====================================================
+   SCROLL HINT BADGE
+===================================================== */
 
-        106,
+.dialogue-scroll-hint{
 
-        .95
+    margin-left:auto;
 
-    );
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:.35rem;
+
+    padding:.25rem .65rem;
+
+    background:rgba(214,176,106,0.18);
+
+    border:1px solid rgba(255,213,79,0.7);
+
+    border-radius:20px;
+
+    font-size:clamp(0.72rem, 1.4vh, 0.88rem);
+
+    font-weight:600;
+
+    color:#fcedba;
+
+    letter-spacing:0.02em;
+
+    user-select:none;
+
+    -webkit-user-select:none;
+
+    opacity:0;
+
+    pointer-events:none;
+
+    transition:opacity 0.25s ease, transform 0.25s ease;
+
+    cursor:pointer;
+
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+
+}
+
+.dialogue-scroll-hint:hover{
+
+    background:rgba(214,176,106,0.32);
+
+    border-color:#ffd54f;
+
+}
+
+.scroll-hint-icon{
+
+    font-size:1em;
+
+}
+
+.scroll-hint-arrow{
+
+    display:inline-block;
+
+    color:#ffd54f;
+
+    font-weight:bold;
+
+    animation:scrollBounce 1.2s infinite ease-in-out;
+
+}
+
+@keyframes scrollBounce{
+
+    0%, 100%{
+
+        transform:translateY(0);
+
+    }
+
+    50%{
+
+        transform:translateY(3px);
+
+    }
 
 }
 
@@ -648,6 +728,28 @@ RESPONSIVE ADJUSTMENTS
             17px
 
         );
+
+    }
+
+    .dialogue-scroll-hint{
+
+        padding:.15rem .45rem;
+
+        font-size:clamp(10px, 1.25vh, 12px);
+
+        gap:.25rem;
+
+    }
+
+}
+
+@media (max-width:480px){
+
+    .dialogue-scroll-hint{
+
+        padding:.15rem .45rem;
+
+        font-size:.72rem;
 
     }
 
