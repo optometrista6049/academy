@@ -5,12 +5,24 @@ import {
 } from '../state/runtimeState.js';
 
 let currentAction = null;
+let animOverride = null;
+
+export function setPlayerAnimationOverride(name) {
+    animOverride = name ? name.toLowerCase() : null;
+    if (animOverride) {
+        playAnimation(animOverride);
+    }
+}
+
+export function getPlayerAnimationOverride() {
+    return animOverride;
+}
 
 // =====================================================
 // CAMBIAR ANIMACIÓN
 // =====================================================
 
-function playAnimation(name){
+export function playAnimation(name){
 
     name = name.toLowerCase();
 
@@ -49,6 +61,14 @@ export function updatePlayerAnimation(
     if(runtimeState.mixer){
 
         runtimeState.mixer.update(delta);
+
+    }
+
+    if(animOverride){
+
+        playAnimation(animOverride);
+
+        return;
 
     }
 

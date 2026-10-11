@@ -14,11 +14,10 @@ export const gameState = {
 
     flags:{
 
+        metPanda:false,
+        registryUnlocked:false
 
-    metPanda:false
-
-
-},
+    },
 
 
     inventory:[],

@@ -20,6 +20,11 @@ import {
 }
 from './loadingScreen.js';
 
+import {
+    openLogoUploadModal
+}
+from './logoUploadModal.js';
+
 export function createMainMenu(onStart){
 
     const root =
@@ -200,6 +205,24 @@ export function createMainMenu(onStart){
     };
 
     // =========================
+    // SUBIR LOGO OFICIAL
+    // =========================
+
+    const btnLogo =
+        createButton(
+            '🎨 SUBIR LOGO OFICIAL'
+        );
+
+    btnLogo.style.border = '1px solid rgba(212,175,55,0.85)';
+    btnLogo.style.color = '#f5e197';
+
+    btnLogo.onclick = ()=>{
+
+        openLogoUploadModal();
+
+    };
+
+    // =========================
     // APPEND
     // =========================
 
@@ -217,6 +240,10 @@ export function createMainMenu(onStart){
 
     root.appendChild(
         btnCredits
+    );
+
+    root.appendChild(
+        btnLogo
     );
 
     root.appendChild(

@@ -3,9 +3,7 @@
 *========================================================*/
 
 let archiveRoot = null;
-
 let archivePanel = null;
-
 let archiveTitle = null;
 
 /*========================================================*
@@ -32,13 +30,11 @@ export function createArchiveModule(){
 
 function buildModule(){
 
-    archiveRoot =
+    archiveRoot = document.createElement("div");
 
-        document.createElement("div");
+    archiveRoot.id = "archiveModule";
 
-    archiveRoot.id =
-
-        "archiveModule";
+    archiveRoot.className = "registryModule";
 
     buildArchivePanel();
 
@@ -50,21 +46,25 @@ function buildModule(){
 
 function buildArchivePanel(){
 
-    archivePanel =
+    archivePanel = document.createElement("div");
 
-        document.createElement("div");
-
-    archivePanel.id =
-
-        "archivePanel";
-
-    archiveRoot.appendChild(
-
-        archivePanel
-
-    );
+    archivePanel.id = "archivePanel";
 
     buildArchiveTitle();
+
+    const emptyContainer = document.createElement("div");
+    emptyContainer.className = "archiveEmptyState";
+    emptyContainer.innerHTML = `
+        <div class="archiveEmptyIcon">📁</div>
+        <div class="archiveEmptyTitle">Sin documentos archivados</div>
+        <div class="archiveEmptyText">
+            Actualmente no dispones de documentos o fotografías archivadas. 
+            Los carnets, informes y recuerdos que decidas archivar desde tu Inventario se custodiarán aquí.
+        </div>
+    `;
+
+    archivePanel.appendChild(emptyContainer);
+    archiveRoot.appendChild(archivePanel);
 
 }
 
@@ -74,22 +74,12 @@ function buildArchivePanel(){
 
 function buildArchiveTitle(){
 
-    archiveTitle =
+    archiveTitle = document.createElement("div");
 
-        document.createElement("div");
+    archiveTitle.id = "archiveTitle";
 
-    archiveTitle.id =
+    archiveTitle.textContent = "ARCHIVO";
 
-        "archiveTitle";
-
-    archiveTitle.textContent =
-
-        "ARCHIVO";
-
-    archivePanel.appendChild(
-
-        archiveTitle
-
-    );
+    archivePanel.appendChild(archiveTitle);
 
 }

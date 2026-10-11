@@ -11,6 +11,10 @@ import {
 } from "../../systems/inputLockSystem.js";
 
 import {
+    gameState
+} from "../../state/gameState.js";
+
+import {
     initializeRegistryModules,
     showRegistrySection,
     resetRegistryModulesVisualState
@@ -249,91 +253,6 @@ switch(index){
         registryContent
     );
 
-//--------------------------------------------------
-// BARRA DE AYUDA
-//--------------------------------------------------
-
-const registryHelp =
-
-    document.createElement("div");
-
-registryHelp.id =
-
-    "registryHelp";
-
-registryHelp.innerHTML = `
-
-<div class="registryHelpItem">
-
-<span class="registryHelpKey">
-
-1–4
-
-</span>
-
-<span>
-
-Cambiar pestaña
-
-</span>
-
-</div>
-
-<div class="registryHelpItem">
-
-<span class="registryHelpKey">
-
-WASD
-
-</span>
-
-<span>
-
-Mover
-
-</span>
-
-</div>
-
-<div class="registryHelpItem">
-
-<span class="registryHelpKey">
-
-ENTER
-
-</span>
-
-<span>
-
-Abrir
-
-</span>
-
-</div>
-
-<div class="registryHelpItem">
-
-<span class="registryHelpKey">
-
-ESC
-
-</span>
-
-<span>
-
-Cerrar
-
-</span>
-
-</div>
-
-`;
-
-registryRoot.appendChild(
-
-    registryHelp
-
-);
     document.body.appendChild(
         registryRoot
     );
@@ -370,9 +289,39 @@ export function isRegistryOpen(){
 
 export function openRegistry(){
 
+    if(!gameState.flags.registryUnlocked){
+
+        return;
+
+    }
+
     if(isOpen){
 
         return;
+
+    }
+
+    if(spotlightTimer){
+
+        clearTimeout(spotlightTimer);
+
+        spotlightTimer = null;
+
+    }
+
+    dismissRegistryAttentionPulse();
+
+    if(registryBase){
+
+        registryBase.classList.remove("registry-spotlight");
+
+    }
+
+    if(registryButton){
+
+        registryButton.classList.remove("registry-spotlight");
+
+        registryButton.classList.remove("registry-attention-pulse");
 
     }
 
@@ -424,6 +373,12 @@ export function closeRegistry(){
 
 export function toggleRegistry(){
 
+    if(!gameState.flags.registryUnlocked){
+
+        return;
+
+    }
+
     if(isOpen){
 
         closeRegistry();
@@ -452,6 +407,12 @@ function createRegistryButton(){
 
         "registryBase";
 
+    if(!gameState.flags.registryUnlocked){
+
+        registryBase.style.display = "none";
+
+    }
+
     document.body.appendChild(
 
         registryBase
@@ -476,11 +437,128 @@ function createRegistryButton(){
 
     registryButton.draggable = false;
 
+    if(!gameState.flags.registryUnlocked){
+
+        registryButton.style.display = "none";
+
+    }
+
     document.body.appendChild(
 
         registryButton
 
     );
+
+}
+
+let spotlightTimer = null;
+let attentionPulseTimer = null;
+
+export function dismissRegistryAttentionPulse(){
+    if(attentionPulseTimer){
+        clearTimeout(attentionPulseTimer);
+        attentionPulseTimer = null;
+    }
+    if(registryButton){
+        registryButton.classList.remove("registry-attention-pulse");
+    }
+}
+
+export function dismissRegistrySpotlight(){
+
+    if(spotlightTimer){
+
+        clearTimeout(spotlightTimer);
+
+        spotlightTimer = null;
+
+    }
+
+    if(registryBase){
+
+        registryBase.classList.remove("registry-spotlight");
+
+    }
+
+    if(registryButton){
+
+        registryButton.classList.remove("registry-spotlight");
+
+    }
+
+}
+
+/**
+ * Dispara una pulsación dorada de absorción cuando un objeto vuela hacia el Registro.
+ */
+export function triggerRegistryIntakeEffect(){
+    if(!registryButton) return;
+    registryButton.classList.remove("registry-intake-pulse");
+    void registryButton.offsetWidth; // Forzar reflow para reiniciar animación
+    registryButton.classList.add("registry-intake-pulse");
+    setTimeout(() => {
+        if(registryButton){
+            registryButton.classList.remove("registry-intake-pulse");
+        }
+    }, 1300);
+}
+
+//======================================================
+// DESBLOQUEO DE REGISTRO
+//======================================================
+
+export function unlockRegistry(){
+
+    gameState.flags.registryUnlocked = true;
+
+    if(!registryBase || !registryButton) return;
+
+    if(registryBase.style.display === "none" || registryButton.style.display === "none"){
+
+        registryBase.style.display = "";
+        registryButton.style.display = "";
+
+        registryBase.classList.remove("registry-unlocked-reveal", "registry-spotlight");
+        registryButton.classList.remove("registry-unlocked-reveal", "registry-spotlight", "registry-attention-pulse");
+
+        void registryBase.offsetWidth;
+        void registryButton.offsetWidth;
+
+        registryBase.classList.add("registry-unlocked-reveal", "registry-spotlight");
+        registryButton.classList.add("registry-unlocked-reveal", "registry-attention-pulse", "registry-spotlight");
+
+        if(spotlightTimer){
+
+            clearTimeout(spotlightTimer);
+
+        }
+
+        spotlightTimer = setTimeout(() => {
+
+            dismissRegistrySpotlight();
+
+        }, 3800);
+
+        // Si el jugador no interactúa con el registro en 15 segundos, el destello dorado desaparece suavemente
+        if(attentionPulseTimer){
+
+            clearTimeout(attentionPulseTimer);
+
+        }
+
+        attentionPulseTimer = setTimeout(() => {
+
+            dismissRegistryAttentionPulse();
+
+        }, 15000);
+
+    }
+
+}
+
+export function isRegistryUnlocked(){
+
+    return Boolean(gameState.flags.registryUnlocked);
 
 }
 
@@ -603,6 +681,12 @@ function onKeyDown(event){
 
     ){
 
+        if(!gameState.flags.registryUnlocked){
+
+            return;
+
+        }
+
         toggleRegistry();
 
         return;
@@ -666,6 +750,12 @@ function onKeyDown(event){
 //======================================================
 
 function onButtonClick(){
+
+    if(!gameState.flags.registryUnlocked){
+
+        return;
+
+    }
 
     toggleRegistry();
 

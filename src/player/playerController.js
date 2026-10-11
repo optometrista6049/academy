@@ -21,11 +21,11 @@ export function updatePlayer(delta){
     // movimiento
     const moving = updateMovement(delta);
 
-    // cámara
-    updateCamera(delta);
-
     // animaciones
     updatePlayerAnimation(moving, delta);
+
+    // cámara
+    updateCamera(delta);
 
     // sincronizar sombras y luz solar con la posición del jugador
     updateSunLighting(runtimeState.player.position, moving);

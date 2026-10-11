@@ -284,6 +284,52 @@ function updateZoom(){
 }
 
 // =====================================================
+// CINEMATIC OVERRIDE
+// =====================================================
+
+let cinematicOverride = null;
+
+export function setCameraCinematicOverride(overrideFn){
+    cinematicOverride = overrideFn;
+}
+
+export function clearCameraCinematicOverride(){
+    cinematicOverride = null;
+}
+
+export function isCameraCinematicActive(){
+    return cinematicOverride !== null;
+}
+
+export function snapCameraOrbitTo(pos, lookTarget){
+    if(!runtimeState.player) return;
+    const p = runtimeState.player.position;
+    if(!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y) || !Number.isFinite(pos.z)) return;
+
+    const dx = pos.x - p.x;
+    const dy = pos.y - p.y;
+    const dz = pos.z - p.z;
+    const r = Math.sqrt(dx * dx + dz * dz + dy * dy);
+
+    const minZ = cam.minZoom || 2.0;
+    const maxZ = cam.maxZoom || 15.0;
+    const safeR = (Number.isFinite(r) && r > 0.1) ? r : 6.0;
+    cam.distance = Math.max(minZ, Math.min(maxZ, safeR));
+    cam.targetDistance = cam.distance;
+
+    if (Number.isFinite(dx) && Number.isFinite(dz) && (dx !== 0 || dz !== 0)) {
+        cam.ax = Math.atan2(dx, dz);
+        targetAx = cam.ax;
+    }
+
+    const horizDist = Math.max(0.001, Math.sqrt(dx * dx + dz * dz));
+    if (Number.isFinite(dy)) {
+        cam.ay = Math.atan2(dy, horizDist);
+        targetAy = Math.max(-0.40, Math.min(1.2, cam.ay));
+    }
+}
+
+// =====================================================
 // UPDATE CAMERA
 // =====================================================
 
@@ -291,7 +337,22 @@ export function updateCamera(delta = 0.016){
 
     if(!runtimeState.player) return;
 
+    if(cinematicOverride){
+        cinematicOverride(delta, camera);
+        return;
+    }
+
     updateZoom();
+
+    // Guardas de robustez contra valores no finitos (anti-NaN)
+    if (!Number.isFinite(cam.distance) || cam.distance <= 0) {
+        cam.distance = 6.0;
+        cam.targetDistance = 6.0;
+    }
+    if (!Number.isFinite(cam.ax)) cam.ax = 0;
+    if (!Number.isFinite(cam.ay)) cam.ay = 0.35;
+    if (!Number.isFinite(targetAx)) targetAx = cam.ax;
+    if (!Number.isFinite(targetAy)) targetAy = cam.ay;
 
     // Suavizado reactivo independiente del framerate (elimina micro-tirones sin añadir lag perceptible)
     const smoothFactor = 1.0 - Math.exp(-22.0 * delta);
@@ -299,6 +360,9 @@ export function updateCamera(delta = 0.016){
     cam.ay += (targetAy - cam.ay) * smoothFactor;
 
     const p = runtimeState.player.position;
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z)) {
+        return;
+    }
 
     const r = cam.distance;
 

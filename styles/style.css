@@ -247,9 +247,11 @@ GAME UI
 
     bottom:2vh;
 
-    transform:translateX(-50%);
+    transform:translateX(-50%) translateY(12px) scale(0.98);
 
     display:none;
+
+    opacity:0;
 
     flex-direction:column;
 
@@ -272,6 +274,16 @@ GAME UI
     color:white;
 
     z-index:15000;
+
+    transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1), transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+
+}
+
+.dialogue.active-dialogue{
+
+    opacity:1;
+
+    transform:translateX(-50%) translateY(0) scale(1);
 
 }
 
@@ -755,6 +767,246 @@ RESPONSIVE ADJUSTMENTS
 
 }
 
+/* =====================================================
+   ESCENARIO CINEMÁTICO DE ESTUDIO (OPCIÓN 1 - DIÁLOGOS NPC)
+===================================================== */
+
+.dialogue-stage-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 14500;
+    pointer-events: none;
+    display: none;
+    opacity: 0;
+    /* Transición envolvente profunda de mayor duración y suavidad */
+    transition: opacity 1.20s cubic-bezier(0.22, 0.65, 0.35, 1);
+    overflow: hidden;
+    background: #050a08;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.dialogue-stage-overlay.visible {
+    opacity: 1;
+}
+
+/* Doble viñeta cinematográfica: viñeta de estudio ultra-difuminada sin círculos rígidos */
+.dialogue-stage-backdrop {
+    position: absolute;
+    inset: 0;
+    /* Difuminado suave y expansivo tipo estudio: halos amplios y degradados continuos sin cortes circulares */
+    background: 
+        radial-gradient(ellipse 85% 65% at 50% 38%, rgba(22, 42, 32, 0.65) 0%, rgba(12, 22, 17, 0.85) 45%, rgba(6, 12, 9, 0.96) 75%, #050a08 100%),
+        radial-gradient(ellipse 55% 45% at 50% 36%, rgba(212, 175, 55, 0.09) 0%, rgba(46, 204, 113, 0.04) 40%, transparent 75%);
+    opacity: 0;
+    transition: opacity 1.25s cubic-bezier(0.22, 0.65, 0.35, 1);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-backdrop {
+    opacity: 1;
+}
+
+/* Transición cinematográfica envolvente desde la periferia:
+   Cierra suavemente hacia el centro y se disuelve por completo en el fondo,
+   sin dejar ningún aro o círculo residual marcado */
+.dialogue-stage-iris {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 250vmax;
+    height: 250vmax;
+    margin-left: -125vmax;
+    margin-top: -125vmax;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+    /* Difuminado progresivo y suave con blur para eliminar bordes duros */
+    background: radial-gradient(circle at 50% 50%, 
+        transparent 0%, 
+        transparent 35%, 
+        rgba(5, 10, 8, 0.40) 55%, 
+        rgba(5, 10, 8, 0.85) 75%, 
+        #050a08 90%
+    );
+    box-shadow: 0 0 0 125vmax #050a08;
+    transform: scale(2.2);
+    opacity: 0;
+    filter: blur(14px);
+    will-change: transform, opacity;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-iris {
+    animation: irisCinematicSweep 1.35s cubic-bezier(0.22, 0.65, 0.35, 1) forwards;
+}
+
+@keyframes irisCinematicSweep {
+    0% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.95;
+    }
+    85% {
+        transform: scale(0.60);
+        opacity: 0.85;
+    }
+    100% {
+        transform: scale(0.25);
+        opacity: 0;
+    }
+}
+
+/* En pantallas de escritorio: logo en lateral izquierdo para acompañar al NPC encuadrado a la derecha */
+.dialogue-stage-watermark {
+    position: absolute;
+    top: 36%;
+    left: 24%;
+    transform: translate(-50%, -50%) scale(0.92);
+    width: min(380px, 38vw);
+    height: auto;
+    max-height: 44vh;
+    opacity: 0;
+    filter: drop-shadow(0 0 28px rgba(46, 204, 113, 0.38)) drop-shadow(0 0 12px rgba(212, 175, 55, 0.25));
+    pointer-events: none;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 1.20s cubic-bezier(0.16, 1, 0.3, 1) 0.15s,
+                transform 1.20s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
+    will-change: opacity, transform;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-watermark {
+    opacity: 0.40;
+    transform: translate(-50%, -50%) scale(1);
+    animation: watermarkGlowPulse 6s ease-in-out 1.25s infinite alternate;
+}
+
+@keyframes watermarkGlowPulse {
+    0% {
+        opacity: 0.34;
+        transform: translate(-50%, -50%) scale(0.98);
+        filter: drop-shadow(0 0 22px rgba(46, 204, 113, 0.28)) drop-shadow(0 0 8px rgba(212, 175, 55, 0.16));
+    }
+    100% {
+        opacity: 0.46;
+        transform: translate(-50%, -50%) scale(1.02);
+        filter: drop-shadow(0 0 38px rgba(46, 204, 113, 0.48)) drop-shadow(0 0 16px rgba(212, 175, 55, 0.32));
+    }
+}
+
+/* En móvil portrait: logo centrado y proporcionado para no interferir con el NPC ni la caja */
+@media (max-width: 768px), (orientation: portrait) {
+    .dialogue-stage-watermark {
+        top: 22%;
+        left: 50%;
+        width: min(240px, 60vw);
+        max-height: 28vh;
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.92);
+    }
+    .dialogue-stage-overlay.visible .dialogue-stage-watermark {
+        opacity: 0.28;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.dialogue-stage-logo-img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+.dialogue-stage-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity 1.15s cubic-bezier(0.16, 1, 0.3, 1) 0.10s,
+                transform 1.15s cubic-bezier(0.16, 1, 0.3, 1) 0.10s;
+    will-change: opacity, transform;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-canvas {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* =====================================================
+   ADAPTACIONES DE LA CAJA DE DIÁLOGO EN MODO NPC (.npc-mode)
+===================================================== */
+
+.dialogue.npc-mode {
+    border: 2px solid rgba(212, 175, 55, 0.85);
+    background: linear-gradient(180deg, rgba(16, 22, 19, 0.94) 0%, rgba(9, 14, 12, 0.96) 100%);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 24px rgba(46, 204, 113, 0.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-radius: 20px;
+    padding: 0.9rem 1.4rem;
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    width: min(92vw, 920px);
+}
+
+@media (max-width: 768px) {
+    .dialogue.npc-mode {
+        width: min(94vw, 560px);
+        padding: 0.75rem 1rem;
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        border-radius: 16px;
+    }
+}
+
+.dialogue.npc-mode .dialogue-header {
+    gap: 0;
+    margin-bottom: 0.4rem;
+}
+
+.dialogue.npc-mode .dialogue-speaker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.25) 0%, rgba(212, 175, 55, 0.05) 100%);
+    border-left: 3px solid #d6b06a;
+    padding: 3px 14px 3px 10px;
+    border-radius: 4px 10px 10px 4px;
+    font-size: clamp(1.05rem, 2.2vh, 1.45rem);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #f7e4a8;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.dialogue.npc-mode .dialogue-text {
+    font-size: clamp(1rem, 2.1vh, 1.25rem);
+    line-height: 1.6;
+    color: #f2f4f8;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.dialogue.npc-mode .dialogue-button {
+    background: linear-gradient(180deg, #d6b06a 0%, #aa8436 100%);
+    border: 1px solid #f7e4a8;
+    color: #12151c;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35);
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.dialogue.npc-mode .dialogue-button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.12);
+}
+
 /* =======================================================
    REGISTRO
 ======================================================= */
@@ -932,6 +1184,111 @@ linear-gradient(
     user-select:none;
 
     -webkit-user-drag:none;
+
+    transition: filter 0.8s ease, transform 0.8s ease;
+
+}
+
+/*======================================================
+   ANIMACIONES DESBLOQUEO REGISTRO
+======================================================*/
+
+/* Estado spotlight para emerger por encima del diálogo (z-index diálogo = 15000) */
+#registryBase.registry-spotlight{
+
+    z-index: 24999 !important;
+
+}
+
+#registryButton.registry-spotlight{
+
+    z-index: 25000 !important;
+
+}
+
+.registry-unlocked-reveal{
+
+    animation: registrySlideUp 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+}
+
+@keyframes registrySlideUp{
+
+    0%{
+
+        transform: translate(-50%, 120%);
+
+        opacity: 0;
+
+    }
+
+    100%{
+
+        transform: translate(-50%, 0);
+
+        opacity: 1;
+
+    }
+
+}
+
+.registry-attention-pulse{
+
+    animation: registryAttentionGlow 1.6s infinite ease-in-out !important;
+
+}
+
+@keyframes registryAttentionGlow{
+
+    0%, 100%{
+
+        filter: drop-shadow(0 0 7px rgba(255, 215, 79, 0.7)) drop-shadow(0 0 16px rgba(255, 179, 0, 0.45));
+
+        transform: translateX(-50%) scale(1);
+
+    }
+
+    50%{
+
+        filter: drop-shadow(0 0 14px rgba(255, 235, 120, 1)) drop-shadow(0 0 32px rgba(255, 180, 0, 0.95)) drop-shadow(0 0 50px rgba(214, 176, 106, 0.8)) brightness(1.32);
+
+        transform: translateX(-50%) scale(1.09);
+
+    }
+
+}
+
+.registry-intake-pulse{
+
+    animation: registryIntakeGlow 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+
+}
+
+@keyframes registryIntakeGlow{
+
+    0%{
+
+        filter: drop-shadow(0 0 14px rgba(255, 230, 100, 1)) drop-shadow(0 0 38px rgba(255, 180, 0, 0.95)) brightness(1.65);
+
+        transform: translateX(-50%) scale(1.24);
+
+    }
+
+    40%{
+
+        filter: drop-shadow(0 0 20px rgba(255, 245, 160, 1)) drop-shadow(0 0 45px rgba(255, 190, 40, 0.9)) brightness(1.38);
+
+        transform: translateX(-50%) scale(1.12);
+
+    }
+
+    100%{
+
+        filter: drop-shadow(0 0 0px rgba(255, 215, 79, 0)) brightness(1);
+
+        transform: translateX(-50%) scale(1);
+
+    }
 
 }
 
@@ -2171,7 +2528,7 @@ REGISTRY HELP BAR
 
 #registryHelp{
 
-    display:flex;
+    display:none !important;
 
     justify-content:center;
 
@@ -2623,6 +2980,206 @@ BARRA DE ATAJOS (NO NECESARIA EN MÓVIL)
 
 }
 
+}
+
+/*======================================================
+   DIARY MODULE & ARCHIVE MODULE STYLES
+======================================================*/
+
+#diaryModule{
+    width:100%;
+    height:100%;
+    box-sizing:border-box;
+    padding:1.5rem 2rem;
+    overflow-y:auto;
+    color:#f5e6cc;
+    display:flex;
+    flex-direction:column;
+    gap:1.2rem;
+}
+
+.diaryHeader{
+    border-bottom:1px solid rgba(214,176,106,0.25);
+    padding-bottom:0.75rem;
+}
+
+.diaryTitle{
+    margin:0 0 0.3rem 0;
+    font-size:clamp(1.2rem, 2.5vw, 1.6rem);
+    color:#f2d08a;
+    font-weight:700;
+    letter-spacing:0.03em;
+}
+
+.diarySubtitle{
+    margin:0;
+    font-size:clamp(0.82rem, 1.4vw, 0.95rem);
+    color:rgba(255,255,255,0.6);
+}
+
+.diaryListContainer{
+    display:flex;
+    flex-direction:column;
+    gap:1rem;
+    flex:1;
+}
+
+.diaryMissionCard{
+    background:rgba(25, 17, 10, 0.55);
+    border:1px solid rgba(214, 176, 106, 0.35);
+    border-radius:14px;
+    padding:1.2rem 1.4rem;
+    box-shadow:0 4px 16px rgba(0,0,0,0.35);
+    backdrop-filter:blur(4px);
+    transition:border-color 0.25s ease;
+}
+
+.diaryMissionCard:hover{
+    border-color:rgba(214, 176, 106, 0.65);
+}
+
+.diaryMissionTop{
+    display:flex;
+    align-items:center;
+    gap:0.8rem;
+    margin-bottom:0.6rem;
+}
+
+.diaryMissionBadge{
+    padding:0.25rem 0.6rem;
+    border-radius:20px;
+    font-size:0.75rem;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+}
+
+.diaryMissionBadge.active{
+    background:rgba(255, 215, 79, 0.2);
+    color:#ffd54f;
+    border:1px solid rgba(255, 215, 79, 0.6);
+    box-shadow:0 0 8px rgba(255, 215, 79, 0.3);
+}
+
+.diaryMissionBadge.completed{
+    background:rgba(46, 204, 113, 0.2);
+    color:#2ecc71;
+    border:1px solid rgba(46, 204, 113, 0.6);
+}
+
+.diaryMissionTitle{
+    margin:0;
+    font-size:clamp(1rem, 2vw, 1.25rem);
+    color:#fff8e7;
+    font-weight:600;
+}
+
+.diaryMissionDesc{
+    margin:0 0 1rem 0;
+    font-size:clamp(0.85rem, 1.4vw, 0.95rem);
+    color:rgba(255,255,255,0.75);
+    line-height:1.45;
+}
+
+.diaryObjectivesList{
+    display:flex;
+    flex-direction:column;
+    gap:0.65rem;
+    background:rgba(0,0,0,0.25);
+    padding:0.85rem 1rem;
+    border-radius:10px;
+    border-left:3px solid #d6b06a;
+}
+
+.diaryObjectiveItem{
+    display:flex;
+    align-items:flex-start;
+    gap:0.6rem;
+    font-size:clamp(0.85rem, 1.4vw, 0.95rem);
+    line-height:1.35;
+}
+
+.diaryObjectiveItem.completed{
+    color:#a8e6cf;
+}
+
+.diaryObjectiveItem.active{
+    color:#ffe082;
+    font-weight:600;
+}
+
+.diaryObjectiveItem.locked{
+    color:rgba(255,255,255,0.38);
+}
+
+.diaryObjectiveStatus{
+    font-size:1rem;
+    flex-shrink:0;
+}
+
+.diaryEmptyCard{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:3rem 1.5rem;
+    gap:0.7rem;
+    color:rgba(255,255,255,0.5);
+}
+
+.diaryEmptyIcon{
+    font-size:2.5rem;
+}
+
+.diaryEmptyTitle{
+    font-size:1.15rem;
+    color:#f2d08a;
+    font-weight:600;
+}
+
+.diaryEmptyText{
+    font-size:0.9rem;
+    max-width:380px;
+    line-height:1.4;
+}
+
+/* ARCHIVE EMPTY STATE */
+#archivePanel{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    padding:1.5rem 2rem;
+    box-sizing:border-box;
+}
+
+.archiveEmptyState{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    margin:auto;
+    padding:2.5rem 1.5rem;
+    gap:0.75rem;
+    color:rgba(255,255,255,0.55);
+}
+
+.archiveEmptyIcon{
+    font-size:2.8rem;
+    opacity:0.8;
+}
+
+.archiveEmptyTitle{
+    font-size:1.15rem;
+    color:#f2d08a;
+    font-weight:600;
+}
+
+.archiveEmptyText{
+    font-size:0.9rem;
+    max-width:420px;
+    line-height:1.45;
 }
 
 

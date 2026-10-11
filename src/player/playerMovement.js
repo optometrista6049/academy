@@ -56,9 +56,18 @@ if(isInputLocked()){
 
     camera.getWorldDirection(_forward);
     _forward.y = 0;
-    _forward.normalize();
+    if (_forward.lengthSq() < 0.0001 || !Number.isFinite(_forward.x) || !Number.isFinite(_forward.z)) {
+        _forward.set(0, 0, 1);
+    } else {
+        _forward.normalize();
+    }
 
     _right.crossVectors(_forward, _up);
+    if (_right.lengthSq() < 0.0001 || !Number.isFinite(_right.x) || !Number.isFinite(_right.z)) {
+        _right.set(1, 0, 0);
+    } else {
+        _right.normalize();
+    }
 
     // =========================
     // INPUT

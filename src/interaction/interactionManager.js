@@ -65,17 +65,33 @@ from '../ui/pandaReminder.js';
 
 import {
     pandaIntroDialogue,
-    montyWaitingDialogue
+    montyWaitingDialogue,
+    montyTurnInDialogue
 } from '../dialogue/dialogues/pandaIntro.js';
 
 import { getNextNeutralDialogue }
 from '../dialogue/neutralDialogues.js';
 
 import {
+    hasInventoryItem,
+    addInventoryItem,
+    removeInventoryItem
+} from '../ui/registry/modules/inventoryModuleV2.js';
+
+import {
     startMissionFromData,
     isMissionActive,
-    isObjectiveCompleted
+    isObjectiveCompleted,
+    completeObjective
 } from '../systems/missionManager.js';
+
+import {
+    playMuebleOpeningCinematic,
+    isMuebleCinematicActive
+} from '../cinematics/muebleCinematic.js';
+
+import { updateDiaryContent }
+from '../ui/registry/modules/diaryModule.js';
 
 import { mission001 }
 from '../systems/missions/missionData.js';
@@ -160,16 +176,15 @@ const teleronBusyDialogue = {
 export function updateInteractionSystem(){
 	
 	if(
+        dialogueState.active ||
+        isMuebleCinematicActive()
+    ){
 
-    dialogueState.active
+        hideInteraction();
 
-){
+        return;
 
-    hideInteraction();
-
-    return;
-
-}
+    }
 
     const player =
         runtimeState.player;
@@ -391,6 +406,7 @@ export function tryInteraction(){
                     gameState.quests.mission_001 = 'active';
                     startMissionFromData(mission001);
                     setPandaIdle();
+                    updateDiaryContent();
                 };
 
                 startDialogue(
@@ -399,16 +415,31 @@ export function tryInteraction(){
 
             } else {
 
-                // Si la mision 1 esta activa y aun no se ha entregado la caja, dar recordatorio
-                if (isMissionActive('mission001') && !isObjectiveCompleted('deliverBadgeBox')) {
+                // Si el jugador ya recogió la caja de cartón, entregar a Monty
+                if (hasInventoryItem('badgeBox')) {
+
+                    montyTurnInDialogue.onComplete = () => {
+                        removeInventoryItem('badgeBox');
+                        completeObjective('deliverBadgeBox');
+                        gameState.flags.deliveredBox = true;
+                        updateDiaryContent();
+                    };
+
+                    startDialogue(montyTurnInDialogue);
+
+                } else if (!gameState.flags.deliveredBox) {
+
                     startDialogue(montyWaitingDialogue);
+
                 } else {
+
                     const next = getNextNeutralDialogue('panda');
                     if (next) {
                         startDialogue(next);
                     } else {
-                        startDialogue(montyWaitingDialogue);
+                        startDialogue(montyTurnInDialogue);
                     }
+
                 }
 
             }
@@ -460,21 +491,48 @@ export function tryInteraction(){
 
         case 'mueble':
 
-            startDialogue({
+            if (gameState.flags.openedMueble || isObjectiveCompleted('findBadgeBox')) {
 
-                speaker: 'Mueble',
+                startDialogue({
 
-                portrait: null,
+                    speaker: 'Mueble',
 
-                pages: [
+                    portrait: null,
 
-                    'Una cómoda de madera noble con vetas naturales y varios cajones.',
+                    pages: [
 
-                    'Por ahora los cajones están cerrados.'
+                        'El cajón de la cómoda ya está abierto y la cerradura desbloqueada.',
 
-                ]
+                        'Ya has recogido la caja de cartón de su interior.'
 
-            });
+                    ]
+
+                });
+
+            } else if (hasInventoryItem('furnitureKey')) {
+
+                hideInteraction();
+                playMuebleOpeningCinematic();
+
+            } else {
+
+                startDialogue({
+
+                    speaker: 'Mueble',
+
+                    portrait: null,
+
+                    pages: [
+
+                        'Una cómoda de madera noble con vetas naturales y varios cajones.',
+
+                        'Todos los cajones están firmemente cerrados con llave. Parece que necesitas la llave correspondiente para poder abrirlos.'
+
+                    ]
+
+                });
+
+            }
 
             break;
 

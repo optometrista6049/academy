@@ -530,10 +530,25 @@ function displayItem(itemData){
     setDescription(itemData.description);
 
     //-------------------------------------------------
-    // Acciones
+    // Acciones (Abrir y Archivar)
     //-------------------------------------------------
 
-    showActions(false);
+    const canOpen = Boolean(itemData.canOpen);
+    const canArchive = Boolean(itemData.canArchive);
+
+    const openBtn = document.getElementById("inventoryOpenButton");
+    const saveBtn = document.getElementById("inventorySaveButton");
+
+    if(openBtn){
+        openBtn.style.display = canOpen ? "" : "none";
+    }
+
+    if(saveBtn){
+        saveBtn.style.display = canArchive ? "" : "none";
+        saveBtn.textContent = "Archivar";
+    }
+
+    showActions(canOpen || canArchive);
 
 }
 
@@ -554,7 +569,9 @@ function setPreviewImage(imageURL){
     previewImage.style.backgroundImage =
         `url(${imageURL})`;
 
-    previewImage.style.backgroundSize = "cover";
+    previewImage.style.backgroundSize = "contain";
+
+    previewImage.style.backgroundRepeat = "no-repeat";
 
     previewImage.style.backgroundPosition = "center";
 

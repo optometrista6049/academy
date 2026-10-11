@@ -29,7 +29,8 @@ from "./modules/archiveModule.js";
 
 import {
 
-    createDiaryModule
+    createDiaryModule,
+    updateDiaryContent
 
 }
 from "./modules/diaryModule.js";
@@ -152,6 +153,12 @@ export function showRegistrySection(index){
         registrySectionMap[index]
 
     );
+
+    if(index === 2){
+
+        updateDiaryContent();
+
+    }
 	
 	
 

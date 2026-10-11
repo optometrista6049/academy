@@ -9,6 +9,14 @@ import {
 }
 from '../systems/inputLockSystem.js';
 
+import {
+    initDialogueStage,
+    showDialogueStage,
+    hideDialogueStage,
+    onDialoguePageAdvance,
+    isNPCSpeaker
+} from './dialogueStage.js';
+
 
 
 let root = null;
@@ -30,6 +38,8 @@ let textLabel = null;
 let footer = null;
 
 let continueButton = null;
+
+let dialogueEntryTimer = null;
 
 // ======================================================
 // CREATE UI
@@ -263,6 +273,12 @@ export function createDialogueUI(){
     root.style.display =
         'none';
 
+    try {
+        initDialogueStage();
+    } catch (e) {
+        console.warn('initDialogueStage deferred:', e);
+    }
+
 }
 
 // ======================================================
@@ -286,10 +302,61 @@ export function showDialogue(
     dialogueState.currentPage =
         0;
 
-    root.style.display =
-        'flex';
+    if (dialogueEntryTimer) {
+        clearTimeout(dialogueEntryTimer);
+        dialogueEntryTimer = null;
+    }
 
-    updateDialogue();
+    let firstSpeaker = dialogue.speaker;
+    if (typeof dialogue.speakerByPage === 'function') {
+        firstSpeaker = dialogue.speakerByPage(0);
+    } else if (Array.isArray(dialogue.speakers) && dialogue.speakers[0]) {
+        firstSpeaker = dialogue.speakers[0];
+    }
+
+    const isNPC = isNPCSpeaker(firstSpeaker);
+
+    if (isNPC) {
+        // ENTRADA DIFERIDA COMBINADA:
+        // 1. Ocultar caja de texto inicialmente para dar protagonismo total a la apertura de la cinemática
+        root.classList.add('npc-mode');
+        root.classList.remove('active-dialogue');
+        root.style.display = 'none';
+
+        // 2. Desplegar el escenario cinemático 3D (viñeta periférica + desenfoque + logo)
+        try {
+            showDialogueStage(firstSpeaker);
+        } catch (err) {
+            console.error('Error starting dialogue stage for NPC:', err);
+        }
+
+        // 3. Pre-renderizar contenido textual de la primera página
+        updateDialogue();
+
+        // 4. Lanzar la caja de diálogo SOLO cuando la cinemática ya esté plenamente asentada (~1250ms)
+        dialogueEntryTimer = setTimeout(() => {
+            if (!dialogueState.active || !root) return;
+            root.style.display = 'flex';
+            // Forzar reflow para animación ascendente suave
+            void root.offsetWidth;
+            root.classList.add('active-dialogue');
+            checkScrollHint();
+        }, 1250);
+
+    } else {
+        // Diálogos estándar no cinemáticos
+        try {
+            hideDialogueStage();
+        } catch (_) {}
+        root.classList.remove('npc-mode');
+        root.style.display = 'flex';
+        requestAnimationFrame(() => {
+            if (root && dialogueState.active) {
+                root.classList.add('active-dialogue');
+            }
+        });
+        updateDialogue();
+    }
 
 }
 
@@ -350,7 +417,7 @@ function updateDialogue(){
     }
 
     // ------------------------------------------
-    // SPEAKER
+    // SPEAKER & NPC STAGE MODE
     // ------------------------------------------
 
     let currentSpeaker = dialogue.speaker;
@@ -363,32 +430,32 @@ function updateDialogue(){
     speakerLabel.innerText =
         currentSpeaker || 'Panda';
 
-    // ------------------------------------------
-    // PORTRAIT
-    // ------------------------------------------
+    const isNPC = isNPCSpeaker(currentSpeaker);
 
-    if(
+    if (isNPC) {
+        // Opción 1: Reemplazar pantalla de juego por cinemática del modelo 3D del NPC gesticulando en fondo neutro
+        root.classList.add('npc-mode');
+        // En la caja de diálogo solo aparece el nombre, ocultando el retrato
+        portraitContainer.style.display = 'none';
 
-        dialogue.portrait
+        try {
+            showDialogueStage(currentSpeaker);
+        } catch (err) {
+            console.error('Error starting dialogue stage for NPC:', err);
+        }
+    } else {
+        // Mantener estética estándar original cuando NO sea diálogo de NPC
+        try {
+            hideDialogueStage();
+        } catch (_) {}
+        root.classList.remove('npc-mode');
 
-    ){
-
-        portraitImage.src =
-
-            dialogue.portrait;
-
-        portraitContainer.style.display =
-
-            '';
-
-    }
-
-    else{
-
-        portraitContainer.style.display =
-
-            'none';
-
+        if (dialogue.portrait) {
+            portraitImage.src = dialogue.portrait;
+            portraitContainer.style.display = '';
+        } else {
+            portraitContainer.style.display = 'none';
+        }
     }
 
     // ------------------------------------------
@@ -420,6 +487,18 @@ function updateDialogue(){
             continueButton.innerText = 'Entendido';
         } else {
             continueButton.innerText = 'Continuar';
+        }
+    }
+
+    // ------------------------------------------
+    // PAGE CHANGE CALLBACK
+    // ------------------------------------------
+
+    if (typeof dialogue.onPageChange === 'function') {
+        try {
+            dialogue.onPageChange(dialogueState.currentPage);
+        } catch (e) {
+            console.error('Error in dialogue onPageChange:', e);
         }
     }
 
@@ -461,6 +540,7 @@ function nextDialoguePage(){
 
     }
 
+    onDialoguePageAdvance();
     updateDialogue();
 
 }
@@ -471,7 +551,20 @@ function nextDialoguePage(){
 
 export function closeDialogue(){
 
+    if (dialogueEntryTimer) {
+        clearTimeout(dialogueEntryTimer);
+        dialogueEntryTimer = null;
+    }
+
     unlockInput('dialogue');
+
+    if (root) {
+        root.classList.remove('active-dialogue');
+    }
+
+    try {
+        hideDialogueStage();
+    } catch (_) {}
 
     if(scrollHintBadge){
         scrollHintBadge.style.opacity = '0';
@@ -481,20 +574,20 @@ export function closeDialogue(){
     const finishedDialogue = dialogueState.currentDialogue;
 
     dialogueState.active =
-
         false;
 
     dialogueState.currentDialogue =
-
         null;
 
     dialogueState.currentPage =
-
         0;
 
-    root.style.display =
-
-        'none';
+    setTimeout(() => {
+        if (!dialogueState.active && root) {
+            root.style.display = 'none';
+            root.classList.remove('npc-mode');
+        }
+    }, 420);
 
     if (finishedDialogue && typeof finishedDialogue.onComplete === 'function') {
         try {

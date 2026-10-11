@@ -5,6 +5,38 @@
 
 export const registryCatalog = {
 
+    furnitureKey: {
+
+        //-------------------------------------------------
+        // Identificación
+        //-------------------------------------------------
+        id: "furnitureKey",
+
+        type: "item",
+
+        //-------------------------------------------------
+        // Información
+        //-------------------------------------------------
+        title: "Llave del mueble",
+
+        description:
+            "Una llave dorada con llavero verde que te entregó Monty. Abre los cajones de la cómoda de madera.",
+
+        //-------------------------------------------------
+        // Recursos gráficos
+        //-------------------------------------------------
+        thumbnail:
+            "assets/registry/inventory/furnitureKey.svg",
+
+        //-------------------------------------------------
+        // Comportamiento
+        //-------------------------------------------------
+        canOpen: false,
+
+        canArchive: false
+
+    },
+
     badgeBox: {
 
         //-------------------------------------------------
@@ -17,10 +49,10 @@ export const registryCatalog = {
         //-------------------------------------------------
         // Información
         //-------------------------------------------------
-        title: "Caja con carnets",
+        title: "Caja de cartón",
 
         description:
-            "Una pequeña caja de cartón que contiene varios carnets sin rellenar.",
+            "Una pequeña caja de cartón cerrada con precinto. Monty te ha pedido que se la lleves tal y como está.",
 
         //-------------------------------------------------
         // Recursos gráficos

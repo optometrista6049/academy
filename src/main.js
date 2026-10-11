@@ -20,11 +20,14 @@ import './core/lighting.js';
 import { animate } from './core/gameLoop.js';
 
 import {
-
     createMainMenu
-
 }
 from './ui/mainMenu.js';
+
+import {
+    initLogoUploadUI
+}
+from './ui/logoUploadModal.js';
 
 import {
 	showLoadingScreen,
@@ -472,6 +475,8 @@ window.addEventListener(
 // ======================================================
 
 createOrientationOverlay();
+
+initLogoUploadUI();
 
 createBootScreen(
 

@@ -21,6 +21,7 @@ export function loadModel(
 ){
 
     const loader = new GLTFLoader();
+    loader.setWithCredentials(true);
 
     loader.load(url, function(gltf){
 
@@ -86,6 +87,8 @@ export function loadModel(
 
         }
 
+    }, undefined, function(err){
+        console.warn('Failed loading model from ' + url + ':', err);
     });
 
 }
