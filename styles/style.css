@@ -836,17 +836,16 @@ GAME UI
     }
 }
 
-/* En pantallas de escritorio: logo en lateral izquierdo para acompañar al NPC encuadrado a la derecha */
+/* En pantallas panorámicas / horizontal: logo en fondo lateral izquierdo para acompañar al NPC a la derecha */
 .dialogue-stage-watermark {
     position: absolute;
-    top: 36%;
-    left: 24%;
-    transform: translate(-50%, -50%) scale(0.92);
-    width: min(380px, 38vw);
+    top: 32%;
+    left: 25%;
+    transform: translate(-50%, -50%) scale(0.96);
+    width: min(320px, 34vw);
     height: auto;
-    max-height: 44vh;
+    max-height: 42vh;
     opacity: 0;
-    filter: drop-shadow(0 0 28px rgba(46, 204, 113, 0.38)) drop-shadow(0 0 12px rgba(212, 175, 55, 0.25));
     pointer-events: none;
     z-index: 2;
     display: flex;
@@ -858,28 +857,23 @@ GAME UI
 }
 
 .dialogue-stage-overlay.visible .dialogue-stage-watermark {
-    opacity: 0.40;
+    opacity: 0.55;
     transform: translate(-50%, -50%) scale(1);
-    animation: watermarkGlowPulse 6s ease-in-out 1.25s infinite alternate;
 }
 
-@keyframes watermarkGlowPulse {
-    0% {
-        opacity: 0.34;
-        transform: translate(-50%, -50%) scale(0.98);
-        filter: drop-shadow(0 0 22px rgba(46, 204, 113, 0.28)) drop-shadow(0 0 8px rgba(212, 175, 55, 0.16));
-    }
-    100% {
-        opacity: 0.46;
-        transform: translate(-50%, -50%) scale(1.02);
-        filter: drop-shadow(0 0 38px rgba(46, 204, 113, 0.48)) drop-shadow(0 0 16px rgba(212, 175, 55, 0.32));
+@media (max-height: 520px) {
+    .dialogue-stage-watermark {
+        top: 28%;
+        left: 26%;
+        width: min(220px, 28vw);
+        max-height: 36vh;
     }
 }
 
 /* En móvil portrait: logo centrado y proporcionado para no interferir con el NPC ni la caja */
-@media (max-width: 768px), (orientation: portrait) {
+@media (orientation: portrait) {
     .dialogue-stage-watermark {
-        top: 22%;
+        top: 20%;
         left: 50%;
         width: min(240px, 60vw);
         max-height: 28vh;
@@ -887,7 +881,7 @@ GAME UI
         transform: translate(-50%, -50%) scale(0.92);
     }
     .dialogue-stage-overlay.visible .dialogue-stage-watermark {
-        opacity: 0.28;
+        opacity: 0.35;
         transform: translate(-50%, -50%) scale(1);
     }
 }
@@ -929,23 +923,56 @@ GAME UI
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-radius: 20px;
-    padding: 0.70rem 1.3rem;
-    bottom: max(12px, env(safe-area-inset-bottom, 12px));
-    width: min(92vw, 880px);
+    padding: 0.65rem 1.25rem;
+    left: max(20px, env(safe-area-inset-left, 20px));
+    right: auto;
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    transform: translateY(14px) scale(0.98);
+    width: min(50vw, 500px);
+    max-width: 52vw;
     height: auto;
-    min-height: 110px;
-    max-height: min(48vh, 210px);
+    min-height: 115px;
+    max-height: min(82vh, 320px);
+    box-sizing: border-box;
+}
+
+.dialogue.npc-mode.active-dialogue {
+    opacity: 1;
+    transform: translateY(0) scale(1);
 }
 
 @media (max-width: 768px), (max-height: 520px) {
     .dialogue.npc-mode {
-        width: min(92vw, 860px);
-        padding: 0.45rem 1rem;
-        bottom: max(8px, env(safe-area-inset-bottom, 8px));
+        left: max(14px, env(safe-area-inset-left, 14px));
+        right: auto;
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        transform: translateY(14px) scale(0.98);
+        width: min(52vw, 440px);
+        max-width: 54vw;
+        padding: 0.45rem 0.95rem;
         border-radius: 16px;
         height: auto;
-        min-height: 105px;
-        max-height: min(48vh, 185px);
+        min-height: 110px;
+        max-height: min(88vh, calc(100vh - 20px));
+    }
+
+    .dialogue.npc-mode.active-dialogue {
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (orientation: portrait) {
+    .dialogue.npc-mode {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%) translateY(14px) scale(0.98);
+        width: min(92vw, 560px);
+        max-width: 94vw;
+        bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    }
+
+    .dialogue.npc-mode.active-dialogue {
+        transform: translateX(-50%) translateY(0) scale(1);
     }
 }
 
@@ -1004,9 +1031,11 @@ GAME UI
     .dialogue.npc-mode .dialogue-text {
         font-size: clamp(0.88rem, 2.7vh, 1.05rem);
         line-height: 1.42;
-        min-height: 50px;
-        max-height: 24vh;
+        min-height: 54px;
+        max-height: min(48vh, 180px);
         padding: 0.15rem 0.35rem 0.15rem 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
     .dialogue.npc-mode .dialogue-footer {
         margin-top: 0.25rem;

@@ -75,12 +75,28 @@ export function getNPCModelUrl(speakerName) {
 }
 
 /**
+ * Obtiene la URL canónica del logotipo oficial de Monteserín Academy:
+ * 1. Logotipo personalizado guardado por el usuario en localStorage
+ * 2. Recurso oficial empaquetado por Vite en index.html (preload)
+ * 3. Ruta directa a assets/ui/monteserin_academy_logo_clean.png
+ */
+export function getOfficialLogoUrl() {
+    const saved = localStorage.getItem('monteserin_custom_logo');
+    if (saved) return saved;
+    const preloadEl = document.querySelector('link[rel="preload"][href*="monteserin_academy_logo"]');
+    if (preloadEl && preloadEl.getAttribute('href')) {
+        return preloadEl.getAttribute('href');
+    }
+    return './assets/ui/monteserin_academy_logo_clean.png';
+}
+
+/**
  * Inicializa el DOM del escenario cinemático y la escena Three.js
  */
 export function initDialogueStage() {
     if (overlay) return;
 
-    const savedLogo = localStorage.getItem('monteserin_custom_logo') || 'assets/ui/monteserin_academy_logo_clean.png';
+    const savedLogo = getOfficialLogoUrl();
 
     overlay = document.createElement('div');
     overlay.id = 'dialogueStageOverlay';
@@ -93,6 +109,15 @@ export function initDialogueStage() {
         </div>
         <canvas id="dialogueStageCanvas" class="dialogue-stage-canvas"></canvas>
     `;
+
+    const logoImg = overlay.querySelector('.dialogue-stage-logo-img');
+    if (logoImg) {
+        logoImg.onerror = () => {
+            if (!logoImg.src.includes('monteserin_academy_logo.png')) {
+                logoImg.src = './assets/ui/monteserin_academy_logo.png';
+            }
+        };
+    }
 
     document.body.appendChild(overlay);
 
@@ -180,7 +205,7 @@ function onStageResize() {
 
     // Ajustar posición horizontal del modelo según si es pantalla ancha o móvil
     if (currentModel) {
-        const baseX = isPortrait ? 0 : 0.40;
+        const baseX = isPortrait ? 0 : 0.48;
         currentModel.userData.baseX = baseX;
         currentModel.position.x = baseX;
     }
@@ -289,8 +314,8 @@ function setupNPCInStage(gltf, modelUrl, speakerName) {
     // Centrar en el escenario
     box.setFromObject(model);
     const isPortrait = (window.innerWidth / window.innerHeight) < 1;
-    const baseX = isPortrait ? 0 : 0.38;
-    model.position.x = baseX; // En horizontal hacia la derecha del logo
+    const baseX = isPortrait ? 0 : 0.48;
+    model.position.x = baseX; // En horizontal hacia la derecha, dejando la mitad izquierda 100% libre para la caja
     model.userData.baseX = baseX;
     model.position.z = 0;
     model.position.y = isPortrait 
@@ -363,9 +388,9 @@ export function showDialogueStage(speakerName) {
 
     const logoImg = overlay.querySelector('.dialogue-stage-logo-img');
     if (logoImg) {
-        const savedLogo = localStorage.getItem('monteserin_custom_logo');
-        if (savedLogo && logoImg.src !== savedLogo) {
-            logoImg.src = savedLogo;
+        const canonicalLogo = getOfficialLogoUrl();
+        if (logoImg.src !== canonicalLogo && !logoImg.src.endsWith(canonicalLogo.replace('./', ''))) {
+            logoImg.src = canonicalLogo;
         }
     }
 
