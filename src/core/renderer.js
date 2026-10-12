@@ -9,11 +9,7 @@ export const renderer = new THREE.WebGLRenderer({
 
 // Desactivar Tone Mapping para que los colores sean puros, vivos y alegres (sin filtros plomizos ni grises)
 renderer.toneMapping = THREE.NoToneMapping;
-if (THREE.sRGBEncoding) {
-    renderer.outputEncoding = THREE.sRGBEncoding;
-} else if ('SRGBColorSpace' in THREE) {
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-}
+renderer.outputEncoding = THREE.LinearEncoding;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.shadowMap.autoUpdate = false;
