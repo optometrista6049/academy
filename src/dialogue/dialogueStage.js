@@ -205,7 +205,7 @@ function onStageResize() {
 
     // Ajustar posición horizontal del modelo según si es pantalla ancha o móvil
     if (currentModel) {
-        const baseX = isPortrait ? 0 : 0.48;
+        const baseX = isPortrait ? 0 : 0.68;
         currentModel.userData.baseX = baseX;
         currentModel.position.x = baseX;
     }
@@ -314,7 +314,7 @@ function setupNPCInStage(gltf, modelUrl, speakerName) {
     // Centrar en el escenario
     box.setFromObject(model);
     const isPortrait = (window.innerWidth / window.innerHeight) < 1;
-    const baseX = isPortrait ? 0 : 0.48;
+    const baseX = isPortrait ? 0 : 0.68;
     model.position.x = baseX; // En horizontal hacia la derecha, dejando la mitad izquierda 100% libre para la caja
     model.userData.baseX = baseX;
     model.position.z = 0;

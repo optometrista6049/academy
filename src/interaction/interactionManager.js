@@ -4,6 +4,9 @@ from '../state/runtimeState.js';
 import { gameState }
 from '../state/gameState.js';
 
+import { isInputLocked }
+from '../systems/inputLockSystem.js';
+
 import {
 
     showInteraction,
@@ -177,7 +180,8 @@ export function updateInteractionSystem(){
 	
 	if(
         dialogueState.active ||
-        isMuebleCinematicActive()
+        isMuebleCinematicActive() ||
+        isInputLocked()
     ){
 
         hideInteraction();

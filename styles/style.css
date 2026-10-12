@@ -840,11 +840,11 @@ GAME UI
 .dialogue-stage-watermark {
     position: absolute;
     top: 32%;
-    left: 25%;
+    left: 24%;
     transform: translate(-50%, -50%) scale(0.96);
-    width: min(320px, 34vw);
+    width: min(260px, 28vw);
     height: auto;
-    max-height: 42vh;
+    max-height: 38vh;
     opacity: 0;
     pointer-events: none;
     z-index: 2;
@@ -857,16 +857,16 @@ GAME UI
 }
 
 .dialogue-stage-overlay.visible .dialogue-stage-watermark {
-    opacity: 0.55;
+    opacity: 0.45;
     transform: translate(-50%, -50%) scale(1);
 }
 
 @media (max-height: 520px) {
     .dialogue-stage-watermark {
-        top: 28%;
-        left: 26%;
-        width: min(220px, 28vw);
-        max-height: 36vh;
+        top: 26%;
+        left: 24%;
+        width: min(180px, 24vw);
+        max-height: 32vh;
     }
 }
 
@@ -928,8 +928,8 @@ GAME UI
     right: auto;
     bottom: max(16px, env(safe-area-inset-bottom, 16px));
     transform: translateY(14px) scale(0.98);
-    width: min(50vw, 500px);
-    max-width: 52vw;
+    width: min(46vw, 440px);
+    max-width: 48vw;
     height: auto;
     min-height: 115px;
     max-height: min(82vh, 320px);
@@ -947,8 +947,8 @@ GAME UI
         right: auto;
         bottom: max(10px, env(safe-area-inset-bottom, 10px));
         transform: translateY(14px) scale(0.98);
-        width: min(52vw, 440px);
-        max-width: 54vw;
+        width: min(46vw, 410px);
+        max-width: 48vw;
         padding: 0.45rem 0.95rem;
         border-radius: 16px;
         height: auto;
@@ -1020,6 +1020,14 @@ GAME UI
     filter: brightness(1.12);
 }
 
+.dialogue.npc-mode .dialogue-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 0.35rem;
+    width: 100%;
+}
+
 @media (max-height: 520px) {
     .dialogue.npc-mode .dialogue-header {
         margin-bottom: 0.20rem;
@@ -1038,7 +1046,11 @@ GAME UI
         -webkit-overflow-scrolling: touch;
     }
     .dialogue.npc-mode .dialogue-footer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
         margin-top: 0.25rem;
+        width: 100%;
     }
     .dialogue.npc-mode .dialogue-button {
         padding: clamp(0.28rem, 1vh, 0.42rem) clamp(0.8rem, 2vw, 1.25rem);
@@ -1375,8 +1387,17 @@ VENTANA REGISTRO
 
     overflow:hidden;
 
-    z-index:500;
+    z-index:20000;
 
+}
+
+/* Asegurar que cuando Registro está abierto en móvil, el botón y etiqueta de interacción nunca queden por encima */
+body.registry-open #mobileInteractionButton,
+body.registry-open #mobileInteractionLabel,
+body:has(#registry:not([hidden])) #mobileInteractionButton,
+body:has(#registry:not([hidden])) #mobileInteractionLabel {
+    display: none !important;
+    pointer-events: none !important;
 }
 
 #registryHeaderIcon{

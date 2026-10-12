@@ -11,6 +11,10 @@ import {
 } from "../../systems/inputLockSystem.js";
 
 import {
+    hideInteraction
+} from "../../interaction/interactionUI.js";
+
+import {
     gameState
 } from "../../state/gameState.js";
 
@@ -327,6 +331,10 @@ export function openRegistry(){
 
     isOpen = true;
 
+    hideInteraction();
+
+    document.body.classList.add("registry-open");
+
     lockInput("registry");
 
     registryRoot.hidden = false;
@@ -360,6 +368,8 @@ export function closeRegistry(){
     }
 
     isOpen = false;
+
+    document.body.classList.remove("registry-open");
 
     unlockInput("registry");
 
