@@ -104,8 +104,8 @@ export function initDialogueStage() {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 50);
-    camera.position.set(0, 0.42, 3.35);
+    camera = new THREE.PerspectiveCamera(25, w / h, 0.1, 50);
+    camera.position.set(0, 0.38, 3.65);
     camera.lookAt(0, 0.35, 0);
 
     // Iluminación de estudio con matices esmeralda, luz principal cálida dorada y rim light
@@ -164,16 +164,16 @@ function onStageResize() {
     const isPanda = isPandaSpeaker(currentSpeaker);
 
     if (isPortrait) {
-        // Móvil vertical: encuadre adaptado con aire superior para verse por encima del diálogo
-        camera.fov = isPanda ? 30 : 32;
-        camera.position.set(0, isPanda ? 0.42 : 0.46, isPanda ? 3.65 : 3.35);
-        camera.lookAt(0, isPanda ? 0.38 : 0.42, 0);
+        // En caso de redimensión vertical
+        camera.fov = 30;
+        camera.position.set(0, 0.40, 3.65);
+        camera.lookAt(0, 0.36, 0);
     } else {
-        // Desktop / horizontal: NPC posicionado hacia el lado derecho (X: 0.40)
-        // para dar protagonismo cinematográfico al logo de Monteserín Academy a su izquierda
-        camera.fov = isPanda ? 25 : 27;
-        camera.position.set(0, isPanda ? 0.38 : 0.42, isPanda ? 3.65 : 3.25);
-        camera.lookAt(0, isPanda ? 0.34 : 0.38, 0);
+        // Móvil horizontal / Desktop: encuadre de plano medio calibrado
+        // con margen superior holgado (headroom) para que jamás se corten las orejas ni el peinado
+        camera.fov = 25;
+        camera.position.set(0, 0.38, 3.65);
+        camera.lookAt(0, 0.35, 0);
     }
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
@@ -278,22 +278,24 @@ function setupNPCInStage(gltf, modelUrl, speakerName) {
     const size = new THREE.Vector3();
     box.getSize(size);
 
-    // Ajuste específico de escala y centrado para Panda vs Otros NPCs
-    // Para Panda: altura calibrada a 1.76 y margen inferior ampliado para evitar corte superior
-    const desiredHeight = isPanda ? 1.76 : 2.05;
+    // Ajuste uniforme y proporcional de escala y centrado para todos los NPCs
+    // Altura calibrada a 1.76 para todos (Telerín, Telerón, Señor Alto y Panda)
+    // asegurando encuadre de plano medio con margen superior holgado (headroom)
+    // para que jamás se corten las orejas ni el peinado en móvil horizontal
+    const desiredHeight = 1.76;
     const scale = desiredHeight / (size.y || 1);
     model.scale.setScalar(scale);
 
     // Centrar en el escenario
     box.setFromObject(model);
     const isPortrait = (window.innerWidth / window.innerHeight) < 1;
-    const baseX = isPortrait ? 0 : 0.40;
-    model.position.x = baseX; // En desktop hacia la derecha del logo
+    const baseX = isPortrait ? 0 : 0.38;
+    model.position.x = baseX; // En horizontal hacia la derecha del logo
     model.userData.baseX = baseX;
     model.position.z = 0;
-    model.position.y = isPanda 
-        ? (isPortrait ? (-box.min.y - 0.78) : (-box.min.y - 0.94))
-        : (isPortrait ? (-box.min.y - 0.58) : (-box.min.y - 0.72));
+    model.position.y = isPortrait 
+        ? (-box.min.y - 0.78) 
+        : (-box.min.y - 0.94);
 
     // Orientación hacia el frente/centro con dinamismo sutil
     model.rotation.y = isPortrait ? -0.10 : -0.25;

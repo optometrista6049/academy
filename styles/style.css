@@ -257,11 +257,15 @@ GAME UI
 
     box-sizing:border-box;
 
-    width:min(94vw,1000px);
+    width:min(92vw,920px);
 
-    max-height:25vh;
+    height:auto;
 
-    padding:.7rem;
+    min-height:105px;
+
+    max-height:min(48vh, 220px);
+
+    padding:.65rem 1rem;
 
     border-radius:18px;
 
@@ -415,15 +419,19 @@ GAME UI
 
     -webkit-overflow-scrolling:touch;
 
-    max-height:14vh;
+    height:auto;
+
+    min-height:50px;
+
+    max-height:24vh;
 
     font-size:clamp(
 
-        .9rem,
+        .92rem,
 
-        1.8vh,
+        2.5vh,
 
-        1.35rem
+        1.25rem
 
     );
 
@@ -668,89 +676,58 @@ GAME UI
 }
 
 /* =====================================================
-   SMALL HEIGHT SCREENS
+   HORIZONTAL MOBILE & SMALL HEIGHT SCREENS
 ===================================================== */
 
-@media (max-height:520px){
+@media (max-height: 520px) {
 
-    .dialogue{
-
-        bottom:1vh;
-
-        padding:.55rem;
-
-        max-height:25vh;
-
+    .dialogue {
+        bottom: max(6px, env(safe-area-inset-bottom, 6px));
+        padding: 0.45rem 0.95rem;
+        width: min(92vw, 860px);
+        height: auto;
+        min-height: 105px;
+        max-height: min(48vh, 185px);
     }
 
-    .dialogue-header{
-
-        margin-bottom:.35rem;
-
+    .dialogue-header {
+        margin-bottom: 0.20rem;
+        gap: 0.5rem;
     }
 
-    .dialogue-text{
-
-        max-height:13vh;
-
+    .dialogue-portrait-container {
+        width: 5.4vh;
+        height: 5.4vh;
+        min-width: 32px;
+        min-height: 32px;
     }
 
-}
-
-
-
-/* =====================================================
-RESPONSIVE ADJUSTMENTS
-===================================================== */
-
-@media (max-height:520px){
-
-    .dialogue{
-
-        max-height:30vh;
-
-        min-height:120px;
-
-        bottom:1vh;
-
-        padding:.7vh;
-
+    .dialogue-speaker {
+        font-size: clamp(0.90rem, 3.2vh, 1.15rem);
     }
 
-    .dialogue-portrait-container{
-
-        width:5.8vh;
-
-        height:5.8vh;
-
-        min-width:34px;
-
-        min-height:34px;
-
+    .dialogue-text {
+        height: auto;
+        min-height: 52px;
+        max-height: 24vh;
+        font-size: clamp(0.90rem, 2.7vh, 1.08rem);
+        line-height: 1.45;
+        padding: 0.2rem 0.4rem 0.2rem 0;
     }
 
-    .dialogue-text{
-
-        font-size:clamp(
-
-            12px,
-
-            1.5vh,
-
-            17px
-
-        );
-
+    .dialogue-footer {
+        margin-top: 0.25rem;
     }
 
-    .dialogue-scroll-hint{
+    .dialogue-button {
+        padding: clamp(0.28rem, 1vh, 0.45rem) clamp(0.8rem, 2vw, 1.25rem);
+        font-size: clamp(0.82rem, 2.3vh, 0.95rem);
+    }
 
-        padding:.15rem .45rem;
-
-        font-size:clamp(10px, 1.25vh, 12px);
-
-        gap:.25rem;
-
+    .dialogue-scroll-hint {
+        padding: 0.15rem 0.45rem;
+        font-size: clamp(10px, 1.25vh, 12px);
+        gap: 0.25rem;
     }
 
 }
@@ -952,23 +929,29 @@ RESPONSIVE ADJUSTMENTS
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-radius: 20px;
-    padding: 0.9rem 1.4rem;
-    bottom: max(16px, env(safe-area-inset-bottom, 16px));
-    width: min(92vw, 920px);
+    padding: 0.70rem 1.3rem;
+    bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    width: min(92vw, 880px);
+    height: auto;
+    min-height: 110px;
+    max-height: min(48vh, 210px);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (max-height: 520px) {
     .dialogue.npc-mode {
-        width: min(94vw, 560px);
-        padding: 0.75rem 1rem;
-        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        width: min(92vw, 860px);
+        padding: 0.45rem 1rem;
+        bottom: max(8px, env(safe-area-inset-bottom, 8px));
         border-radius: 16px;
+        height: auto;
+        min-height: 105px;
+        max-height: min(48vh, 185px);
     }
 }
 
 .dialogue.npc-mode .dialogue-header {
     gap: 0;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.35rem;
 }
 
 .dialogue.npc-mode .dialogue-speaker {
@@ -979,7 +962,7 @@ RESPONSIVE ADJUSTMENTS
     border-left: 3px solid #d6b06a;
     padding: 3px 14px 3px 10px;
     border-radius: 4px 10px 10px 4px;
-    font-size: clamp(1.05rem, 2.2vh, 1.45rem);
+    font-size: clamp(1rem, 2.2vh, 1.35rem);
     letter-spacing: 0.8px;
     text-transform: uppercase;
     color: #f7e4a8;
@@ -987,10 +970,13 @@ RESPONSIVE ADJUSTMENTS
 }
 
 .dialogue.npc-mode .dialogue-text {
-    font-size: clamp(1rem, 2.1vh, 1.25rem);
-    line-height: 1.6;
+    font-size: clamp(0.94rem, 2.6vh, 1.16rem);
+    line-height: 1.45;
     color: #f2f4f8;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    height: auto;
+    min-height: 52px;
+    max-height: 24vh;
 }
 
 .dialogue.npc-mode .dialogue-button {
@@ -1005,6 +991,30 @@ RESPONSIVE ADJUSTMENTS
 .dialogue.npc-mode .dialogue-button:hover {
     transform: translateY(-2px);
     filter: brightness(1.12);
+}
+
+@media (max-height: 520px) {
+    .dialogue.npc-mode .dialogue-header {
+        margin-bottom: 0.20rem;
+    }
+    .dialogue.npc-mode .dialogue-speaker {
+        padding: 2px 10px 2px 8px;
+        font-size: clamp(0.88rem, 3.2vh, 1.12rem);
+    }
+    .dialogue.npc-mode .dialogue-text {
+        font-size: clamp(0.88rem, 2.7vh, 1.05rem);
+        line-height: 1.42;
+        min-height: 50px;
+        max-height: 24vh;
+        padding: 0.15rem 0.35rem 0.15rem 0;
+    }
+    .dialogue.npc-mode .dialogue-footer {
+        margin-top: 0.25rem;
+    }
+    .dialogue.npc-mode .dialogue-button {
+        padding: clamp(0.28rem, 1vh, 0.42rem) clamp(0.8rem, 2vw, 1.25rem);
+        font-size: clamp(0.82rem, 2.3vh, 0.95rem);
+    }
 }
 
 /* =======================================================
