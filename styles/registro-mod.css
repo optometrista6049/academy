@@ -16,7 +16,7 @@
 
     height:22px;
 
-    z-index:998;
+    z-index:24999;
 
     pointer-events:none;
 
@@ -170,11 +170,15 @@ linear-gradient(
 
     height:auto;
 
-    z-index:999;
+    z-index:25000;
 
     user-select:none;
 
     -webkit-user-drag:none;
+
+    cursor:pointer;
+
+    pointer-events:auto;
 
 }
 

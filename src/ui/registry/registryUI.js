@@ -614,16 +614,41 @@ function registerEvents(){
     );
 
     //--------------------------------------------------
-    // BOTÓN REGISTRO
+    // BOTÓN REGISTRO (Abrir / Cerrar al pulsar el icono flotante)
     //--------------------------------------------------
 
     registryButton.addEventListener(
 
         "click",
 
-        onButtonClick
+        (e) => {
+            e.stopPropagation();
+            onButtonClick();
+        }
 
     );
+
+    // Permitir cerrar también pulsando sobre el icono de cabecera del propio registro
+    if (registryHeaderIcon) {
+        registryHeaderIcon.style.cursor = "pointer";
+        registryHeaderIcon.title = "Cerrar Registro";
+        registryHeaderIcon.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (isOpen) {
+                closeRegistry();
+            }
+        });
+    }
+
+    // Tocar fuera del panel del Registro para cerrarlo cómodamente
+    document.addEventListener("pointerdown", (e) => {
+        if (!isOpen) return;
+        if (!registryRoot || registryRoot.hidden) return;
+        if (registryRoot.contains(e.target)) return;
+        if (registryButton && (registryButton === e.target || registryButton.contains(e.target))) return;
+        if (registryBase && (registryBase === e.target || registryBase.contains(e.target))) return;
+        closeRegistry();
+    });
 
     //--------------------------------------------------
     // PESTAÑAS

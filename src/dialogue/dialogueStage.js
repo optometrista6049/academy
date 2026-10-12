@@ -82,12 +82,12 @@ export function getNPCModelUrl(speakerName) {
  */
 export function getOfficialLogoUrl() {
     const saved = localStorage.getItem('monteserin_custom_logo');
-    if (saved) return saved;
+    if (saved && !saved.includes('pantallazo') && saved.startsWith('data:image/')) return saved;
     const preloadEl = document.querySelector('link[rel="preload"][href*="monteserin_academy_logo"]');
     if (preloadEl && preloadEl.getAttribute('href')) {
         return preloadEl.getAttribute('href');
     }
-    return './assets/ui/monteserin_academy_logo_clean.png';
+    return './assets/ui/monteserin_academy_logo_clean.png?v=2';
 }
 
 /**
@@ -205,7 +205,7 @@ function onStageResize() {
 
     // Ajustar posición horizontal del modelo según si es pantalla ancha o móvil
     if (currentModel) {
-        const baseX = isPortrait ? 0 : 0.68;
+        const baseX = isPortrait ? 0 : -0.68;
         currentModel.userData.baseX = baseX;
         currentModel.position.x = baseX;
     }
@@ -314,16 +314,16 @@ function setupNPCInStage(gltf, modelUrl, speakerName) {
     // Centrar en el escenario
     box.setFromObject(model);
     const isPortrait = (window.innerWidth / window.innerHeight) < 1;
-    const baseX = isPortrait ? 0 : 0.68;
-    model.position.x = baseX; // En horizontal hacia la derecha, dejando la mitad izquierda 100% libre para la caja
+    const baseX = isPortrait ? 0 : -0.68;
+    model.position.x = baseX; // En horizontal hacia la izquierda, dejando la mitad derecha libre para la caja y el logo
     model.userData.baseX = baseX;
     model.position.z = 0;
     model.position.y = isPortrait 
         ? (-box.min.y - 0.78) 
         : (-box.min.y - 0.94);
 
-    // Orientación hacia el frente/centro con dinamismo sutil
-    model.rotation.y = isPortrait ? -0.10 : -0.25;
+    // Orientación hacia el frente/centro con dinamismo sutil hacia la caja de diálogo
+    model.rotation.y = isPortrait ? 0 : 0.22;
 
     scene.add(model);
 

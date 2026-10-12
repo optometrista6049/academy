@@ -836,15 +836,16 @@ GAME UI
     }
 }
 
-/* En pantallas panorámicas / horizontal: logo en fondo lateral izquierdo para acompañar al NPC a la derecha */
+/* En pantallas panorámicas / horizontal: logo en esquina superior derecha para acompañar la escena con NPC a la izquierda */
 .dialogue-stage-watermark {
     position: absolute;
-    top: 32%;
-    left: 24%;
-    transform: translate(-50%, -50%) scale(0.96);
-    width: min(260px, 28vw);
+    top: clamp(18px, 12%, 80px);
+    right: clamp(24px, 4.5vw, 64px);
+    left: auto;
+    transform: scale(0.96);
+    width: min(220px, 22vw);
     height: auto;
-    max-height: 38vh;
+    max-height: 28vh;
     opacity: 0;
     pointer-events: none;
     z-index: 2;
@@ -857,32 +858,34 @@ GAME UI
 }
 
 .dialogue-stage-overlay.visible .dialogue-stage-watermark {
-    opacity: 0.45;
-    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.82;
+    transform: scale(1);
 }
 
 @media (max-height: 520px) {
     .dialogue-stage-watermark {
-        top: 26%;
-        left: 24%;
-        width: min(180px, 24vw);
-        max-height: 32vh;
+        top: 10px;
+        right: max(16px, env(safe-area-inset-right, 16px));
+        left: auto;
+        width: min(150px, 18vw);
+        max-height: 24vh;
     }
 }
 
-/* En móvil portrait: logo centrado y proporcionado para no interferir con el NPC ni la caja */
+/* En móvil portrait: logo en esquina superior derecha proporcionado */
 @media (orientation: portrait) {
     .dialogue-stage-watermark {
-        top: 20%;
-        left: 50%;
-        width: min(240px, 60vw);
-        max-height: 28vh;
+        top: max(14px, env(safe-area-inset-top, 14px));
+        right: max(16px, env(safe-area-inset-right, 16px));
+        left: auto;
+        width: min(150px, 34vw);
+        max-height: 20vh;
         opacity: 0;
-        transform: translate(-50%, -50%) scale(0.92);
+        transform: scale(0.92);
     }
     .dialogue-stage-overlay.visible .dialogue-stage-watermark {
-        opacity: 0.35;
-        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.82;
+        transform: scale(1);
     }
 }
 
@@ -924,8 +927,8 @@ GAME UI
     -webkit-backdrop-filter: blur(14px);
     border-radius: 20px;
     padding: 0.65rem 1.25rem;
-    left: max(20px, env(safe-area-inset-left, 20px));
-    right: auto;
+    left: auto;
+    right: max(20px, env(safe-area-inset-right, 20px));
     bottom: max(16px, env(safe-area-inset-bottom, 16px));
     transform: translateY(14px) scale(0.98);
     width: min(46vw, 440px);
@@ -943,8 +946,8 @@ GAME UI
 
 @media (max-width: 768px), (max-height: 520px) {
     .dialogue.npc-mode {
-        left: max(14px, env(safe-area-inset-left, 14px));
-        right: auto;
+        left: auto;
+        right: max(14px, env(safe-area-inset-right, 14px));
         bottom: max(10px, env(safe-area-inset-bottom, 10px));
         transform: translateY(14px) scale(0.98);
         width: min(46vw, 410px);
@@ -1022,10 +1025,11 @@ GAME UI
 
 .dialogue.npc-mode .dialogue-footer {
     display: flex;
-    justify-content: center;
+    justify-content: flex-end;
     align-items: center;
     margin-top: 0.35rem;
     width: 100%;
+    padding-right: 4px;
 }
 
 @media (max-height: 520px) {
@@ -1047,10 +1051,11 @@ GAME UI
     }
     .dialogue.npc-mode .dialogue-footer {
         display: flex;
-        justify-content: center;
+        justify-content: flex-end;
         align-items: center;
         margin-top: 0.25rem;
         width: 100%;
+        padding-right: 4px;
     }
     .dialogue.npc-mode .dialogue-button {
         padding: clamp(0.28rem, 1vh, 0.42rem) clamp(0.8rem, 2vw, 1.25rem);
@@ -1076,7 +1081,7 @@ GAME UI
 
     height:22px;
 
-    z-index:998;
+    z-index:24999 !important;
 
     pointer-events:none;
 
@@ -1230,13 +1235,27 @@ linear-gradient(
 
     height:auto;
 
-    z-index:999;
+    z-index:25000 !important;
 
     user-select:none;
 
     -webkit-user-drag:none;
 
+    cursor:pointer;
+
+    pointer-events:auto !important;
+
     transition: filter 0.8s ease, transform 0.8s ease;
+
+}
+
+.registry-open #registryButton{
+
+    z-index: 25000 !important;
+
+    cursor: pointer;
+
+    pointer-events: auto !important;
 
 }
 
