@@ -30,6 +30,11 @@ export default defineConfig(() => {
                     fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_clean.png'), cleanBuffer);
                     fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo.png'), cleanBuffer);
                     fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_trans.png'), cleanBuffer);
+                    fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_official_logo.png'), cleanBuffer);
+                    try {
+                      fs.mkdirSync(path.resolve(__dirname, 'src/assets/images'), { recursive: true });
+                      fs.writeFileSync(path.resolve(__dirname, 'src/assets/images/monteserin_official_logo.png'), cleanBuffer);
+                    } catch (_) {}
                   }
                   if (data.rawBase64Data) {
                     const rawBuffer = Buffer.from(

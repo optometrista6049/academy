@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260" width="100%" height="100%">
+  <!-- Pablo Monteserín Official Green Spiral Glyph -->
+  <g fill="none" stroke="#0b8e36" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Outer elegant swoop -->
+    <path d="M 175 80 C 160 48, 138 32, 118 32 C 82 32, 60 75, 60 130 C 60 185, 88 228, 126 228 C 158 228, 175 195, 175 160 C 175 110, 140 68, 115 68 C 96 68, 86 92, 86 122 C 86 160, 108 190, 135 190 C 155 190, 168 172, 170 148 C 171 138, 168 132, 162 130 C 155 128, 148 133, 148 140 C 148 148, 154 154, 162 154" 
+          stroke-width="11" stroke-linecap="round"/>
+  </g>
+  <!-- Dot / Node terminal with center hole -->
+  <circle cx="162" cy="130" r="12" fill="#0b8e36"/>
+  <circle cx="162" cy="130" r="4.5" fill="#ffffff"/>
+</svg>

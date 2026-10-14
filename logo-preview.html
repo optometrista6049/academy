@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comprobación Visual de Logotipo - Opción L2</title>
+  <style>
+    body {
+      background: #080f0c;
+      color: #e6f0eb;
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 680px;
+      width: 100%;
+      background: #111c16;
+      border: 1.5px solid rgba(46, 204, 113, 0.4);
+      border-radius: 18px;
+      padding: 24px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.12);
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin-top: 0;
+      text-align: center;
+      color: #2ecc71;
+      border-bottom: 1px solid rgba(46, 204, 113, 0.25);
+      padding-bottom: 12px;
+    }
+    .desc {
+      text-align: center;
+      color: #9ab3a5;
+      font-size: 0.95rem;
+      margin-bottom: 20px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 520px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: #0b130f;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .card h3 {
+      font-size: 0.9rem;
+      color: #f1f7f4;
+      margin: 0 0 10px 0;
+    }
+    .img-box {
+      width: 100%;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .bg-white {
+      background: #ffffff;
+    }
+    .bg-cinematic {
+      background: radial-gradient(circle at center, #1b2f24 0%, #08100b 100%);
+      border: 1px solid rgba(46, 204, 113, 0.3);
+    }
+    .badge {
+      margin-top: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: rgba(46, 204, 113, 0.15);
+      color: #2ecc71;
+    }
+    .info {
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 4px solid #2ecc71;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Comprobación Visual: Logotipo Original</h1>
+    <div class="desc">Glifo oficial en espiral verde (Pablo Monteserín)</div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>1. Sobre fondo blanco</h3>
+        <div class="img-box bg-white">
+          <svg viewBox="0 0 260 260" width="160" height="160">
+            <g fill="none" stroke="#0b8e36" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 175 80 C 160 48, 138 32, 118 32 C 82 32, 60 75, 60 130 C 60 185, 88 228, 126 228 C 158 228, 175 195, 175 160 C 175 110, 140 68, 115 68 C 96 68, 86 92, 86 122 C 86 160, 108 190, 135 190 C 155 190, 168 172, 170 148 C 171 138, 168 132, 162 130 C 155 128, 148 133, 148 140 C 148 148, 154 154, 162 154" stroke-width="11"/>
+            </g>
+            <circle cx="162" cy="130" r="12" fill="#0b8e36"/>
+            <circle cx="162" cy="130" r="4.5" fill="#ffffff"/>
+          </svg>
+        </div>
+        <span class="badge">Trazo original aportado</span>
+      </div>
+
+      <div class="card">
+        <h3>2. Transparente para Cinemática</h3>
+        <div class="img-box bg-cinematic">
+          <svg viewBox="0 0 260 260" width="160" height="160">
+            <g fill="none" stroke="#2ecc71" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M 175 80 C 160 48, 138 32, 118 32 C 82 32, 60 75, 60 130 C 60 185, 88 228, 126 228 C 158 228, 175 195, 175 160 C 175 110, 140 68, 115 68 C 96 68, 86 92, 86 122 C 86 160, 108 190, 135 190 C 155 190, 168 172, 170 148 C 171 138, 168 132, 162 130 C 155 128, 148 133, 148 140 C 148 148, 154 154, 162 154" stroke-width="11"/>
+            </g>
+            <circle cx="162" cy="130" r="12" fill="#2ecc71"/>
+            <circle cx="162" cy="130" r="4.5" fill="rgba(255,255,255,0.9)"/>
+          </svg>
+        </div>
+        <span class="badge">Fondo transparente en cinemática</span>
+      </div>
+    </div>
+
+    <div class="info">
+      <strong>Garantías confirmadas:</strong>
+      <ul>
+        <li><strong>Sólo este logo:</strong> Sin blasones, sin escudos, sin leones ni coronas de laurel.</li>
+        <li><strong>Transparente:</strong> Sin ningún recuadro blanco ni efecto de "pantallazo".</li>
+        <li><strong>Ubicación:</strong> Esquina superior derecha de la pantalla de cinemática.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

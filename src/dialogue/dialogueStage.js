@@ -81,13 +81,7 @@ export function getNPCModelUrl(speakerName) {
  * 3. Ruta directa a assets/ui/monteserin_academy_logo_clean.png
  */
 export function getOfficialLogoUrl() {
-    const saved = localStorage.getItem('monteserin_custom_logo');
-    if (saved && !saved.includes('pantallazo') && saved.startsWith('data:image/')) return saved;
-    const preloadEl = document.querySelector('link[rel="preload"][href*="monteserin_academy_logo"]');
-    if (preloadEl && preloadEl.getAttribute('href')) {
-        return preloadEl.getAttribute('href');
-    }
-    return './assets/ui/monteserin_academy_logo_clean.png?v=2';
+    return './assets/ui/monteserin_academy_logo_clean.png?v=trans_verified';
 }
 
 /**
@@ -147,11 +141,6 @@ export function initDialogueStage() {
     renderer.outputEncoding = THREE.sRGBEncoding;
 
     window.addEventListener('resize', onStageResize, { passive: true });
-
-    // Pre-cargar modelos de NPCs para que estén listos inmediatamente
-    Object.values(NPC_MODELS_MAP).forEach(url => {
-        loadAndCacheModel(url);
-    });
 }
 
 function createLights() {

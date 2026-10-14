@@ -32,13 +32,16 @@ export function initworldEditor(){
 
     panel.style.fontSize = '14px';
 
-    panel.style.zIndex = '999999';
+    // Opción C3: z-index subordinado para no solapar menús, registro ni diálogos
+    panel.style.zIndex = '100';
 
     panel.style.pointerEvents =
         'none';
 
     panel.style.borderRadius =
         '8px';
+
+    panel.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
 
     document.body.appendChild(panel);
 
@@ -107,6 +110,20 @@ export function updateworldEditor(){
         !runtimeState.player
     ){
         return;
+    }
+
+    // Opción C3: Ocultar automáticamente si el registro o un diálogo están abiertos
+    const isRegistryOpen = document.body.classList.contains('registry-open');
+    const isInDialogue = document.body.classList.contains('in-dialogue');
+    if (isRegistryOpen || isInDialogue) {
+        if (panel.style.display !== 'none') {
+            panel.style.display = 'none';
+        }
+        return;
+    } else {
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+        }
     }
 
     const now = performance.now();

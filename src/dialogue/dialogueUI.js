@@ -273,12 +273,7 @@ export function createDialogueUI(){
     root.style.display =
         'none';
 
-    try {
-        initDialogueStage();
-    } catch (e) {
-        console.warn('initDialogueStage deferred:', e);
-    }
-
+    // La cinemática de diálogo se inicializará bajo demanda (lazy-loading) al comenzar el primer diálogo
 }
 
 // ======================================================
@@ -292,6 +287,9 @@ export function showDialogue(
 ){
 
     lockInput('dialogue');
+
+    // Opción R1: Ocultar botón de registro durante diálogos e interacción
+    document.body.classList.add('in-dialogue');
 
     dialogueState.active =
         true;
@@ -557,6 +555,9 @@ export function closeDialogue(){
     }
 
     unlockInput('dialogue');
+
+    // Opción R1: Restaurar visibilidad del registro al finalizar diálogo
+    document.body.classList.remove('in-dialogue');
 
     if (root) {
         root.classList.remove('active-dialogue');

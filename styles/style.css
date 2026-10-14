@@ -894,6 +894,9 @@ GAME UI
     height: auto;
     object-fit: contain;
     display: block;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.75));
+    user-select: none;
+    -webkit-user-drag: none;
 }
 
 .dialogue-stage-canvas {
@@ -1257,6 +1260,41 @@ linear-gradient(
 
     pointer-events: auto !important;
 
+}
+
+/* =====================================================
+   OPCIÓN R1: OCULTACIÓN LIMPIA DEL BOTÓN DE REGISTRO
+   DURANTE DIÁLOGOS Y CINEMÁTICAS
+===================================================== */
+body.in-dialogue #registryButton:not(.registry-spotlight),
+body.in-dialogue #registryBase:not(.registry-spotlight),
+.dialogue.active-dialogue ~ #registryButton:not(.registry-spotlight),
+.dialogue.active-dialogue ~ #registryBase:not(.registry-spotlight),
+.dialogue-stage-overlay.visible ~ #registryButton:not(.registry-spotlight),
+.dialogue-stage-overlay.visible ~ #registryBase:not(.registry-spotlight) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(-50%) translateY(40px) scale(0.9) !important;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* =====================================================
+   OPCIÓN C3: CAJA DE COORDENADAS SUPERIOR IZQUIERDA
+   SUBORDINADA Y OCULTA AL ABRIR REGISTRO O EN DIÁLOGO
+===================================================== */
+#worldEditor {
+    z-index: 100 !important;
+    transition: opacity 0.25s ease, transform 0.25s ease !important;
+}
+
+body.registry-open #worldEditor,
+body.in-dialogue #worldEditor,
+.dialogue.active-dialogue ~ #worldEditor,
+.dialogue-stage-overlay.visible ~ #worldEditor {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(-8px) !important;
+    display: none !important;
 }
 
 /*======================================================

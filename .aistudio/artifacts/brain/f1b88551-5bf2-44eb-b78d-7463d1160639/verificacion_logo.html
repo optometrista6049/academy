@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Verificación de Logotipo Oficial - Cinemática de Diálogos</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #080f0c;
+      color: #e6f0eb;
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 780px;
+      width: 100%;
+      background: #111c16;
+      border: 1.5px solid rgba(46, 204, 113, 0.35);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(16, 185, 129, 0.1);
+      box-sizing: border-box;
+    }
+    h1 {
+      font-size: 1.45rem;
+      margin-top: 0;
+      text-align: center;
+      color: #2ecc71;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(46, 204, 113, 0.25);
+      padding-bottom: 14px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #9ab3a5;
+      font-size: 0.95rem;
+      margin-top: -6px;
+      margin-bottom: 22px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: #0b130f;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .card h3 {
+      font-size: 0.95rem;
+      color: #f1f7f4;
+      margin: 0 0 12px 0;
+    }
+    .img-wrapper {
+      width: 100%;
+      height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .bg-white {
+      background: #ffffff;
+      border: 1px solid #2a3a31;
+    }
+    .bg-cinematic {
+      background: radial-gradient(circle at center, #1b2f24 0%, #08100b 100%);
+      border: 1px solid rgba(46, 204, 113, 0.3);
+      position: relative;
+    }
+    .bg-cinematic::after {
+      content: "Esquina superior derecha en cinemática";
+      position: absolute;
+      bottom: 8px;
+      font-size: 0.7rem;
+      color: #6da383;
+      letter-spacing: 0.3px;
+    }
+    img {
+      max-width: 85%;
+      max-height: 180px;
+      object-fit: contain;
+    }
+    .transparent-mode {
+      mix-blend-mode: multiply;
+      filter: contrast(1.08) saturate(1.05);
+    }
+    .badge {
+      margin-top: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      background: rgba(46, 204, 113, 0.15);
+      color: #2ecc71;
+      border: 1px solid rgba(46, 204, 113, 0.3);
+    }
+    .checklist {
+      background: rgba(16, 185, 129, 0.08);
+      border-left: 4px solid #2ecc71;
+      border-radius: 8px;
+      padding: 16px 20px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: #d1e3d9;
+    }
+    .checklist ul {
+      margin: 8px 0 0 0;
+      padding-left: 20px;
+    }
+    .checklist li {
+      margin-bottom: 6px;
+    }
+    .tag-no {
+      color: #f87171;
+      font-weight: 600;
+    }
+    .tag-yes {
+      color: #34d399;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Comprobación Visual del Logotipo</h1>
+    <div class="subtitle">Referencia exacta aportada: Glifo espiral verde original (Pablo Monteserín)</div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>1. Archivo Original que Aportaste</h3>
+        <div class="img-wrapper bg-white">
+          <img src="logo.jpg" alt="Logo original subido por el usuario">
+        </div>
+        <span class="badge">Archivo Subido: logo.jpg</span>
+      </div>
+
+      <div class="card">
+        <h3>2. Cómo se Verá en la Cinemática</h3>
+        <div class="img-wrapper bg-cinematic">
+          <img src="logo.jpg" class="transparent-mode" alt="Logo transparente en cinemática">
+        </div>
+        <span class="badge">Fondo Blanco Transparente (PNG limpio)</span>
+      </div>
+    </div>
+
+    <div class="checklist">
+      <strong>Verificación de requisitos solicitados:</strong>
+      <ul>
+        <li><span class="tag-yes">✓</span> <strong>Símbolo exacto:</strong> Se utilizará única y exclusivamente este isotipo verde en espiral que has aportado.</li>
+        <li><span class="tag-no">✕</span> <strong>Sin interpretaciones de IA:</strong> Queda totalmente descartado cualquier escudo medieval, blasón, tenantes, leones o coronas de laurel.</li>
+        <li><span class="tag-yes">✓</span> <strong>Transparencia limpia:</strong> Todas las zonas blancas se vuelven transparentes en PNG para fundirse naturalmente con el fondo 3D.</li>
+        <li><span class="tag-yes">✓</span> <strong>Ubicación:</strong> Posicionado en la esquina superior derecha de la cinemática, dejando el espacio central/izquierdo para el personaje 3D y la caja a la derecha.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

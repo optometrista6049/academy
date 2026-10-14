@@ -23,15 +23,21 @@ export function animate({
         // UPDATE SYSTEMS
         // =========================
         for(const update of updateFunctions){
-
-            update(delta);
-
+            try {
+                update(delta);
+            } catch (err) {
+                console.warn('Game loop update error caught:', err);
+            }
         }
 
         // =========================
         // RENDER
         // =========================
-        renderer.render(scene, camera);
+        try {
+            renderer.render(scene, camera);
+        } catch (err) {
+            console.warn('Game loop render error caught:', err);
+        }
 
     }
 
