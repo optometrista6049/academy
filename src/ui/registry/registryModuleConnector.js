@@ -22,7 +22,8 @@ import {
 
 import {
 
-    createArchiveModule
+    createArchiveModule,
+    updateArchiveContent
 
 }
 from "./modules/archiveModule.js";
@@ -153,6 +154,12 @@ export function showRegistrySection(index){
         registrySectionMap[index]
 
     );
+
+    if(index === 1){
+
+        updateArchiveContent();
+
+    }
 
     if(index === 2){
 

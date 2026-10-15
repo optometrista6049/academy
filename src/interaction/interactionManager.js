@@ -81,6 +81,9 @@ import {
     removeInventoryItem
 } from '../ui/registry/modules/inventoryModuleV2.js';
 
+import { archiveItem } from '../ui/registry/modules/archiveModule.js';
+import { showItemObtainedBanner } from '../ui/itemObtainedNotification.js';
+
 import {
     startMissionFromData,
     isMissionActive,
@@ -422,10 +425,29 @@ export function tryInteraction(){
                 // Si el jugador ya recogió la caja de cartón, entregar a Monty
                 if (hasInventoryItem('badgeBox')) {
 
+                    // Procesar transferencia de inmediato: caja retirada, carnet entregado y archivado
+                    removeInventoryItem('badgeBox');
+                    addInventoryItem('aspirantCard');
+                    archiveItem('aspirantCard');
+                    completeObjective('deliverBadgeBox');
+                    completeObjective('receiveBadge');
+                    gameState.flags.deliveredBox = true;
+                    gameState.flags.receivedAspirantCard = true;
+                    gameState.quests.mission_001 = 'completed';
+                    updateDiaryContent();
+
+                    // Disparar efecto audiovisual (Opción A: Banner flotante + Chime armónico)
+                    // coordinado con la aparición del texto de Monty presentando el Carnet
+                    setTimeout(() => {
+                        showItemObtainedBanner({
+                            title: '¡Acreditación Obtenida!',
+                            itemName: 'Carnet de Aspirante',
+                            subtitle: 'Añadido al Inventario y Archivado en Registro',
+                            thumbnail: 'assets/ui/ASPIRANTE.jpg'
+                        });
+                    }, 1300);
+
                     montyTurnInDialogue.onComplete = () => {
-                        removeInventoryItem('badgeBox');
-                        completeObjective('deliverBadgeBox');
-                        gameState.flags.deliveredBox = true;
                         updateDiaryContent();
                     };
 

@@ -644,6 +644,13 @@ function registerEvents(){
     document.addEventListener("pointerdown", (e) => {
         if (!isOpen) return;
         if (!registryRoot || registryRoot.hidden) return;
+
+        // Si el visualizador de documentos está abierto o el toque proviene de él, NUNCA cerrar el Registro
+        const docViewer = document.getElementById("documentViewerOverlay");
+        if (docViewer && (docViewer.style.display !== "none" || docViewer.contains(e.target))) {
+            return;
+        }
+
         if (registryRoot.contains(e.target)) return;
         if (registryButton && (registryButton === e.target || registryButton.contains(e.target))) return;
         if (registryBase && (registryBase === e.target || registryBase.contains(e.target))) return;

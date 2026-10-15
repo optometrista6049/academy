@@ -4,6 +4,8 @@
 // ======================================================
 
 import { registryCatalog } from "../registryCatalog.js";
+import { openDocumentViewer } from "../../documentViewer.js";
+import { archiveItem, hasArchivedItem } from "./archiveModule.js";
 
 
 let inventoryModule;
@@ -116,6 +118,20 @@ let previewImage;
 let previewTitle;
 let description;
 let actions;
+let inventoryNotice = null;
+let noticeTimer = null;
+
+export function showInventoryNotice(text) {
+    if (!inventoryNotice) return;
+    inventoryNotice.textContent = text;
+    inventoryNotice.style.opacity = "1";
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+        if (inventoryNotice) {
+            inventoryNotice.style.opacity = "0";
+        }
+    }, 3500);
+}
 
 export function createInventoryModuleV2() {
 
@@ -276,13 +292,32 @@ actions.id = "inventoryActions";
 const openButton = document.createElement("button");
 openButton.id = "inventoryOpenButton";
 openButton.textContent = "Abrir";
+openButton.onclick = () => {
+    if (selectedObject && (selectedObject.canOpen || selectedObject.documentImage)) {
+        openDocumentViewer(selectedObject.documentImage || selectedObject.thumbnail, selectedObject.title);
+    }
+};
 
 const saveButton = document.createElement("button");
 saveButton.id = "inventorySaveButton";
-saveButton.textContent = "Guardar";
+saveButton.textContent = "Archivar";
+saveButton.onclick = () => {
+    if (!selectedObject) return;
+    if (hasArchivedItem(selectedObject.id) || selectedObject.isArchived) {
+        showInventoryNotice("Este objeto ya se encuentra archivado en tu Registro.");
+    } else {
+        archiveItem(selectedObject.id);
+        showInventoryNotice("Documento archivado con éxito en el Registro.");
+    }
+};
 
 actions.appendChild(openButton);
 actions.appendChild(saveButton);
+
+// Mensaje de feedback para acciones (ej. aviso de ya archivado)
+inventoryNotice = document.createElement("div");
+inventoryNotice.id = "inventoryNotice";
+inventoryNotice.className = "inventoryNotice";
 
 // ======================================================
 // ENSAMBLAJE
@@ -303,6 +338,7 @@ infoContent.id = "inventoryInfoContent";
 infoContent.appendChild(previewHeader);
 infoContent.appendChild(description);
 infoContent.appendChild(actions);
+infoContent.appendChild(inventoryNotice);
 
 infoPanel.appendChild(infoContent);
 
@@ -349,6 +385,11 @@ function initializeInfoPanel(){
     // ------------------------------------------
 
     showActions(false);
+
+    if (inventoryNotice) {
+        inventoryNotice.textContent = "";
+        inventoryNotice.style.opacity = "0";
+    }
 
 }
 

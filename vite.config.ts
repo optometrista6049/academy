@@ -56,6 +56,43 @@ export default defineConfig(() => {
               res.end('Method Not Allowed');
             }
           });
+
+          server.middlewares.use('/api/upload-carnet', (req, res) => {
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => {
+                body += chunk;
+              });
+              req.on('end', () => {
+                try {
+                  const data = JSON.parse(body);
+                  if (data.carnetBase64Data) {
+                    const carnetBuffer = Buffer.from(
+                      data.carnetBase64Data.replace(/^data:image\/\w+;base64,/, ''),
+                      'base64'
+                    );
+                    fs.mkdirSync(path.resolve(__dirname, 'assets/carnet'), { recursive: true });
+                    fs.mkdirSync(path.resolve(__dirname, 'public/assets/carnet'), { recursive: true });
+                    fs.writeFileSync(path.resolve(__dirname, 'assets/carnet/carnet_oficial.jpg'), carnetBuffer);
+                    fs.writeFileSync(path.resolve(__dirname, 'public/assets/carnet/carnet_oficial.jpg'), carnetBuffer);
+                  }
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ 
+                    success: true, 
+                    message: 'Carnet JPG oficial guardado con total exactitud binaria',
+                    url: '/assets/carnet/carnet_oficial.jpg'
+                  }));
+                } catch (err) {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ error: String(err) }));
+                }
+              });
+            } else {
+              res.statusCode = 405;
+              res.end('Method Not Allowed');
+            }
+          });
         }
       }
     ],

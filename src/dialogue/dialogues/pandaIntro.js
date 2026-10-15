@@ -88,11 +88,13 @@ export const montyTurnInDialogue = {
 
     pages: [
 
-        '¡Excelente! Veo que has conseguido la caja de cartón del mueble.',
+        "¡Hala, mil gracias por traerme la caja! Me has echado una mano enorme. Déjame abrirla... ¡Aquí está! Este Carnet de Aspirante es para ti, tu primera acreditación oficial en Monteserin Academy.",
 
-        'Muchas gracias por tu ayuda. ¡Justo lo que necesitábamos! Al abrirla veo que contiene los carnets para los nuevos aspirantes que lleguen a la academia.',
+        "Archivar documentos suele ser opcional, pero te lo recomiendo siempre para tener acceso garantizado y no perder nada. En este caso, al ser un documento importante, el Registro lo detecta y lo archiva directamente. ¡Ah! Y si quieres, echa un ojo a los botones del Registro para ir familiarizándote con ellos.",
 
-        'Has demostrado una gran iniciativa como aspirante a IA. En cuanto terminemos de acondicionar el aula, te entregaré tu propio carnet oficial. Mientras tanto, puedes hablar con el Señor Alto, Telerín o Telerón.'
+        "Una vez descargado el carnet en tu dispositivo, abre su editor de imágenes, usa un rotulador de tinta blanca y firma en el recuadro que pone Registro de Aspirante.",
+
+        "De esa forma, en nuestra sede física podrás disfrutar de las ventajas que el carnet te otorga al identificarte como Aspirante. ¡Enhorabuena!"
 
     ]
 

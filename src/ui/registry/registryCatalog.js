@@ -67,6 +67,46 @@ export const registryCatalog = {
 
         canArchive: false
 
+    },
+
+    aspirantCard: {
+
+        //-------------------------------------------------
+        // Identificación
+        //-------------------------------------------------
+        id: "aspirantCard",
+
+        type: "document",
+
+        //-------------------------------------------------
+        // Información
+        //-------------------------------------------------
+        title: "Carnet de Aspirante",
+
+        description:
+            "Tu primera acreditación oficial en Monteserin Academy. Descárgalo en tu dispositivo, abre su editor de imágenes y firma con un rotulador de tinta blanca en el recuadro 'Registro de Aspirante'.",
+
+        //-------------------------------------------------
+        // Recursos gráficos
+        //-------------------------------------------------
+        thumbnail:
+            "assets/ui/ASPIRANTE.jpg",
+
+        documentImage:
+            "assets/ui/ASPIRANTE.jpg",
+
+        downloadFilename:
+            "Carnet_Aspirante_Monteserin.jpg",
+
+        //-------------------------------------------------
+        // Comportamiento
+        //-------------------------------------------------
+        canOpen: true,
+
+        canArchive: true,
+
+        isArchived: true
+
     }
 
 };
