@@ -653,16 +653,7 @@ function showActions(show){
 // REINICIAR ESTADO VISUAL
 // ======================================================
 export function resetInventoryVisualState(){
-    if (inventoryObjects.length > 0) {
-        if (!selectedObject || !inventoryObjects.includes(selectedObject)) {
-            selectObject(inventoryObjects[0]);
-        } else {
-            displayItem(selectedObject);
-            refreshGrid();
-        }
-    } else {
-        clearSelection();
-    }
+    clearSelection();
 }
 
 

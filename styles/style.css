@@ -3011,22 +3011,23 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     --------------------------------------*/
     #registry {
         flex-direction: row !important;
-        width: min(98vw, 1280px) !important;
-        height: min(96vh, 600px) !important;
-        padding: clamp(6px, 1.6vh, 12px) clamp(8px, 1.6vw, 14px) !important;
-        gap: clamp(8px, 1.4vw, 14px) !important;
-        border-radius: 14px !important;
+        width: min(99vw, 1280px) !important;
+        height: min(97vh, 600px) !important;
+        padding: clamp(4px, 1.2vh, 8px) clamp(6px, 1.2vw, 10px) !important;
+        gap: clamp(5px, 1vw, 8px) !important;
+        border-radius: 12px !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
     }
 
     /* Botón de cierre en esquina superior derecha */
     #registryCloseBtn {
-        top: 6px !important;
-        right: 8px !important;
-        width: 30px !important;
-        height: 30px !important;
-        font-size: 1.2rem !important;
+        top: 4px !important;
+        right: 6px !important;
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 1.15rem !important;
+        z-index: 25020 !important;
     }
 
     #registryHeaderIcon {
@@ -3035,8 +3036,8 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
 
     /* Botón DevTools en móvil: compacto en esquina superior derecha */
     .devSuiteTriggerBtn {
-        top: 10px !important;
-        right: 12px !important;
+        top: 8px !important;
+        right: 10px !important;
         bottom: auto !important;
         padding: 4px 10px !important;
         font-size: 0.72rem !important;
@@ -3044,20 +3045,20 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     }
 
     /*--------------------------------------
-    BARRA LATERAL IZQUIERDA (SIDEBAR DOCK)
+    BARRA LATERAL IZQUIERDA (SIDEBAR COMPACTO)
     --------------------------------------*/
     #registryNav {
-        width: clamp(68px, 11vw, 98px) !important;
+        width: clamp(52px, 8vw, 64px) !important;
         height: 100% !important;
         display: flex !important;
         flex-direction: column !important;
         align-items: stretch !important;
         justify-content: flex-start !important;
-        gap: clamp(4px, 1vh, 8px) !important;
+        gap: clamp(2px, 0.8vh, 5px) !important;
         margin: 0 !important;
         margin-bottom: 0 !important;
         padding: 0 !important;
-        padding-right: clamp(4px, 0.8vw, 8px) !important;
+        padding-right: 4px !important;
         border-bottom: none !important;
         border-right: 1px solid rgba(190, 150, 95, 0.28) !important;
         flex-shrink: 0 !important;
@@ -3067,16 +3068,16 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         width: 100% !important;
         min-width: 0 !important;
         flex: 1 !important;
-        max-height: 72px !important;
-        min-height: 40px !important;
+        max-height: 64px !important;
+        min-height: 36px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
         align-items: center !important;
         text-align: center !important;
-        gap: 2px !important;
-        padding: 4px 2px !important;
-        border-radius: 10px !important;
+        gap: 1px !important;
+        padding: 2px 1px !important;
+        border-radius: 8px !important;
         border: 1px solid transparent !important;
         cursor: pointer !important;
     }
@@ -3090,17 +3091,17 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     }
 
     .registryTabIcon {
-        width: clamp(18px, 3.8vh, 26px) !important;
-        height: clamp(18px, 3.8vh, 26px) !important;
+        width: clamp(16px, 3.2vh, 22px) !important;
+        height: clamp(16px, 3.2vh, 22px) !important;
         margin-right: 0 !important;
-        margin-bottom: 2px !important;
+        margin-bottom: 1px !important;
     }
 
     .registryTabTitle {
-        font-size: clamp(0.66rem, 1.8vh, 0.76rem) !important;
+        font-size: clamp(0.58rem, 1.5vh, 0.68rem) !important;
         font-weight: 600 !important;
-        line-height: 1.1 !important;
-        letter-spacing: 0.02em !important;
+        line-height: 1.05 !important;
+        letter-spacing: 0.01em !important;
         white-space: nowrap !important;
     }
 
@@ -3109,7 +3110,7 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     }
 
     /*--------------------------------------
-    CONTENEDOR DE CONTENIDO PRINCIPAL
+    CONTENEDOR DE CONTENIDO PRINCIPAL (SIN ESPACIO MUERTO A LA DERECHA)
     --------------------------------------*/
     #registryContent {
         flex: 1 !important;
@@ -3120,7 +3121,7 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         flex-direction: column !important;
         overflow: hidden !important;
         padding: 0 !important;
-        padding-right: 32px !important; /* Espacio de seguridad para no solapar con el botón ✕ */
+        padding-right: 2px !important;
         gap: 0 !important;
     }
 
@@ -3146,27 +3147,27 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         min-width: 0 !important;
         min-height: 0 !important;
         height: 100% !important;
-        gap: clamp(8px, 1.2vw, 14px) !important;
+        gap: clamp(6px, 1vw, 10px) !important;
         padding: 0 !important;
         overflow: hidden !important;
     }
 
     #inventoryGridPanel {
-        flex: 5.2 !important;
+        flex: 4.8 !important;
         min-width: 0 !important;
         min-height: 0 !important;
         height: 100% !important;
-        padding: clamp(6px, 1vh, 10px) !important;
+        padding: clamp(4px, 0.8vh, 8px) !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
-        border-radius: 12px !important;
+        border-radius: 10px !important;
     }
 
     #inventorySlots {
         display: grid !important;
         grid-template-columns: repeat(5, 1fr) !important;
         grid-template-rows: repeat(4, 1fr) !important;
-        gap: clamp(3px, 0.6vh, 6px) !important;
+        gap: clamp(2px, 0.5vh, 4px) !important;
         width: 100% !important;
         height: 100% !important;
     }
@@ -3176,7 +3177,7 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     }
 
     #inventoryInfoPanel {
-        flex: 6.8 !important;
+        flex: 7.2 !important;
         min-width: 0 !important;
         min-height: 0 !important;
         height: 100% !important;
@@ -3184,7 +3185,7 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         flex-direction: column !important;
         background: rgba(20, 14, 9, 0.45) !important;
         border: 1px solid rgba(214, 176, 106, 0.25) !important;
-        border-radius: 12px !important;
+        border-radius: 10px !important;
         overflow: hidden !important;
     }
 
@@ -3195,42 +3196,44 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         min-width: 0 !important;
         min-height: 0 !important;
         height: 100% !important;
-        padding: clamp(8px, 1.4vh, 14px) !important;
-        gap: clamp(6px, 1.2vh, 10px) !important;
+        padding: clamp(6px, 1.2vh, 10px) !important;
+        gap: clamp(4px, 1vh, 8px) !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
     }
 
-    /* Cabecera en fila: miniatura + título lado a lado */
+    /* Cabecera en fila: miniatura + título con holgura para el botón ✕ */
     #inventoryPreviewHeader {
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
-        gap: 10px !important;
+        gap: 8px !important;
         width: 100% !important;
         flex-shrink: 0 !important;
         border-bottom: 1px solid rgba(214, 176, 106, 0.2) !important;
-        padding-bottom: 6px !important;
+        padding-bottom: 5px !important;
+        padding-right: 28px !important;
+        box-sizing: border-box !important;
     }
 
     #inventoryPreviewImage {
-        width: clamp(36px, 6.2vh, 48px) !important;
-        height: clamp(36px, 6.2vh, 48px) !important;
+        width: clamp(34px, 5.8vh, 44px) !important;
+        height: clamp(34px, 5.8vh, 44px) !important;
         aspect-ratio: 1 !important;
-        border-radius: 8px !important;
+        border-radius: 6px !important;
         flex-shrink: 0 !important;
     }
 
     #inventoryPreviewTitle {
-        font-size: clamp(0.85rem, 2.4vh, 1.05rem) !important;
+        font-size: clamp(0.82rem, 2.3vh, 1rem) !important;
         font-weight: 700 !important;
-        line-height: 1.2 !important;
+        line-height: 1.15 !important;
         color: #ffffff !important;
         flex: 1 !important;
         word-break: break-word !important;
     }
 
-    /* Área de descripción liberada con altura vertical máxima */
+    /* Área de descripción liberada con anchura y altura completa */
     #inventoryDescription {
         flex: 1 !important;
         min-height: 0 !important;
@@ -3281,6 +3284,8 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     .diaryHeader {
         margin-bottom: 4px !important;
         padding-bottom: 3px !important;
+        padding-right: 28px !important;
+        box-sizing: border-box !important;
         flex-shrink: 0 !important;
     }
 
@@ -3400,6 +3405,8 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     .archiveHeader {
         margin-bottom: 4px !important;
         padding-bottom: 3px !important;
+        padding-right: 28px !important;
+        box-sizing: border-box !important;
         flex-shrink: 0 !important;
     }
 
