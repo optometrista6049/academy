@@ -25,9 +25,9 @@ import {
 from './ui/mainMenu.js';
 
 import {
-    initLogoUploadUI
+    initDevSuite
 }
-from './ui/logoUploadModal.js';
+from './debug/devPanel.js';
 
 import {
 	showLoadingScreen,
@@ -308,6 +308,7 @@ import {
 
 }
 from './debug/worldEditor.js';
+import { loadAndSpawnWorldObjects } from './systems/worldObjectsManager.js';
 
 
 // ======================================================
@@ -389,6 +390,8 @@ function startGame(){
 
    
     initworldEditor();
+
+    loadAndSpawnWorldObjects();
 
     
     loadPandaNPC();
@@ -476,7 +479,7 @@ window.addEventListener(
 
 createOrientationOverlay();
 
-initLogoUploadUI();
+initDevSuite();
 
 createBootScreen(
 

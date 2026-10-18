@@ -44,6 +44,8 @@ export function updateMovement(delta){
 
 if(!player) return false;
 
+if(runtimeState.isGodMode) return false;
+
 if(isInputLocked()){
 
     return false;

@@ -57,6 +57,8 @@ addEventListener("mouseup",()=>{
 
 addEventListener("mousemove",e=>{
 
+    if(runtimeState.isGodMode) return;
+
     if(isInputLocked()) return;
 
     if(!drag) return;
@@ -334,6 +336,8 @@ export function snapCameraOrbitTo(pos, lookTarget){
 // =====================================================
 
 export function updateCamera(delta = 0.016){
+
+    if(runtimeState.isGodMode) return;
 
     if(!runtimeState.player) return;
 

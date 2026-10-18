@@ -19,6 +19,10 @@ import {
 } from "../../state/gameState.js";
 
 import {
+    runtimeState
+} from "../../state/runtimeState.js";
+
+import {
     initializeRegistryModules,
     showRegistrySection,
     resetRegistryModulesVisualState
@@ -94,6 +98,20 @@ export function createRegistryUI(){
     registryRoot.appendChild(
         registryHeaderIcon
     );
+
+    //--------------------------------------------------
+    // BOTÓN DE CIERRE (ESQUINA SUPERIOR DERECHA)
+    //--------------------------------------------------
+    const closeBtn = document.createElement("button");
+    closeBtn.id = "registryCloseBtn";
+    closeBtn.innerHTML = "&times;";
+    closeBtn.title = "Cerrar Registro";
+    closeBtn.setAttribute("aria-label", "Cerrar Registro");
+    closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeRegistry();
+    });
+    registryRoot.appendChild(closeBtn);
 
     //--------------------------------------------------
     // NAVEGACIÓN
@@ -722,6 +740,12 @@ function onKeyDown(event){
         event.key==="R"
 
     ){
+
+        if(runtimeState.isGodMode){
+
+            return;
+
+        }
 
         if(!gameState.flags.registryUnlocked){
 

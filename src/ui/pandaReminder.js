@@ -11,6 +11,8 @@ import {
 }
 from '../utils/deviceDetection.js';
 
+import { runtimeState } from '../state/runtimeState.js';
+
 let reminderRoot = null;
 
 let visible = false;
@@ -202,6 +204,7 @@ export function updatePandaReminder(delta){
     if(!reminderRoot) return;
 
     if(
+        runtimeState.isGodMode ||
         gameState.flags.metPanda ||
         gameState.flags.talkedToPanda ||
         gameState.flags.metMonty ||

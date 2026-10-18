@@ -55,6 +55,11 @@ export const runtimeState = {
         minZoom:4,
         maxZoom:20
 
-    }
+    },
+
+    // =========================
+    // MODO DIOS / LEVEL BUILDER
+    // =========================
+    isGodMode: false
 
 };

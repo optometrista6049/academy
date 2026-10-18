@@ -27,6 +27,8 @@ import {
 }
 from '../systems/saveSystem.js';
 
+import { initPlayerEquipment } from './playerEquipment.js';
+
 export function loadPlayer(){
 
     loadModel(
@@ -43,6 +45,8 @@ export function loadPlayer(){
             runtimeState.player = model;
 
             runtimeState.playerHeightOffset = offset;
+
+            initPlayerEquipment(model);
 
             // =========================
             // RESTORE SAVE POSITION
