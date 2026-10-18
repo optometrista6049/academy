@@ -239,7 +239,8 @@ export function updateInteractionSystem(){
                 'panda';
 
             showInteraction(
-                gameState.flags.metPanda ? 'Hablar con Monty' : 'Hablar'
+                gameState.flags.metPanda ? 'Hablar con Monty' : 'Hablar',
+                'talk'
             );
 
             return;
@@ -269,7 +270,8 @@ export function updateInteractionSystem(){
                 'alto';
 
             showInteraction(
-                'Hablar con Señor Alto'
+                'Hablar con Señor Alto',
+                'talk'
             );
 
             return;
@@ -299,7 +301,8 @@ export function updateInteractionSystem(){
                 'telerin';
 
             showInteraction(
-                'Hablar con Telerín'
+                'Hablar con Telerín',
+                'talk'
             );
 
             return;
@@ -329,7 +332,8 @@ export function updateInteractionSystem(){
                 'teleron';
 
             showInteraction(
-                'Hablar con Telerón'
+                'Hablar con Telerón',
+                'talk'
             );
 
             return;
@@ -361,7 +365,8 @@ export function updateInteractionSystem(){
                 'mueble';
 
             showInteraction(
-                'Examinar'
+                'Examinar',
+                'object'
             );
 
             return;

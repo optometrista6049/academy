@@ -18,6 +18,7 @@ export function createMobileInteractionButton(){
 
     button.innerHTML =
         `<img
+            id="mobileInteractionIcon"
             src="./assets/ui/icons/talk.svg"
             width="64"
             height="64"
@@ -88,11 +89,23 @@ export function createMobileInteractionButton(){
 
 }
 
-export function showMobileInteractionButton(text = ''){
+export function showMobileInteractionButton(text = '', type = 'talk'){
 
     if(!button) return;
 
     if(!isMobileDevice()) return;
+
+    // Conmutar icono según el tipo de interacción (NPC vs Objeto)
+    const iconImg = button.querySelector('#mobileInteractionIcon');
+    if (iconImg) {
+        if (type === 'object') {
+            iconImg.src = './assets/ui/icons/interact_object.svg';
+            iconImg.alt = 'Examinar objeto';
+        } else {
+            iconImg.src = './assets/ui/icons/talk.svg';
+            iconImg.alt = 'Hablar';
+        }
+    }
 
     button.style.display =
         'flex';

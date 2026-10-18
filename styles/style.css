@@ -3033,6 +3033,16 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         display: none !important;
     }
 
+    /* Botón DevTools en móvil: compacto en esquina superior derecha */
+    .devSuiteTriggerBtn {
+        top: 10px !important;
+        right: 12px !important;
+        bottom: auto !important;
+        padding: 4px 10px !important;
+        font-size: 0.72rem !important;
+        border-radius: 16px !important;
+    }
+
     /*--------------------------------------
     BARRA LATERAL IZQUIERDA (SIDEBAR DOCK)
     --------------------------------------*/
@@ -4321,8 +4331,9 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
 
 .devSuiteTriggerBtn{
     position:fixed;
-    bottom:14px;
+    top:12px;
     right:14px;
+    bottom:auto;
     z-index:99998;
     background:rgba(20, 24, 20, 0.85);
     color:#d4af37;
@@ -4343,6 +4354,17 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     color:#fff;
     border-color:#ffd54f;
     transform:scale(1.05);
+}
+
+/* Ocultar botón DevTools durante diálogos, cinemáticas y cuando el registro esté abierto */
+body.in-dialogue .devSuiteTriggerBtn,
+body.in-cinematic .devSuiteTriggerBtn,
+body.registry-open .devSuiteTriggerBtn,
+.dialogue.active-dialogue ~ .devSuiteTriggerBtn,
+.dialogue-stage-overlay.visible ~ .devSuiteTriggerBtn {
+    opacity:0 !important;
+    pointer-events:none !important;
+    display:none !important;
 }
 
 .devSuiteOverlay{

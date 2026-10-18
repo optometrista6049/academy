@@ -62,14 +62,14 @@ export function createInteractionUI(){
 
 }
 
-export function showInteraction(text){
+export function showInteraction(text, type = 'talk'){
 
     if(isMobileDevice()){
 
         root.style.display =
             'none';
 
-        showMobileInteractionButton(text);
+        showMobileInteractionButton(text, type);
 
         return;
 
