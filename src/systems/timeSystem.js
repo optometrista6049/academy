@@ -6,17 +6,22 @@ import {
 from '../state/gameState.js';
 
 import {
-
     saveGame
-
 }
 from './saveSystem.js';
+
+import {
+    updateSessionBattery
+}
+from './sessionBatterySystem.js';
 
 let accumulator = 0;
 
 let autoSaveTimer = 0;
 
 export function updatePlayTime(delta){
+
+    updateSessionBattery(delta);
 
     accumulator += delta;
 

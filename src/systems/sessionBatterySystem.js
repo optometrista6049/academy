@@ -1,0 +1,817 @@
+/* ======================================================
+   MONTESERIN ACADEMY - SISTEMA DE CONTROL DE SESIÓN Y BATERÍA (HÍBRIDO 3)
+   - Capacidad: 60 minutos de exploración continua divididos en 3 células (20 min c/u).
+   - Cooldown: 3 horas continuas de descanso tras agotar la hora.
+   - Recarga proporcional estricta: 1 hora de descanso = +1 célula (20 min).
+   - Inactivo por defecto hasta la llegada de la Misión 2 (activable desde DevTools F9).
+   ====================================================== */
+
+import { gameState } from '../state/gameState.js';
+import { saveGame } from './saveSystem.js';
+import { DEV_CONFIG } from '../debug/devPanel.js';
+
+export const BATTERY_CONFIG = {
+    MAX_SESSION_SEC: 60 * 60,         // 60 minutos = 3600 seg
+    CELL_SEC: 20 * 60,                // 20 minutos por célula = 1200 seg
+    TOTAL_CELLS: 3,
+    COOLDOWN_MS: 3 * 60 * 60 * 1000,  // 3 horas = 10,800,000 ms
+    REST_MS_PER_CELL: 60 * 60 * 1000, // 1 hora de descanso = +1 célula (20 min)
+    MIN_REST_MS: 45 * 60 * 1000,      // Umbral mínimo anti-trampas (45 min)
+    AFK_TIMEOUT_SEC: 90,              // 90 segundos sin interacción = pausa inteligente
+    STORAGE_KEY: 'monteserin_session_battery',
+    SUPERVISOR_PIN: '1234'
+};
+
+export const sessionBattery = {
+    enabled: false,             // Inactivo por defecto hasta que Misión 2 lo active
+    consumedSeconds: 0,         // Segundos de juego consumidos (0 a 3600)
+    cooldownUntil: null,        // Timestamp ms del fin del enfriamiento
+    lastActiveTimestamp: Date.now(),
+    lastNotifiedCell: 3,
+    notified5Min: false,
+    notified1Min: false,
+    timeSinceLastInput: 0,
+    isAfk: false,
+    isInitialized: false,
+    listenersAttached: false
+};
+
+let hudElement = null;
+let restOverlayElement = null;
+let infoModalElement = null;
+let toastTimer = null;
+let countdownInterval = null;
+
+// ======================================================
+// INICIALIZACIÓN Y PERSISTENCIA
+// ======================================================
+
+export function initSessionBatterySystem() {
+    if (sessionBattery.isInitialized) return;
+    sessionBattery.isInitialized = true;
+
+    loadBatteryState();
+    calculateOfflineRecovery();
+    setupInputTracking();
+    createHUDWidget();
+    createRestOverlay();
+    createInfoModal();
+
+    // Si ya había un bloqueo de 3h activo y el sistema está habilitado, mostrarlo de inmediato
+    if (sessionBattery.enabled && isCooldownActive()) {
+        showRestOverlay();
+    }
+
+    console.log('🔋 Sistema de Batería de Exploración inicializado (Estado: ' + (sessionBattery.enabled ? 'ACTIVO' : 'INACTIVO / ESPERA MISIÓN 2') + ')');
+}
+
+export function loadBatteryState() {
+    try {
+        const raw = localStorage.getItem(BATTERY_CONFIG.STORAGE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            if (data && typeof data === 'object') {
+                if (typeof data.enabled === 'boolean') sessionBattery.enabled = data.enabled;
+                if (typeof data.consumedSeconds === 'number') sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, data.consumedSeconds));
+                if (data.cooldownUntil) sessionBattery.cooldownUntil = Number(data.cooldownUntil);
+                if (data.lastActiveTimestamp) sessionBattery.lastActiveTimestamp = Number(data.lastActiveTimestamp);
+            }
+        }
+    } catch (e) {
+        console.warn('No se pudo cargar el estado de la batería:', e);
+    }
+
+    // Sincronizar con gameState
+    if (gameState.sessionControl) {
+        if (typeof gameState.sessionControl.enabled === 'boolean' && !sessionBattery.enabled) {
+            sessionBattery.enabled = gameState.sessionControl.enabled;
+        }
+    }
+}
+
+export function saveBatteryState() {
+    try {
+        const payload = {
+            enabled: sessionBattery.enabled,
+            consumedSeconds: Math.round(sessionBattery.consumedSeconds),
+            cooldownUntil: sessionBattery.cooldownUntil,
+            lastActiveTimestamp: Date.now()
+        };
+        localStorage.setItem(BATTERY_CONFIG.STORAGE_KEY, JSON.stringify(payload));
+
+        if (gameState.sessionControl) {
+            gameState.sessionControl.enabled = sessionBattery.enabled;
+            gameState.sessionControl.consumedSeconds = sessionBattery.consumedSeconds;
+            gameState.sessionControl.cooldownUntil = sessionBattery.cooldownUntil;
+            gameState.sessionControl.lastActiveTimestamp = payload.lastActiveTimestamp;
+        }
+    } catch (e) {
+        console.warn('No se pudo persistir la batería:', e);
+    }
+}
+
+// ======================================================
+// CÁLCULO DE DESCANSO / RECUPERACIÓN FUERA DE LÍNEA
+// ======================================================
+
+function calculateOfflineRecovery() {
+    const now = Date.now();
+    const last = sessionBattery.lastActiveTimestamp || now;
+    const elapsedMs = Math.max(0, now - last);
+
+    // Caso 1: Estaba en enfriamiento forzado de 3h
+    if (sessionBattery.cooldownUntil) {
+        if (now >= sessionBattery.cooldownUntil) {
+            // El enfriamiento de 3 horas ha concluido
+            sessionBattery.cooldownUntil = null;
+            sessionBattery.consumedSeconds = 0;
+            sessionBattery.lastNotifiedCell = 3;
+            sessionBattery.notified5Min = false;
+            sessionBattery.notified1Min = false;
+            saveBatteryState();
+        }
+        return;
+    }
+
+    // Caso 2: Descanso voluntario antes de bloquearse
+    if (elapsedMs >= BATTERY_CONFIG.COOLDOWN_MS) {
+        // Pasaron 3 horas o más: recarga total (100%)
+        sessionBattery.consumedSeconds = 0;
+        sessionBattery.lastNotifiedCell = 3;
+        sessionBattery.notified5Min = false;
+        sessionBattery.notified1Min = false;
+    } else if (elapsedMs >= BATTERY_CONFIG.MIN_REST_MS) {
+        // Pasó al menos el umbral mínimo (45 min): recuperar 1 célula por cada hora completa
+        const cellsToRecover = Math.floor(elapsedMs / BATTERY_CONFIG.REST_MS_PER_CELL);
+        if (cellsToRecover > 0) {
+            const secToRecover = cellsToRecover * BATTERY_CONFIG.CELL_SEC;
+            sessionBattery.consumedSeconds = Math.max(0, sessionBattery.consumedSeconds - secToRecover);
+            sessionBattery.lastNotifiedCell = getRemainingCells();
+            sessionBattery.notified5Min = false;
+            sessionBattery.notified1Min = false;
+        }
+    }
+
+    sessionBattery.lastActiveTimestamp = now;
+    saveBatteryState();
+}
+
+// ======================================================
+// ENTRADA Y DETECCIÓN AFK (SMART PAUSE)
+// ======================================================
+
+function setupInputTracking() {
+    if (sessionBattery.listenersAttached) return;
+    sessionBattery.listenersAttached = true;
+
+    const onUserActivity = () => {
+        sessionBattery.timeSinceLastInput = 0;
+        sessionBattery.isAfk = false;
+    };
+
+    ['keydown', 'mousedown', 'mousemove', 'touchstart', 'pointerdown'].forEach(evt => {
+        window.addEventListener(evt, onUserActivity, { passive: true });
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            sessionBattery.isAfk = true;
+            saveBatteryState();
+        } else {
+            sessionBattery.timeSinceLastInput = 0;
+            sessionBattery.isAfk = false;
+            calculateOfflineRecovery();
+            updateHUDVisuals();
+        }
+    });
+}
+
+// ======================================================
+// LOOP PRINCIPAL (LLAMADO CADA FRAME)
+// ======================================================
+
+let saveCounter = 0;
+
+export function updateSessionBattery(delta) {
+    if (!sessionBattery.isInitialized) {
+        initSessionBatterySystem();
+    }
+
+    // Si el sistema está inactivo (hasta Misión 2) y no forzado por dev, no consumir tiempo
+    if (!sessionBattery.enabled) {
+        if (hudElement) hudElement.style.display = 'none';
+        return;
+    }
+
+    if (hudElement) hudElement.style.display = 'flex';
+
+    // 1. Si está en enfriamiento de 3 horas
+    if (isCooldownActive()) {
+        if (!restOverlayElement || restOverlayElement.style.display !== 'flex') {
+            showRestOverlay();
+        }
+        return;
+    }
+
+    // 2. Comprobar AFK
+    sessionBattery.timeSinceLastInput += delta;
+    if (sessionBattery.timeSinceLastInput >= BATTERY_CONFIG.AFK_TIMEOUT_SEC) {
+        sessionBattery.isAfk = true;
+        updateHUDVisuals();
+        return; // Pausado, no resta batería
+    }
+
+    sessionBattery.isAfk = false;
+
+    // 3. Consumir tiempo de juego
+    sessionBattery.consumedSeconds = Math.min(
+        BATTERY_CONFIG.MAX_SESSION_SEC,
+        sessionBattery.consumedSeconds + delta
+    );
+    sessionBattery.lastActiveTimestamp = Date.now();
+
+    const remainingSec = getRemainingSeconds();
+    const currentCells = getRemainingCells();
+
+    // 4. Notificaciones automáticas de energía del Robot Aspirante
+    checkBatteryNotifications(remainingSec, currentCells);
+
+    // 5. Agotamiento total de la batería (60 min) -> Bloqueo de 3 horas
+    if (remainingSec <= 0) {
+        triggerCooldownLock();
+        return;
+    }
+
+    // 6. Actualizar visuales del HUD
+    updateHUDVisuals();
+
+    // 7. Auto-guardado periódico del estado de batería (cada 15 seg aprox)
+    saveCounter += delta;
+    if (saveCounter >= 15) {
+        saveCounter = 0;
+        saveBatteryState();
+    }
+}
+
+// ======================================================
+// CÁLCULOS AUXILIARES
+// ======================================================
+
+export function getRemainingSeconds() {
+    return Math.max(0, BATTERY_CONFIG.MAX_SESSION_SEC - sessionBattery.consumedSeconds);
+}
+
+export function getRemainingCells() {
+    const sec = getRemainingSeconds();
+    if (sec > 2 * BATTERY_CONFIG.CELL_SEC) return 3;
+    if (sec > 1 * BATTERY_CONFIG.CELL_SEC) return 2;
+    if (sec > 0) return 1;
+    return 0;
+}
+
+export function isCooldownActive() {
+    if (!sessionBattery.cooldownUntil) return false;
+    if (Date.now() >= sessionBattery.cooldownUntil) {
+        sessionBattery.cooldownUntil = null;
+        sessionBattery.consumedSeconds = 0;
+        saveBatteryState();
+        if (restOverlayElement) restOverlayElement.style.display = 'none';
+        return false;
+    }
+    return true;
+}
+
+export function getCooldownRemainingMs() {
+    if (!sessionBattery.cooldownUntil) return 0;
+    return Math.max(0, sessionBattery.cooldownUntil - Date.now());
+}
+
+// ======================================================
+// NOTIFICACIONES AUTOMÁTICAS DE ENERGÍA Y DESCANSO
+// ======================================================
+
+function checkBatteryNotifications(remainingSec, currentCells) {
+    // Transición de 3 células a 2 células (minuto 40 restante)
+    if (sessionBattery.lastNotifiedCell === 3 && currentCells === 2) {
+        sessionBattery.lastNotifiedCell = 2;
+        showBatteryToast(
+            '🔋 Batería al 66%',
+            'La batería de exploración del Robot Aspirante está al 66% (te quedan 40 minutos). Toca la batería arriba para ver más detalles.',
+            'info'
+        );
+        pulseBatteryHUD();
+    }
+
+    // Transición de 2 células a 1 célula (minuto 20 restante)
+    if (sessionBattery.lastNotifiedCell === 2 && currentCells === 1) {
+        sessionBattery.lastNotifiedCell = 1;
+        showBatteryToast(
+            '⚡ Batería baja (33%)',
+            'Los circuitos del Robot Aspirante necesitan descanso. Se recomienda buscar un punto seguro en los próximos 20 minutos.',
+            'warning'
+        );
+        pulseBatteryHUD();
+    }
+
+    // Alerta de 5 minutos restantes
+    if (!sessionBattery.notified5Min && remainingSec <= 300 && remainingSec > 60) {
+        sessionBattery.notified5Min = true;
+        showBatteryToast(
+            '⚠️ Batería Crítica (5 minutos)',
+            'Quedan 5 minutos de energía. Los circuitos del Robot Aspirante pronto entrarán en modo reposo.',
+            'danger'
+        );
+        pulseBatteryHUD(true);
+    }
+
+    // Alerta del último minuto
+    if (!sessionBattery.notified1Min && remainingSec <= 60 && remainingSec > 0) {
+        sessionBattery.notified1Min = true;
+        showBatteryToast(
+            '⏱️ Último minuto',
+            'Guardando tu partida automáticamente antes de que el Robot Aspirante entre en reposo...',
+            'danger'
+        );
+        saveGame();
+    }
+}
+
+// ======================================================
+// BLOQUEO Y PANTALLA DE REPOSO (COOLDOWN)
+// ======================================================
+
+export function triggerCooldownLock() {
+    sessionBattery.cooldownUntil = Date.now() + BATTERY_CONFIG.COOLDOWN_MS;
+    sessionBattery.consumedSeconds = BATTERY_CONFIG.MAX_SESSION_SEC;
+    saveGame();
+    saveBatteryState();
+    showRestOverlay();
+}
+
+export function showRestOverlay() {
+    if (!restOverlayElement) {
+        createRestOverlay();
+    }
+    restOverlayElement.style.display = 'flex';
+    startCountdownTimer();
+}
+
+export function hideRestOverlay() {
+    if (restOverlayElement) {
+        restOverlayElement.style.display = 'none';
+    }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+}
+
+function startCountdownTimer() {
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    const updateDisplay = () => {
+        const remainingMs = getCooldownRemainingMs();
+        if (remainingMs <= 0) {
+            sessionBattery.cooldownUntil = null;
+            sessionBattery.consumedSeconds = 0;
+            saveBatteryState();
+            hideRestOverlay();
+            showBatteryToast('🎉 ¡Batería Recargada!', 'Los circuitos del Robot Aspirante se han enfriado y la batería está al 100%. ¡Listo para explorar!', 'success');
+            return;
+        }
+
+        const totalSec = Math.floor(remainingMs / 1000);
+        const hours = Math.floor(totalSec / 3600);
+        const minutes = Math.floor((totalSec % 3600) / 60);
+        const seconds = totalSec % 60;
+
+        const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+        const timerText = document.getElementById('robotRestTimerText');
+        if (timerText) timerText.textContent = timeStr;
+
+        const progressPercent = Math.min(100, Math.max(0, ((BATTERY_CONFIG.COOLDOWN_MS - remainingMs) / BATTERY_CONFIG.COOLDOWN_MS) * 100));
+        const progressBar = document.getElementById('robotRestProgressBar');
+        if (progressBar) progressBar.style.width = `${progressPercent.toFixed(1)}%`;
+    };
+
+    updateDisplay();
+    countdownInterval = setInterval(updateDisplay, 1000);
+}
+
+// ======================================================
+// CONSTRUCCIÓN DEL HUD (WIDGET DE BATERÍA DIEGÉTICA)
+// ======================================================
+
+function createHUDWidget() {
+    if (document.getElementById('robotBatteryHUD')) return;
+
+    hudElement = document.createElement('div');
+    hudElement.id = 'robotBatteryHUD';
+    hudElement.className = 'robotBatteryHUD';
+    hudElement.title = 'Batería de exploración del Robot Aspirante (Haz clic o toca para ver detalles)';
+
+    hudElement.innerHTML = `
+        <div class="robotBatteryCapsule">
+            <div class="robotBatteryAvatar" title="Robot Aspirante">🤖</div>
+            <div class="robotBatteryBody">
+                <div class="robotBatteryCell cell-1" data-cell="1"></div>
+                <div class="robotBatteryCell cell-2" data-cell="2"></div>
+                <div class="robotBatteryCell cell-3" data-cell="3"></div>
+            </div>
+            <div class="robotBatteryTerminal"></div>
+        </div>
+        <div class="robotBatteryInfo">
+            <span id="robotBatteryText" class="robotBatteryTime">60 min</span>
+            <span class="robotBatteryTip">Info ℹ️</span>
+        </div>
+    `;
+
+    // Abrir modal de información al pulsar
+    hudElement.onclick = (e) => {
+        e.stopPropagation();
+        openInfoModal();
+    };
+
+    document.body.appendChild(hudElement);
+
+    // Si está inactivo por defecto, ocultarlo
+    if (!sessionBattery.enabled) {
+        hudElement.style.display = 'none';
+    }
+}
+
+export function updateHUDVisuals() {
+    if (!hudElement || !sessionBattery.enabled) return;
+
+    const remainingSec = getRemainingSeconds();
+    const cells = getRemainingCells();
+    const minutes = Math.ceil(remainingSec / 60);
+
+    const textEl = document.getElementById('robotBatteryText');
+    if (textEl) {
+        if (sessionBattery.isAfk) {
+            textEl.textContent = 'En pausa ⏸️';
+        } else {
+            textEl.textContent = `${minutes} min`;
+        }
+    }
+
+    const cell1 = hudElement.querySelector('.cell-1');
+    const cell2 = hudElement.querySelector('.cell-2');
+    const cell3 = hudElement.querySelector('.cell-3');
+
+    // Resetear clases
+    [cell1, cell2, cell3].forEach(c => {
+        if (c) c.className = 'robotBatteryCell';
+    });
+
+    if (cells >= 3) {
+        if (cell1) cell1.classList.add('cell-active', 'color-high');
+        if (cell2) cell2.classList.add('cell-active', 'color-high');
+        if (cell3) cell3.classList.add('cell-active', 'color-high');
+        hudElement.classList.remove('batteryWarning', 'batteryDanger');
+    } else if (cells === 2) {
+        if (cell1) cell1.classList.add('cell-active', 'color-mid');
+        if (cell2) cell2.classList.add('cell-active', 'color-mid');
+        hudElement.classList.add('batteryWarning');
+        hudElement.classList.remove('batteryDanger');
+    } else if (cells === 1) {
+        if (cell1) cell1.classList.add('cell-active', 'color-low');
+        hudElement.classList.add('batteryDanger');
+        hudElement.classList.remove('batteryWarning');
+    } else {
+        hudElement.classList.add('batteryDanger');
+    }
+}
+
+function pulseBatteryHUD(isUrgent = false) {
+    if (!hudElement) return;
+    hudElement.classList.remove('hudPulseAnim', 'hudUrgentPulseAnim');
+    void hudElement.offsetWidth; // Forzar reflow
+    hudElement.classList.add(isUrgent ? 'hudUrgentPulseAnim' : 'hudPulseAnim');
+}
+
+// ======================================================
+// MODAL DE DETALLES E INFORMACIÓN DE LA BATERÍA
+// ======================================================
+
+function createInfoModal() {
+    if (document.getElementById('robotBatteryInfoModal')) return;
+
+    infoModalElement = document.createElement('div');
+    infoModalElement.id = 'robotBatteryInfoModal';
+    infoModalElement.className = 'robotBatteryInfoOverlay';
+
+    infoModalElement.innerHTML = `
+        <div class="robotBatteryInfoCard">
+            <div class="batteryCardHeader">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <div class="batteryAvatarBig">🤖</div>
+                    <div>
+                        <div class="batteryCardTitle">Batería de Exploración del Robot Aspirante</div>
+                        <div class="batteryCardSub">Sistema de descanso inteligente y circuitos saludables</div>
+                    </div>
+                </div>
+                <button id="closeBatteryInfoBtn" class="devCloseBtn" title="Cerrar">&times;</button>
+            </div>
+
+            <div class="batteryCardBody">
+                <div class="batteryStatusBox">
+                    <div class="batteryStatusBigVal" id="modalBatteryRemaining">-- min</div>
+                    <div class="batteryStatusCells" id="modalBatteryCellsVisual">
+                        <div class="modalCell cellA"></div>
+                        <div class="modalCell cellB"></div>
+                        <div class="modalCell cellC"></div>
+                    </div>
+                    <div class="batteryStatusNote" id="modalBatteryNote">3 de 3 células activas</div>
+                </div>
+
+                <div class="batteryRulesBox">
+                    <div class="ruleItem">
+                        <span class="ruleIcon">⏱️</span>
+                        <div>
+                            <strong>Capacidad máxima:</strong> 1 hora de juego continuo (dividida en 3 células de 20 minutos).
+                        </div>
+                    </div>
+                    <div class="ruleItem">
+                        <span class="ruleIcon">🔋</span>
+                        <div>
+                            <strong>Recarga por descanso:</strong> Cada 1 hora completa de descanso real recupera 1 célula (+20 min de juego).
+                        </div>
+                    </div>
+                    <div class="ruleItem">
+                        <span class="ruleIcon">💤</span>
+                        <div>
+                            <strong>Enfriamiento total:</strong> Tras 3 horas de descanso continuo, la batería se llena al 100% (3 células).
+                        </div>
+                    </div>
+                    <div class="ruleItem">
+                        <span class="ruleIcon">⏸️</span>
+                        <div>
+                            <strong>Pausa inteligente:</strong> Si dejas el juego inactivo o cambias de pestaña, la batería deja de consumirse.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="batteryCardFooter">
+                <button id="understandBatteryBtn" class="batteryPrimaryBtn">¡Entendido! 👍</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(infoModalElement);
+
+    const closeBtn = document.getElementById('closeBatteryInfoBtn');
+    if (closeBtn) closeBtn.onclick = closeInfoModal;
+
+    const okBtn = document.getElementById('understandBatteryBtn');
+    if (okBtn) okBtn.onclick = closeInfoModal;
+
+    infoModalElement.onclick = (e) => {
+        if (e.target === infoModalElement) closeInfoModal();
+    };
+}
+
+export function openInfoModal() {
+    if (!infoModalElement) createInfoModal();
+
+    const remainingSec = getRemainingSeconds();
+    const cells = getRemainingCells();
+    const min = Math.ceil(remainingSec / 60);
+
+    const bigVal = document.getElementById('modalBatteryRemaining');
+    if (bigVal) bigVal.textContent = `${min} minutos de energía`;
+
+    const note = document.getElementById('modalBatteryNote');
+    if (note) note.textContent = `${cells} de 3 células activas`;
+
+    const cellsVisual = document.getElementById('modalBatteryCellsVisual');
+    if (cellsVisual) {
+        cellsVisual.innerHTML = `
+            <div class="modalCell ${cells >= 1 ? 'active color-high' : ''}"></div>
+            <div class="modalCell ${cells >= 2 ? 'active color-high' : ''}"></div>
+            <div class="modalCell ${cells >= 3 ? 'active color-high' : ''}"></div>
+        `;
+    }
+
+    infoModalElement.style.display = 'flex';
+}
+
+export function closeInfoModal() {
+    if (infoModalElement) infoModalElement.style.display = 'none';
+}
+
+// ======================================================
+// PANTALLA DE REPOSO (OVERLAY DE BLOQUEO DE 3 HORAS)
+// ======================================================
+
+function createRestOverlay() {
+    if (document.getElementById('robotRestOverlay')) return;
+
+    restOverlayElement = document.createElement('div');
+    restOverlayElement.id = 'robotRestOverlay';
+    restOverlayElement.className = 'robotRestOverlay';
+
+    // Evitar cualquier interacción con el juego de fondo
+    ['pointerdown', 'mousedown', 'touchstart', 'click', 'keydown'].forEach(evt => {
+        restOverlayElement.addEventListener(evt, (e) => {
+            e.stopPropagation();
+        });
+    });
+
+    restOverlayElement.innerHTML = `
+        <div class="robotRestCard">
+            <!-- CABECERA ILUSTRADA -->
+            <div class="robotRestIconArea">
+                <div class="robotSleepingAnimation">
+                    <span class="robotFace">🤖</span>
+                    <span class="sleepZ z1">Z</span>
+                    <span class="sleepZ z2">z</span>
+                    <span class="sleepZ z3">z</span>
+                </div>
+            </div>
+
+            <!-- TÍTULO Y MENSAJE OFICIAL SOLICITADO -->
+            <h2 class="robotRestTitle">TIEMPO DE ENFRIAMIENTO</h2>
+            
+            <p class="robotRestMessage">
+                ¡Excelente sesión de exploración! Los circuitos del robot necesitan enfriarse y Monty se va a echar una siesta. Tómate una buena merienda, descansa la vista y vuelve en cuanto la batería esté lista.
+            </p>
+
+            <!-- CONTADOR REGRESIVO EN TIEMPO REAL -->
+            <div class="robotRestCountdownBox">
+                <div class="robotRestCountdownLabel">Batería lista en:</div>
+                <div id="robotRestTimerText" class="robotRestTimerText">03:00:00</div>
+                <div class="robotRestProgressContainer">
+                    <div id="robotRestProgressBar" class="robotRestProgressBar"></div>
+                </div>
+            </div>
+
+            <!-- CONSEJOS DE BIENESTAR -->
+            <div class="robotRestTipsGrid">
+                <div class="restTipCard">
+                    <span class="tipIcon">🍎</span>
+                    <div class="tipText">
+                        <strong>Merienda sana:</strong> Come una fruta o bebe agua para reponer energías.
+                    </div>
+                </div>
+                <div class="restTipCard">
+                    <span class="tipIcon">👀</span>
+                    <div class="tipText">
+                        <strong>Descanso visual:</strong> Mira por la ventana a lo lejos para relajar la vista.
+                    </div>
+                </div>
+                <div class="restTipCard">
+                    <span class="tipIcon">🚶</span>
+                    <div class="tipText">
+                        <strong>Estiramiento:</strong> Levántate de la silla y mueve un poco el cuerpo.
+                    </div>
+                </div>
+            </div>
+
+            <!-- DESBLOQUEO DE DESARROLLADOR / SUPERVISOR -->
+            <div class="devUnlockContainer">
+                <button id="toggleDevUnlockBtn" class="devUnlockToggleBtn">
+                    🛠️ Desbloqueo de Desarrollo / Supervisor (PIN)
+                </button>
+                <div id="devUnlockForm" class="devUnlockForm" style="display:none;">
+                    <input type="password" id="devUnlockPinInput" placeholder="Introduce PIN (ej: 1234)" class="devUnlockInput" maxlength="6" />
+                    <button id="submitDevUnlockPin" class="devUnlockSubmitBtn">Desbloquear</button>
+                    ${DEV_CONFIG.enabled ? '<button id="instantDevUnlockBtn" class="devUnlockInstantBtn">⚡ Desbloqueo Inmediato (Modo Dev)</button>' : ''}
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(restOverlayElement);
+
+    // Eventos del formulario de desbloqueo
+    const toggleBtn = document.getElementById('toggleDevUnlockBtn');
+    const form = document.getElementById('devUnlockForm');
+    if (toggleBtn && form) {
+        toggleBtn.onclick = () => {
+            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+        };
+    }
+
+    const pinInput = document.getElementById('devUnlockPinInput');
+    const submitBtn = document.getElementById('submitDevUnlockPin');
+    if (submitBtn && pinInput) {
+        submitBtn.onclick = () => {
+            if (pinInput.value === BATTERY_CONFIG.SUPERVISOR_PIN) {
+                bypassCooldown('PIN Supervisor correcto');
+            } else {
+                pinInput.style.borderColor = '#ef4444';
+                pinInput.value = '';
+                pinInput.placeholder = 'PIN Incorrecto';
+            }
+        };
+        pinInput.onkeydown = (e) => {
+            if (e.key === 'Enter') submitBtn.click();
+        };
+    }
+
+    const instantBtn = document.getElementById('instantDevUnlockBtn');
+    if (instantBtn) {
+        instantBtn.onclick = () => {
+            bypassCooldown('Desbloqueo de Desarrollo');
+        };
+    }
+}
+
+export function bypassCooldown(reason = 'Bypass') {
+    sessionBattery.cooldownUntil = null;
+    sessionBattery.consumedSeconds = 0;
+    sessionBattery.lastNotifiedCell = 3;
+    sessionBattery.notified5Min = false;
+    sessionBattery.notified1Min = false;
+    saveBatteryState();
+    hideRestOverlay();
+    showBatteryToast('✅ Desbloqueado', `${reason}. La batería vuelve a estar al 100%.`, 'success');
+}
+
+// ======================================================
+// TOAST NOTIFICATIONS DE BATERÍA
+// ======================================================
+
+export function showBatteryToast(title, message, type = 'info') {
+    let toast = document.getElementById('robotBatteryToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'robotBatteryToast';
+        toast.className = 'robotBatteryToast';
+        document.body.appendChild(toast);
+    }
+
+    toast.className = `robotBatteryToast toast-${type} visible`;
+    toast.innerHTML = `
+        <div class="toastHeader">
+            <span class="toastIcon">${type === 'danger' ? '⚠️' : (type === 'warning' ? '⚡' : '🔋')}</span>
+            <strong>${title}</strong>
+        </div>
+        <div class="toastBody">${message}</div>
+    `;
+
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.classList.remove('visible');
+    }, 4500);
+}
+
+// ======================================================
+// FUNCIONES DE CONTROL PARA EL PANEL DE DESARROLLO (DEV TOOLS)
+// ======================================================
+
+export function devSetSystemEnabled(enabled) {
+    sessionBattery.enabled = Boolean(enabled);
+    saveBatteryState();
+    if (hudElement) {
+        hudElement.style.display = sessionBattery.enabled ? 'flex' : 'none';
+    }
+    updateHUDVisuals();
+}
+
+export function devSetConsumedMinutes(minutes) {
+    sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, minutes * 60));
+    sessionBattery.cooldownUntil = null;
+    sessionBattery.lastActiveTimestamp = Date.now();
+    sessionBattery.lastNotifiedCell = getRemainingCells();
+    sessionBattery.notified5Min = (60 - minutes) <= 5;
+    sessionBattery.notified1Min = (60 - minutes) <= 1;
+    saveBatteryState();
+    hideRestOverlay();
+    updateHUDVisuals();
+}
+
+export function devSimulateRestHours(hours) {
+    const msToSimulate = hours * 60 * 60 * 1000;
+    
+    // Si estaba en cooldown
+    if (sessionBattery.cooldownUntil) {
+        const remaining = sessionBattery.cooldownUntil - Date.now();
+        if (msToSimulate >= remaining) {
+            bypassCooldown(`Simuladas +${hours}h de descanso`);
+        } else {
+            sessionBattery.cooldownUntil -= msToSimulate;
+            saveBatteryState();
+            startCountdownTimer();
+        }
+        return;
+    }
+
+    // Si estaba en juego normal
+    const cellsToRecover = Math.floor(msToSimulate / BATTERY_CONFIG.REST_MS_PER_CELL);
+    const secToRecover = cellsToRecover * BATTERY_CONFIG.CELL_SEC;
+    sessionBattery.consumedSeconds = Math.max(0, sessionBattery.consumedSeconds - secToRecover);
+    sessionBattery.lastNotifiedCell = getRemainingCells();
+    sessionBattery.notified5Min = false;
+    sessionBattery.notified1Min = false;
+    saveBatteryState();
+    updateHUDVisuals();
+}
+
+export function devResetToFull() {
+    bypassCooldown('Reset completo a cero');
+}

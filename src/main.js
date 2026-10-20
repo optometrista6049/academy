@@ -36,11 +36,14 @@ import {
 from './ui/loadingScreen.js';
 
 import {
-
     updatePlayTime
-
 }
 from './systems/timeSystem.js';
+
+import {
+    initSessionBatterySystem
+}
+from './systems/sessionBatterySystem.js';
 import {
 
     createPandaReminder,
@@ -480,6 +483,8 @@ window.addEventListener(
 createOrientationOverlay();
 
 initDevSuite();
+
+initSessionBatterySystem();
 
 createBootScreen(
 

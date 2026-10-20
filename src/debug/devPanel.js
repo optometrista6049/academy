@@ -11,6 +11,7 @@ import { renderEquipmentDebuggerTab, cleanupEquipmentDebugger } from './equipmen
 import { renderModelGeneratorTab, cleanupModelGeneratorDebugger } from './modelGeneratorDebugger.js';
 import { renderAssetManagerTab } from './assetManagerDebug.js';
 import { renderWorldEditorTab } from './worldEditorTab.js';
+import { renderSessionBatteryTab, cleanupSessionBatteryTab } from './sessionBatteryTab.js';
 
 export const DEV_CONFIG = {
     enabled: true // Cambiar a false para distribución final a alumnos
@@ -47,6 +48,7 @@ export function closeDevPanel() {
     if (!devModalRoot) return;
     cleanupEquipmentDebugger();
     cleanupModelGeneratorDebugger();
+    cleanupSessionBatteryTab();
     devModalRoot.style.display = 'none';
 }
 
@@ -111,6 +113,7 @@ function buildDevModal() {
                 <button class="devTabBtn" data-tab="modelGenerator">✨ Generador 3D (Three.js)</button>
                 <button class="devTabBtn" data-tab="worldEditor">🌐 Modo Dios &bull; Mundo</button>
                 <button class="devTabBtn" data-tab="assets">📁 Gestor de Recursos (Slots)</button>
+                <button class="devTabBtn" data-tab="battery">⏳ Batería / Tiempo</button>
             </div>
 
             <!-- CONTENEDOR DE CONTENIDO -->
@@ -144,6 +147,7 @@ function buildDevModal() {
 function switchTab(tabId) {
     cleanupEquipmentDebugger();
     cleanupModelGeneratorDebugger();
+    cleanupSessionBatteryTab();
     currentTab = tabId;
     const content = document.getElementById('devSuiteContent');
     if (!content) return;
@@ -160,6 +164,8 @@ function switchTab(tabId) {
         renderWorldEditorTab(content);
     } else if (tabId === 'assets') {
         renderAssetManagerTab(content);
+    } else if (tabId === 'battery') {
+        renderSessionBatteryTab(content);
     }
 }
 

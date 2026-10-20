@@ -36,13 +36,11 @@ export const gameState = {
     playTime:0,
 
     sessionControl:{
-
+        enabled:false,
         totalMinutesPlayed:0,
-
         todayMinutesPlayed:0,
-
-        cooldownUntil:null
-
+        consumedSeconds:0,
+        cooldownUntil:null,
+        lastActiveTimestamp:null
     }
-
 };
