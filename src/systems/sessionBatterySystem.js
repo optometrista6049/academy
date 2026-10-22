@@ -9,6 +9,7 @@
 import { gameState } from '../state/gameState.js';
 import { saveGame } from './saveSystem.js';
 import { DEV_CONFIG } from '../debug/devPanel.js';
+import { mountRestRobot3DStage, unmountRestRobot3DStage } from './restRobot3DStage.js';
 
 export const BATTERY_CONFIG = {
     MAX_SESSION_SEC: 60 * 60,         // 60 minutos = 3600 seg
@@ -341,6 +342,7 @@ function checkBatteryNotifications(remainingSec, currentCells) {
 // ======================================================
 
 export function triggerCooldownLock() {
+    sessionBattery.enabled = true;
     sessionBattery.cooldownUntil = Date.now() + BATTERY_CONFIG.COOLDOWN_MS;
     sessionBattery.consumedSeconds = BATTERY_CONFIG.MAX_SESSION_SEC;
     saveGame();
@@ -352,7 +354,22 @@ export function showRestOverlay() {
     if (!restOverlayElement) {
         createRestOverlay();
     }
+
+    // Si el panel de desarrollo está abierto, cerrarlo automáticamente
+    const devSuite = document.getElementById('devSuiteOverlay');
+    if (devSuite && devSuite.style.display === 'flex') {
+        devSuite.style.display = 'none';
+    }
+
     restOverlayElement.style.display = 'flex';
+    restOverlayElement.style.zIndex = '2000000';
+
+    // Montar escenario 3D del Robot Aspirante durmiendo sentado
+    const container = document.getElementById('robotRest3DCanvasContainer');
+    if (container) {
+        mountRestRobot3DStage(container);
+    }
+
     startCountdownTimer();
 }
 
@@ -360,6 +377,7 @@ export function hideRestOverlay() {
     if (restOverlayElement) {
         restOverlayElement.style.display = 'none';
     }
+    unmountRestRobot3DStage();
     if (countdownInterval) {
         clearInterval(countdownInterval);
         countdownInterval = null;
@@ -623,10 +641,10 @@ function createRestOverlay() {
 
     restOverlayElement.innerHTML = `
         <div class="robotRestCard">
-            <!-- CABECERA ILUSTRADA -->
+            <!-- CABECERA ILUSTRADA CON ROBOT 3D EN REPOSO -->
             <div class="robotRestIconArea">
-                <div class="robotSleepingAnimation">
-                    <span class="robotFace">🤖</span>
+                <div id="robotRest3DCanvasContainer" class="robotRest3DArea"></div>
+                <div class="robotSleepingFloatingZ">
                     <span class="sleepZ z1">Z</span>
                     <span class="sleepZ z2">z</span>
                     <span class="sleepZ z3">z</span>
@@ -774,6 +792,7 @@ export function devSetSystemEnabled(enabled) {
 }
 
 export function devSetConsumedMinutes(minutes) {
+    sessionBattery.enabled = true; // Auto-activar para visibilidad inmediata en pruebas
     sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, minutes * 60));
     sessionBattery.cooldownUntil = null;
     sessionBattery.lastActiveTimestamp = Date.now();
@@ -782,10 +801,14 @@ export function devSetConsumedMinutes(minutes) {
     sessionBattery.notified1Min = (60 - minutes) <= 1;
     saveBatteryState();
     hideRestOverlay();
+    if (hudElement) {
+        hudElement.style.display = 'flex';
+    }
     updateHUDVisuals();
 }
 
 export function devSimulateRestHours(hours) {
+    sessionBattery.enabled = true; // Auto-activar para visibilidad inmediata en pruebas
     const msToSimulate = hours * 60 * 60 * 1000;
     
     // Si estaba en cooldown
@@ -809,6 +832,9 @@ export function devSimulateRestHours(hours) {
     sessionBattery.notified5Min = false;
     sessionBattery.notified1Min = false;
     saveBatteryState();
+    if (hudElement) {
+        hudElement.style.display = 'flex';
+    }
     updateHUDVisuals();
 }
 

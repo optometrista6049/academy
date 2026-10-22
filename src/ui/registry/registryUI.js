@@ -28,6 +28,9 @@ import {
     resetRegistryModulesVisualState
 } from "./registryModuleConnector.js";
 
+import { restoreInventoryFromGameState } from "./modules/inventoryModuleV2.js";
+import { restoreArchiveFromGameState } from "./modules/archiveModule.js";
+
 let initialized = false;
 
 let isOpen = false;
@@ -287,6 +290,12 @@ switch(index){
         registryContent
     );
 
+    try {
+        restoreInventoryFromGameState();
+        restoreArchiveFromGameState();
+    } catch (e) {
+        console.warn("Error restaurando inventario/archivo en createRegistryUI:", e);
+    }
 
     createRegistryButton();
 

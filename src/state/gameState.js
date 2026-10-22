@@ -22,6 +22,8 @@ export const gameState = {
 
     inventory:[],
 
+    archived:[],
+
     dialogueIndices:{
         panda:0,
         alto:0,

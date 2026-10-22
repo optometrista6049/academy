@@ -6,7 +6,8 @@
 import { registryCatalog } from "../registryCatalog.js";
 import { openDocumentViewer } from "../../documentViewer.js";
 import { archiveItem, hasArchivedItem } from "./archiveModule.js";
-
+import { gameState } from "../../../state/gameState.js";
+import { saveGame } from "../../../systems/saveSystem.js";
 
 let inventoryModule;
 
@@ -26,6 +27,63 @@ let selectedObject = null;
 
 
 // ======================================================
+// SINCRONIZACIÓN Y PERSISTENCIA
+// ======================================================
+
+function syncInventoryToGameState(){
+    if (!Array.isArray(gameState.inventory)) {
+        gameState.inventory = [];
+    }
+    gameState.inventory = inventoryObjects.map(item => item.id);
+    saveGame();
+}
+
+export function restoreInventoryFromGameState(){
+    inventoryObjects.length = 0;
+
+    // 1. Reconstruir desde gameState.inventory si existe
+    if (Array.isArray(gameState.inventory) && gameState.inventory.length > 0) {
+        gameState.inventory.forEach(id => {
+            const item = registryCatalog[id];
+            if (item && !inventoryObjects.some(it => it.id === item.id)) {
+                inventoryObjects.push(item);
+            }
+        });
+    }
+
+    // 2. Red de seguridad / Fallback de misiones completadas:
+    if (gameState.flags?.deliveredBox || gameState.flags?.receivedAspirantCard) {
+        const aspirantCardItem = registryCatalog['aspirantCard'];
+        if (aspirantCardItem && !inventoryObjects.some(it => it.id === aspirantCardItem.id)) {
+            inventoryObjects.push(aspirantCardItem);
+        }
+    }
+
+    if (gameState.flags?.hasFurnitureKey && !gameState.flags?.drawerOpened) {
+        const keyItem = registryCatalog['badgeKey'];
+        if (keyItem && !inventoryObjects.some(it => it.id === keyItem.id)) {
+            inventoryObjects.push(keyItem);
+        }
+    }
+
+    if (gameState.flags?.drawerOpened && !gameState.flags?.deliveredBox) {
+        const boxItem = registryCatalog['badgeBox'];
+        if (boxItem && !inventoryObjects.some(it => it.id === boxItem.id)) {
+            inventoryObjects.push(boxItem);
+        }
+    }
+
+    if (!Array.isArray(gameState.inventory)) {
+        gameState.inventory = [];
+    }
+    gameState.inventory = inventoryObjects.map(item => item.id);
+
+    if (inventoryModule) {
+        refreshGrid();
+    }
+}
+
+// ======================================================
 // API DEL INVENTARIO
 // ======================================================
 
@@ -43,7 +101,7 @@ export function addInventoryItem(itemId){
 
     }
 
-    if(inventoryObjects.includes(item)){
+    if(inventoryObjects.some(it => it.id === item.id)){
 
         return false;
 
@@ -60,6 +118,8 @@ export function addInventoryItem(itemId){
     }
 
     inventoryObjects.push(item);
+
+    syncInventoryToGameState();
 
     refreshGrid();
 
@@ -91,6 +151,8 @@ export function removeInventoryItem(itemId){
         initializeInfoPanel();
 
     }
+
+    syncInventoryToGameState();
 
     refreshGrid();
 

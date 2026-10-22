@@ -7,6 +7,9 @@ from '../state/gameState.js';
 import { isInputLocked }
 from '../systems/inputLockSystem.js';
 
+import { saveGame }
+from '../systems/saveSystem.js';
+
 import {
 
     showInteraction,
@@ -440,6 +443,7 @@ export function tryInteraction(){
                     gameState.flags.receivedAspirantCard = true;
                     gameState.quests.mission_001 = 'completed';
                     updateDiaryContent();
+                    saveGame();
 
                     // Disparar efecto audiovisual (Opción A: Banner flotante + Chime armónico)
                     // coordinado con la aparición del texto de Monty presentando el Carnet

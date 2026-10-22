@@ -6,6 +6,8 @@
 
 import { registryCatalog } from "../registryCatalog.js";
 import { openDocumentViewer } from "../../documentViewer.js";
+import { gameState } from "../../../state/gameState.js";
+import { saveGame } from "../../../systems/saveSystem.js";
 
 let archiveRoot = null;
 let archivePanel = null;
@@ -15,6 +17,53 @@ let detailContainer = null;
 // Lista de documentos archivados
 const archivedDocuments = [];
 let selectedDocumentId = null;
+
+/* ======================================================
+   SINCRONIZACIÓN Y PERSISTENCIA
+   ====================================================== */
+
+function syncArchiveToGameState(){
+    if (!Array.isArray(gameState.archived)) {
+        gameState.archived = [];
+    }
+    gameState.archived = archivedDocuments.map(doc => doc.id);
+    saveGame();
+}
+
+export function restoreArchiveFromGameState(){
+    archivedDocuments.length = 0;
+
+    // 1. Reconstruir desde gameState.archived si existe
+    if (Array.isArray(gameState.archived) && gameState.archived.length > 0) {
+        gameState.archived.forEach(id => {
+            const doc = registryCatalog[id];
+            if (doc && !archivedDocuments.some(d => d.id === doc.id)) {
+                archivedDocuments.push(doc);
+            }
+        });
+    }
+
+    // 2. Red de seguridad / Fallback de misiones completadas:
+    if (gameState.flags?.deliveredBox || gameState.flags?.receivedAspirantCard) {
+        const aspirantCard = registryCatalog['aspirantCard'];
+        if (aspirantCard && !archivedDocuments.some(d => d.id === aspirantCard.id)) {
+            archivedDocuments.push(aspirantCard);
+        }
+    }
+
+    if (!Array.isArray(gameState.archived)) {
+        gameState.archived = [];
+    }
+    gameState.archived = archivedDocuments.map(doc => doc.id);
+
+    if (archivedDocuments.length > 0 && !selectedDocumentId) {
+        selectedDocumentId = archivedDocuments[0].id;
+    }
+
+    if (archiveRoot) {
+        updateArchiveContent();
+    }
+}
 
 /* ======================================================
    API DE ARCHIVO
@@ -39,6 +88,7 @@ export function archiveItem(itemId) {
         selectedDocumentId = item.id;
     }
 
+    syncArchiveToGameState();
     updateArchiveContent();
     return true;
 }

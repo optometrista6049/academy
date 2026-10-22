@@ -6253,19 +6253,20 @@ body.registry-open .devSuiteTriggerBtn,
    SISTEMA DE BATERÍA DE EXPLORACIÓN / CONTROL DE TIEMPO (HÍBRIDO 3)
    ========================================================= */
 
-/* --- WIDGET HUD DE BATERÍA (ESQUINA SUPERIOR IZQUIERDA) --- */
+/* --- WIDGET HUD DE BATERÍA (PARTE CENTRAL SUPERIOR) --- */
 .robotBatteryHUD {
     position: fixed;
-    top: 14px;
-    left: 14px;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 20050;
     display: none; /* Inactivo por defecto hasta activación */
     align-items: center;
     gap: 8px;
-    background: rgba(10, 16, 26, 0.85);
-    border: 1px solid rgba(0, 240, 255, 0.35);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 10px rgba(0, 240, 255, 0.15);
-    padding: 6px 12px;
+    background: rgba(10, 16, 26, 0.88);
+    border: 1px solid rgba(0, 240, 255, 0.45);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65), 0 0 14px rgba(0, 240, 255, 0.25);
+    padding: 6px 14px;
     border-radius: 24px;
     backdrop-filter: blur(8px);
     cursor: pointer;
@@ -6274,9 +6275,9 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .robotBatteryHUD:hover {
-    transform: scale(1.04);
-    border-color: rgba(0, 240, 255, 0.7);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 240, 255, 0.35);
+    transform: translateX(-50%) scale(1.04);
+    border-color: rgba(0, 240, 255, 0.75);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 240, 255, 0.4);
 }
 
 .robotBatteryHUD.batteryWarning {
@@ -6366,8 +6367,9 @@ body.registry-open .devSuiteTriggerBtn,
 @media (max-width: 600px) {
     .robotBatteryHUD {
         top: 8px;
-        left: 8px;
-        padding: 4px 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 4px 10px;
         gap: 6px;
     }
     .robotBatteryCell {
@@ -6637,14 +6639,39 @@ body.registry-open .devSuiteTriggerBtn,
 
 .robotRestIconArea {
     position: relative;
-    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
 }
 
-.robotSleepingAnimation {
-    font-size: 3.2rem;
-    line-height: 1;
+.robotRest3DArea {
+    width: 170px;
+    height: 170px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.22) 0%, rgba(15, 23, 42, 0.75) 65%, rgba(10, 15, 25, 0.98) 100%);
+    border: 1.5px solid rgba(56, 189, 248, 0.45);
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.3), inset 0 0 16px rgba(56, 189, 248, 0.15);
     position: relative;
-    display: inline-block;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.robotRest3DCanvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    border-radius: 50%;
+}
+
+.robotSleepingFloatingZ {
+    position: absolute;
+    top: 5px;
+    right: -10px;
+    pointer-events: none;
+    z-index: 5;
 }
 
 .sleepZ {
@@ -6653,17 +6680,25 @@ body.registry-open .devSuiteTriggerBtn,
     font-weight: 800;
     font-family: system-ui, sans-serif;
     opacity: 0;
+    -webkit-animation: sleepZAnim 2.4s infinite ease-in;
     animation: sleepZAnim 2.4s infinite ease-in;
+    text-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
 }
 
-.sleepZ.z1 { top: -10px; right: -8px; font-size: 1rem; animation-delay: 0s; }
-.sleepZ.z2 { top: -20px; right: -18px; font-size: 1.3rem; animation-delay: 0.8s; }
-.sleepZ.z3 { top: -32px; right: -28px; font-size: 1.6rem; animation-delay: 1.6s; }
+.sleepZ.z1 { top: 0px; right: 0px; font-size: 1.1rem; animation-delay: 0s; -webkit-animation-delay: 0s; }
+.sleepZ.z2 { top: -14px; right: -12px; font-size: 1.4rem; animation-delay: 0.8s; -webkit-animation-delay: 0.8s; }
+.sleepZ.z3 { top: -28px; right: -24px; font-size: 1.7rem; animation-delay: 1.6s; -webkit-animation-delay: 1.6s; }
+
+@-webkit-keyframes sleepZAnim {
+    0% { opacity: 0; -webkit-transform: translate(0, 0) scale(0.6); }
+    50% { opacity: 0.95; }
+    100% { opacity: 0; -webkit-transform: translate(14px, -24px) scale(1.2); }
+}
 
 @keyframes sleepZAnim {
     0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
-    50% { opacity: 0.9; }
-    100% { opacity: 0; transform: translate(12px, -20px) scale(1.2); }
+    50% { opacity: 0.95; }
+    100% { opacity: 0; transform: translate(14px, -24px) scale(1.2); }
 }
 
 .robotRestTitle {
@@ -6944,4 +6979,96 @@ body.registry-open .devSuiteTriggerBtn,
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 8px;
 }
+
+/* ======================================================
+   CENTRAL FULLSCREEN RECOVERY PROMPT (MOBILE & SLEEP RESTORE)
+   ====================================================== */
+.centralFullscreenPrompt {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(4, 7, 14, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.centralFullscreenPrompt.visible {
+    opacity: 1;
+}
+
+.centralFullscreenCard {
+    background: linear-gradient(180deg, rgba(30, 20, 14, 0.96) 0%, rgba(14, 9, 6, 0.98) 100%);
+    border: 1.5px solid rgba(245, 190, 90, 0.5);
+    border-radius: 18px;
+    padding: 22px 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    max-width: min(88vw, 360px);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 190, 90, 0.2);
+    box-sizing: border-box;
+    transform: translateY(0);
+    animation: centralPromptFloat 3s infinite ease-in-out;
+}
+
+@keyframes centralPromptFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+.centralFullscreenIcon {
+    font-size: 2.2rem;
+    color: #f5be5a;
+    text-shadow: 0 0 14px rgba(245, 190, 90, 0.6);
+    line-height: 1;
+}
+
+.centralFullscreenTitle {
+    font-family: Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #fff6e0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+.centralFullscreenSubtitle {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.centralFullscreenBtn {
+    margin-top: 6px;
+    padding: 10px 22px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1a1005;
+    background: linear-gradient(180deg, #ffd685 0%, #e59d3b 100%);
+    border: 1px solid #ffe8b5;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(229, 157, 59, 0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.centralFullscreenBtn:active {
+    transform: scale(0.95);
+    filter: brightness(1.1);
+}
+
 

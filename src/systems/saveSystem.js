@@ -10,11 +10,12 @@ const SAVE_KEY =
     'monteserinAcademySave';
 
 import {
-
     runtimeState
-
 }
 from '../state/runtimeState.js';
+
+import { restoreInventoryFromGameState } from '../ui/registry/modules/inventoryModuleV2.js';
+import { restoreArchiveFromGameState } from '../ui/registry/modules/archiveModule.js';
 
 export function saveGame(){
     try {
@@ -58,6 +59,15 @@ export function loadGame(){
                 gameState,
                 save
             );
+
+            // Restaurar inventario y documentos archivados en el Registro
+            try {
+                restoreInventoryFromGameState();
+                restoreArchiveFromGameState();
+            } catch (err) {
+                console.warn('Error restaurando inventario/archivo:', err);
+            }
+
             return true;
         }
 

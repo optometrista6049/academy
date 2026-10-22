@@ -44,6 +44,11 @@ import {
     initSessionBatterySystem
 }
 from './systems/sessionBatterySystem.js';
+
+import {
+    initScreenLockManager
+}
+from './mobile/screenLockManager.js';
 import {
 
     createPandaReminder,
@@ -485,6 +490,8 @@ createOrientationOverlay();
 initDevSuite();
 
 initSessionBatterySystem();
+
+initScreenLockManager();
 
 createBootScreen(
 
