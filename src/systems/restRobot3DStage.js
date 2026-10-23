@@ -33,10 +33,10 @@ export function mountRestRobot3DStage(container) {
     // 1. Escena
     scene = new THREE.Scene();
 
-    // 2. Cámara enfocando al robot durmiendo sentado con encuadre completo de cuerpo entero
-    camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 20);
-    camera.position.set(0, 0.38, 2.4);
-    camera.lookAt(0, 0.15, 0);
+    // 2. Cámara enfocando al robot durmiendo sentado con encuadre completo y holgado de cuerpo entero
+    camera = new THREE.PerspectiveCamera(28, w / h, 0.1, 20);
+    camera.position.set(0, 0.28, 2.75);
+    camera.lookAt(0, 0.08, 0);
 
     // 3. Luces con atmósfera suave de descanso y enfriamiento
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
@@ -102,8 +102,8 @@ export function mountRestRobot3DStage(container) {
 
         // Efecto de respiración reposada mientras duerme sentado (sin hacer sentadillas)
         if (currentModel) {
-            currentModel.position.y = -0.38 + Math.sin(elapsed * 1.6) * 0.008;
-            currentModel.rotation.z = Math.sin(elapsed * 0.8) * 0.008;
+            currentModel.position.y = -0.28 + Math.sin(elapsed * 1.5) * 0.005;
+            currentModel.rotation.z = Math.sin(elapsed * 0.8) * 0.006;
         }
 
         if (renderer && scene && camera) {
@@ -126,9 +126,9 @@ function setupRobotModel(gltf) {
     const model = gltf.scene.clone(true);
     currentModel = model;
 
-    // Escalar y centrar el robot sentado para que quepan cabeza, tronco y piernas
-    model.scale.set(0.50, 0.50, 0.50);
-    model.position.set(0, -0.38, 0);
+    // Escalar y centrar el robot sentado para que quepan cabeza con antenas, tronco y piernas holgadamente
+    model.scale.set(0.36, 0.36, 0.36);
+    model.position.set(0, -0.28, 0);
     model.rotation.y = 0.28; // Inclinación diagonal suave y atractiva
 
     scene.add(model);

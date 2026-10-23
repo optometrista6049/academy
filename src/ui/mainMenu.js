@@ -210,19 +210,20 @@ export function createMainMenu(onStart){
     btnResumeMission.style.border = '1px solid rgba(56, 189, 248, 0.45)';
     btnResumeMission.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4), 0 0 10px rgba(56, 189, 248, 0.15)';
 
-    const cpInfo = getMissionCheckpointInfo();
-    if (cpInfo && cpInfo.missionTitle) {
-        const sub = document.createElement('div');
-        sub.style.fontSize = '11px';
-        sub.style.color = '#38bdf8';
-        sub.style.marginTop = '4px';
-        sub.style.fontWeight = 'normal';
-        sub.innerText = `Punto seguro: ${cpInfo.missionTitle}`;
-        btnResumeMission.appendChild(sub);
-    }
-
-    if (!hasMissionCheckpoint()) {
+    const checkpointExists = hasMissionCheckpoint();
+    if (!checkpointExists) {
         btnResumeMission.style.display = 'none';
+    } else {
+        const cpInfo = getMissionCheckpointInfo();
+        if (cpInfo && cpInfo.missionTitle) {
+            const sub = document.createElement('div');
+            sub.style.fontSize = '11px';
+            sub.style.color = '#38bdf8';
+            sub.style.marginTop = '4px';
+            sub.style.fontWeight = 'normal';
+            sub.innerText = `Punto seguro: ${cpInfo.missionTitle}`;
+            btnResumeMission.appendChild(sub);
+        }
     }
 
     btnResumeMission.onclick = () => {

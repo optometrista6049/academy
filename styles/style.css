@@ -6355,13 +6355,31 @@ body.registry-open .devSuiteTriggerBtn,
     letter-spacing: 0.5px;
 }
 
-.robotBatteryTip {
-    font-size: 0.65rem;
-    color: #94a3b8;
-    background: rgba(255, 255, 255, 0.08);
-    padding: 2px 5px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+.robotBatteryInfoBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    font-size: 0.70rem;
+    font-weight: 800;
+    font-family: system-ui, sans-serif;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.55);
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+    margin-left: 2px;
+    flex-shrink: 0;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.robotBatteryHUD:hover .robotBatteryInfoBadge {
+    transform: scale(1.15);
+    background: rgba(56, 189, 248, 0.35);
+    color: #ffffff;
 }
 
 @media (max-width: 650px), (max-height: 500px) {
@@ -6371,7 +6389,7 @@ body.registry-open .devSuiteTriggerBtn,
         transform: translateX(-50%) scale(0.82);
         transform-origin: top center;
         padding: 3px 8px;
-        gap: 4px;
+        gap: 5px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
     }
     .robotBatteryCell {
@@ -6379,10 +6397,13 @@ body.registry-open .devSuiteTriggerBtn,
         height: 12px;
     }
     .robotBatteryTime {
-        font-size: 0.68rem;
+        font-size: 0.70rem;
     }
-    .robotBatteryTip {
-        display: none;
+    .robotBatteryInfoBadge {
+        display: inline-flex;
+        width: 15px;
+        height: 15px;
+        font-size: 0.65rem;
     }
 }
 
@@ -6691,17 +6712,64 @@ body.registry-open .devSuiteTriggerBtn,
     border: 1px solid rgba(212, 175, 55, 0.4);
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(212, 175, 55, 0.15);
     border-radius: 20px;
-    width: min(92vw, 560px);
+    width: min(95vw, 760px);
     max-height: 94dvh;
     overflow-y: auto;
-    padding: 28px 24px;
+    padding: 22px 24px;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    gap: 16px;
+    gap: 14px;
     color: #f1f5f9;
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.6) rgba(0, 0, 0, 0.4);
+}
+
+.robotRestCard::-webkit-scrollbar,
+.robotBatteryInfoCard::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    display: block;
+}
+
+.robotRestCard::-webkit-scrollbar-track,
+.robotBatteryInfoCard::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+}
+
+.robotRestCard::-webkit-scrollbar-thumb,
+.robotBatteryInfoCard::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.6);
+    border-radius: 4px;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+}
+
+.robotRestColsWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    width: 100%;
+}
+
+.robotRestColLeft {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.robotRestColRight {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    text-align: center;
 }
 
 .robotRestIconArea {
@@ -6743,18 +6811,47 @@ body.registry-open .devSuiteTriggerBtn,
 
 .sleepZ {
     position: absolute;
-    color: #38bdf8;
     font-weight: 800;
     font-family: system-ui, sans-serif;
     opacity: 0;
     -webkit-animation: sleepZAnim 2.4s infinite ease-in;
     animation: sleepZAnim 2.4s infinite ease-in;
-    text-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
 }
 
-.sleepZ.z1 { top: 0px; right: 0px; font-size: 1.1rem; animation-delay: 0s; -webkit-animation-delay: 0s; }
-.sleepZ.z2 { top: -14px; right: -12px; font-size: 1.4rem; animation-delay: 0.8s; -webkit-animation-delay: 0.8s; }
-.sleepZ.z3 { top: -28px; right: -24px; font-size: 1.7rem; animation-delay: 1.6s; -webkit-animation-delay: 1.6s; }
+/* Opción C: Efecto Gradiente Naranja Dorado a Verde Neón de Recarga */
+.sleepZ.z1 { 
+    top: 0px; 
+    right: 0px; 
+    font-size: 1.1rem; 
+    color: #f59e0b; 
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.95); 
+    animation-delay: 0s; 
+    -webkit-animation-delay: 0s; 
+}
+.sleepZ.z2 { 
+    top: -14px; 
+    right: -12px; 
+    font-size: 1.4rem; 
+    color: #fbbf24; 
+    text-shadow: 0 0 10px rgba(251, 191, 36, 0.95); 
+    animation-delay: 0.8s; 
+    -webkit-animation-delay: 0.8s; 
+}
+.sleepZ.z3 { 
+    top: -28px; 
+    right: -24px; 
+    font-size: 1.7rem; 
+    color: #10b981; 
+    text-shadow: 0 0 12px rgba(16, 185, 129, 0.95); 
+    animation-delay: 1.6s; 
+    -webkit-animation-delay: 1.6s; 
+}
+
+.pinInputSecure {
+    -webkit-text-security: disc !important;
+    text-security: disc !important;
+    letter-spacing: 2px;
+}
 
 @-webkit-keyframes sleepZAnim {
     0% { opacity: 0; -webkit-transform: translate(0, 0) scale(0.6); }
@@ -7138,8 +7235,8 @@ body.registry-open .devSuiteTriggerBtn,
     filter: brightness(1.1);
 }
 
-/* Adaptación móvil y pantallas pequeñas para la pantalla de enfriamiento */
-@media (max-width: 650px), (max-height: 600px) {
+/* Adaptación móvil en modo vertical (Portrait) */
+@media (max-width: 650px) and (orientation: portrait) {
     .robotRestOverlay {
         padding: 8px;
         align-items: flex-start;
@@ -7151,24 +7248,28 @@ body.registry-open .devSuiteTriggerBtn,
         gap: 8px;
         margin: auto;
     }
+    .robotRestColsWrapper {
+        flex-direction: column;
+        gap: 8px;
+    }
     .robotRest3DArea {
-        width: 105px;
-        height: 105px;
+        width: 100px;
+        height: 100px;
     }
     .robotRestTitle {
         font-size: 1rem;
     }
     .robotRestMessage {
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         line-height: 1.35;
         padding: 0 4px;
     }
     .robotRestCountdownBox {
-        padding: 8px 14px;
-        max-width: 260px;
+        padding: 6px 12px;
+        max-width: 250px;
     }
     .robotRestTimerText {
-        font-size: 1.55rem !important;
+        font-size: 1.5rem !important;
     }
     .robotRestTipsGrid {
         grid-template-columns: 1fr;
@@ -7208,6 +7309,132 @@ body.registry-open .devSuiteTriggerBtn,
         right: 8px;
         padding: 6px 10px;
         font-size: 0.74rem;
+    }
+}
+
+/* Adaptación móvil y pantallas apaisadas (Landscape): Aprovecha el ancho y evita scroll */
+@media (orientation: landscape) and (max-height: 560px) {
+    .robotRestOverlay {
+        padding: 6px;
+        align-items: center;
+    }
+    .robotRestCard {
+        width: min(96vw, 760px);
+        max-height: 96dvh;
+        padding: 10px 16px;
+        gap: 8px;
+        margin: auto;
+    }
+    .robotRestColsWrapper {
+        flex-direction: row;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .robotRestColLeft {
+        width: 190px;
+        gap: 6px;
+    }
+    .robotRestColRight {
+        flex: 1;
+        gap: 6px;
+    }
+    .robotRest3DArea {
+        width: 88px;
+        height: 88px;
+    }
+    .robotRestTitle {
+        font-size: 0.95rem;
+        margin: 0;
+    }
+    .robotRestMessage {
+        font-size: 0.72rem;
+        line-height: 1.25;
+        margin: 0;
+    }
+    .robotRestCountdownBox {
+        padding: 4px 10px;
+        max-width: 180px;
+        gap: 2px;
+    }
+    .robotRestTimerText {
+        font-size: 1.35rem !important;
+    }
+    .robotRestTipsGrid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+    }
+    .restTipCard {
+        padding: 3px 6px;
+        gap: 4px;
+    }
+    .tipIcon {
+        font-size: 0.95rem;
+    }
+    .tipText {
+        font-size: 0.62rem;
+        line-height: 1.2;
+    }
+    .devUnlockContainer {
+        margin-top: 1px;
+        gap: 3px;
+    }
+    .devUnlockForm {
+        padding: 4px 8px;
+        gap: 6px;
+    }
+    .devUnlockInput {
+        width: 130px;
+        font-size: 0.72rem;
+        padding: 4px 8px;
+    }
+    .devUnlockSubmitBtn {
+        font-size: 0.72rem;
+        padding: 4px 10px;
+    }
+    .restFullscreenFloatBtn {
+        top: 6px;
+        right: 6px;
+        padding: 4px 10px;
+        font-size: 0.72rem;
+    }
+
+    /* Ventana informativa en Landscape: 2 Columnas sin scroll */
+    .robotBatteryInfoCard {
+        width: min(96vw, 680px);
+        max-height: 96dvh;
+        padding: 12px 18px;
+        gap: 8px;
+    }
+    .batteryCardHeader {
+        padding-bottom: 6px;
+    }
+    .batteryCardBody {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+    .batteryStatusBox {
+        padding: 8px;
+        gap: 4px;
+    }
+    .batteryStatusBigVal {
+        font-size: 1.1rem;
+    }
+    .batteryRulesBox {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+    .ruleItem {
+        padding: 5px 8px;
+        font-size: 0.68rem;
+        line-height: 1.2;
+        gap: 6px;
+    }
+    .batteryCardFooter {
+        margin-top: 0;
     }
 }
 

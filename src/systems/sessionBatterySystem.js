@@ -73,21 +73,27 @@ export function loadBatteryState() {
         if (raw) {
             const data = JSON.parse(raw);
             if (data && typeof data === 'object') {
-                if (typeof data.enabled === 'boolean') sessionBattery.enabled = data.enabled;
                 if (typeof data.consumedSeconds === 'number') sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, data.consumedSeconds));
                 if (data.cooldownUntil) sessionBattery.cooldownUntil = Number(data.cooldownUntil);
                 if (data.lastActiveTimestamp) sessionBattery.lastActiveTimestamp = Number(data.lastActiveTimestamp);
+                if (data.devForced === true) {
+                    sessionBattery.devForced = true;
+                    sessionBattery.enabled = true;
+                }
             }
         }
     } catch (e) {
         console.warn('No se pudo cargar el estado de la batería:', e);
     }
 
-    // Sincronizar con gameState
-    if (gameState.sessionControl) {
-        if (typeof gameState.sessionControl.enabled === 'boolean' && !sessionBattery.enabled) {
-            sessionBattery.enabled = gameState.sessionControl.enabled;
-        }
+    // Sincronizar con gameState: Solo se activa de juego regular si Misión 2 lo ha desbloqueado
+    if (gameState.flags?.batterySystemUnlocked) {
+        sessionBattery.enabled = true;
+    } else if (gameState.sessionControl?.enabled) {
+        sessionBattery.enabled = true;
+    } else if (!sessionBattery.devForced) {
+        // Por defecto inactivo hasta el desarrollo de la Misión 2
+        sessionBattery.enabled = false;
     }
 }
 
@@ -95,6 +101,7 @@ export function saveBatteryState() {
     try {
         const payload = {
             enabled: sessionBattery.enabled,
+            devForced: Boolean(sessionBattery.devForced),
             consumedSeconds: Math.round(sessionBattery.consumedSeconds),
             cooldownUntil: sessionBattery.cooldownUntil,
             lastActiveTimestamp: Date.now()
@@ -365,6 +372,11 @@ export function showRestOverlay() {
     restOverlayElement.style.display = 'flex';
     restOverlayElement.style.zIndex = '2000000';
 
+    // Resetear posición de scroll a la parte superior en cada apertura
+    restOverlayElement.scrollTop = 0;
+    const restCard = restOverlayElement.querySelector('.robotRestCard');
+    if (restCard) restCard.scrollTop = 0;
+
     // Montar escenario 3D del Robot Aspirante durmiendo sentado
     const container = document.getElementById('robotRest3DCanvasContainer');
     if (container) {
@@ -466,7 +478,7 @@ function createHUDWidget() {
         </div>
         <div class="robotBatteryInfo">
             <span id="robotBatteryText" class="robotBatteryTime">60 min</span>
-            <span class="robotBatteryTip">Info ℹ️</span>
+            <span class="robotBatteryInfoBadge" id="robotBatteryInfoBadge" title="Información y reglas de la batería">ⓘ</span>
         </div>
     `;
 
@@ -640,6 +652,11 @@ function createInfoModal() {
 export function openInfoModal() {
     if (!infoModalElement) createInfoModal();
 
+    // Resetear posición de scroll a la parte superior en cada apertura
+    infoModalElement.scrollTop = 0;
+    const infoCard = infoModalElement.querySelector('.robotBatteryInfoCard');
+    if (infoCard) infoCard.scrollTop = 0;
+
     const remainingSec = getRemainingSeconds();
     const cells = getRemainingCells();
     const min = Math.ceil(remainingSec / 60);
@@ -691,63 +708,68 @@ function createRestOverlay() {
         </button>
 
         <div class="robotRestCard">
-            <!-- CABECERA ILUSTRADA CON ROBOT 3D EN REPOSO -->
-            <div class="robotRestIconArea">
-                <div id="robotRest3DCanvasContainer" class="robotRest3DArea"></div>
-                <div class="robotSleepingFloatingZ">
-                    <span class="sleepZ z1">Z</span>
-                    <span class="sleepZ z2">z</span>
-                    <span class="sleepZ z3">z</span>
-                </div>
-            </div>
+            <div class="robotRestColsWrapper">
+                <!-- COLUMNA IZQUIERDA: ROBOT 3D Y CUENTA ATRÁS -->
+                <div class="robotRestColLeft">
+                    <div class="robotRestIconArea">
+                        <div id="robotRest3DCanvasContainer" class="robotRest3DArea"></div>
+                        <div class="robotSleepingFloatingZ">
+                            <span class="sleepZ z1">Z</span>
+                            <span class="sleepZ z2">z</span>
+                            <span class="sleepZ z3">z</span>
+                        </div>
+                    </div>
 
-            <!-- TÍTULO Y MENSAJE OFICIAL SOLICITADO -->
-            <h2 class="robotRestTitle">TIEMPO DE ENFRIAMIENTO</h2>
-            
-            <p class="robotRestMessage">
-                ¡Excelente sesión de exploración! Los circuitos del robot necesitan enfriarse y Monty se va a echar una siesta. Tómate una buena merienda, descansa la vista y vuelve en cuanto la batería esté lista.
-            </p>
-
-            <!-- CONTADOR REGRESIVO EN TIEMPO REAL CON NÚMEROS EN COLOR VERDE -->
-            <div class="robotRestCountdownBox">
-                <div class="robotRestCountdownLabel">Batería lista en:</div>
-                <div id="robotRestTimerText" class="robotRestTimerText">03:00:00</div>
-                <div class="robotRestProgressContainer">
-                    <div id="robotRestProgressBar" class="robotRestProgressBar"></div>
-                </div>
-            </div>
-
-            <!-- CONSEJOS DE BIENESTAR -->
-            <div class="robotRestTipsGrid">
-                <div class="restTipCard">
-                    <span class="tipIcon">🍎</span>
-                    <div class="tipText">
-                        <strong>Merienda sana:</strong> Come una fruta o bebe agua para reponer energías.
+                    <div class="robotRestCountdownBox">
+                        <div class="robotRestCountdownLabel">Batería lista en:</div>
+                        <div id="robotRestTimerText" class="robotRestTimerText">03:00:00</div>
+                        <div class="robotRestProgressContainer">
+                            <div id="robotRestProgressBar" class="robotRestProgressBar"></div>
+                        </div>
                     </div>
                 </div>
-                <div class="restTipCard">
-                    <span class="tipIcon">👀</span>
-                    <div class="tipText">
-                        <strong>Descanso visual:</strong> Mira por la ventana a lo lejos para relajar la vista.
-                    </div>
-                </div>
-                <div class="restTipCard">
-                    <span class="tipIcon">🚶</span>
-                    <div class="tipText">
-                        <strong>Estiramiento:</strong> Levántate de la silla y mueve un poco el cuerpo.
-                    </div>
-                </div>
-            </div>
 
-            <!-- DESBLOQUEO DE DESARROLLADOR / SUPERVISOR (ACCESIBLE Y VISIBLE) -->
-            <div class="devUnlockContainer">
-                <button id="toggleDevUnlockBtn" class="devUnlockToggleBtn">
-                    🛠️ Desbloqueo de Desarrollo / Supervisor (PIN)
-                </button>
-                <div id="devUnlockForm" class="devUnlockForm" style="display:none;">
-                    <input type="password" id="devUnlockPinInput" placeholder="Introduce PIN (ej: 1234)" class="devUnlockInput" maxlength="6" />
-                    <button id="submitDevUnlockPin" class="devUnlockSubmitBtn">Desbloquear</button>
-                    ${DEV_CONFIG.enabled ? '<button id="instantDevUnlockBtn" class="devUnlockInstantBtn">⚡ Desbloqueo Inmediato (Modo Dev)</button>' : ''}
+                <!-- COLUMNA DERECHA: TEXTO, CONSEJOS Y DESBLOQUEO -->
+                <div class="robotRestColRight">
+                    <h2 class="robotRestTitle">TIEMPO DE ENFRIAMIENTO</h2>
+                    
+                    <p class="robotRestMessage">
+                        ¡Excelente sesión de exploración! Los circuitos del robot necesitan enfriarse y Monty se va a echar una siesta. Tómate una buena merienda, descansa la vista y vuelve en cuanto la batería esté lista.
+                    </p>
+
+                    <!-- CONSEJOS DE BIENESTAR -->
+                    <div class="robotRestTipsGrid">
+                        <div class="restTipCard">
+                            <span class="tipIcon">🍎</span>
+                            <div class="tipText">
+                                <strong>Merienda sana:</strong> Come una fruta o bebe agua.
+                            </div>
+                        </div>
+                        <div class="restTipCard">
+                            <span class="tipIcon">👀</span>
+                            <div class="tipText">
+                                <strong>Descanso visual:</strong> Relaja la vista mirando lejos.
+                            </div>
+                        </div>
+                        <div class="restTipCard">
+                            <span class="tipIcon">🚶</span>
+                            <div class="tipText">
+                                <strong>Estiramiento:</strong> Mueve un poco el cuerpo.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DESBLOQUEO DE DESARROLLADOR / SUPERVISOR (ACCESIBLE Y VISIBLE) -->
+                    <div class="devUnlockContainer">
+                        <button id="toggleDevUnlockBtn" class="devUnlockToggleBtn">
+                            🛠️ Desbloqueo de Desarrollo / Supervisor (PIN)
+                        </button>
+                        <div id="devUnlockForm" class="devUnlockForm" style="display:none;">
+                            <input type="text" id="devUnlockPinInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" class="devUnlockInput pinInputSecure" placeholder="PIN Supervisor (1234)" maxlength="6" />
+                            <button id="submitDevUnlockPin" class="devUnlockSubmitBtn">Desbloquear</button>
+                            ${DEV_CONFIG.enabled ? '<button id="instantDevUnlockBtn" class="devUnlockInstantBtn">⚡ Desbloqueo Inmediato (Modo Dev)</button>' : ''}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -843,6 +865,7 @@ export function showBatteryToast(title, message, type = 'info') {
 
 export function devSetSystemEnabled(enabled) {
     sessionBattery.enabled = Boolean(enabled);
+    sessionBattery.devForced = sessionBattery.enabled;
     saveBatteryState();
     if (hudElement) {
         hudElement.style.display = sessionBattery.enabled ? 'flex' : 'none';
