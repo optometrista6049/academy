@@ -19,6 +19,7 @@ import {
     devResetToFull,
     triggerCooldownLock,
     showBatteryToast,
+    updateHUDVisuals,
     BATTERY_CONFIG
 } from '../systems/sessionBatterySystem.js';
 import { showDevToast } from './devPanel.js';
@@ -194,10 +195,12 @@ function setupEventListeners(container) {
     const btnSim1m = container.querySelector('#btnSim1m');
     if (btnSim1m) {
         btnSim1m.onclick = () => {
+            sessionBattery.enabled = true;
             sessionBattery.consumedSeconds = 3550;
             sessionBattery.cooldownUntil = null;
             sessionBattery.notified5Min = true;
             sessionBattery.notified1Min = false;
+            updateHUDVisuals();
             showDevToast('⏱️ Simulado último minuto (Quedan 50 seg)');
             updateLiveMonitor();
         };

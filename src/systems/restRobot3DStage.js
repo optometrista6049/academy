@@ -33,10 +33,10 @@ export function mountRestRobot3DStage(container) {
     // 1. Escena
     scene = new THREE.Scene();
 
-    // 2. Cámara enfocando al robot sentado
-    camera = new THREE.PerspectiveCamera(32, w / h, 0.1, 20);
-    camera.position.set(0, 0.55, 2.75);
-    camera.lookAt(0, 0.22, 0);
+    // 2. Cámara enfocando al robot durmiendo sentado con encuadre completo de cuerpo entero
+    camera = new THREE.PerspectiveCamera(30, w / h, 0.1, 20);
+    camera.position.set(0, 0.38, 2.4);
+    camera.lookAt(0, 0.15, 0);
 
     // 3. Luces con atmósfera suave de descanso y enfriamiento
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
@@ -46,7 +46,7 @@ export function mountRestRobot3DStage(container) {
     keyLight.position.set(1.5, 2.0, 2.2);
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffd54f, 0.7); // Halo dorado tenue
+    const rimLight = new THREE.DirectionalLight(0xffd54f, 0.8); // Halo dorado tenue
     rimLight.position.set(-1.4, 1.2, -1.8);
     scene.add(rimLight);
 
@@ -88,14 +88,22 @@ export function mountRestRobot3DStage(container) {
         );
     }
 
-    // 6. Bucle de renderizado
+    // 6. Bucle de renderizado con respiración sutil de descanso
     function animate() {
         if (!isStageActive) return;
         animFrameId = requestAnimationFrame(animate);
 
         const delta = clock.getDelta();
+        const elapsed = clock.getElapsedTime();
+
         if (mixer) {
             mixer.update(delta);
+        }
+
+        // Efecto de respiración reposada mientras duerme sentado (sin hacer sentadillas)
+        if (currentModel) {
+            currentModel.position.y = -0.38 + Math.sin(elapsed * 1.6) * 0.008;
+            currentModel.rotation.z = Math.sin(elapsed * 0.8) * 0.008;
         }
 
         if (renderer && scene && camera) {
@@ -118,14 +126,14 @@ function setupRobotModel(gltf) {
     const model = gltf.scene.clone(true);
     currentModel = model;
 
-    // Escalar y centrar el robot sentado
-    model.scale.set(0.72, 0.72, 0.72);
-    model.position.set(0, -0.32, 0);
-    model.rotation.y = 0.25; // Ligera inclinación diagonal muy atractiva
+    // Escalar y centrar el robot sentado para que quepan cabeza, tronco y piernas
+    model.scale.set(0.50, 0.50, 0.50);
+    model.position.set(0, -0.38, 0);
+    model.rotation.y = 0.28; // Inclinación diagonal suave y atractiva
 
     scene.add(model);
 
-    // Configurar animación 'Robot_Sitting'
+    // Configurar animación 'Robot_Sitting' ejecutándose 1 sola vez y manteniéndose sentado (sin bucle de sentadillas)
     mixer = new THREE.AnimationMixer(model);
 
     const sittingClip = gltf.animations.find(
@@ -137,6 +145,8 @@ function setupRobotModel(gltf) {
     if (sittingClip) {
         const action = mixer.clipAction(sittingClip);
         action.reset();
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true; // Permanece sentado en reposo al terminar de sentarse
         action.play();
     }
 }

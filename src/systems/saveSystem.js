@@ -111,3 +111,123 @@ export function hasSave(){
         return false;
     }
 }
+
+// ======================================================
+// PUNTOS DE CONTROL SEGUROS DE MISIÓN (CHECKPOINT RESTORE)
+// Permite al jugador reanudar desde el último hito de misión
+// seguro en caso de fallos de sincronía o pasos bloqueados.
+// ======================================================
+
+const CHECKPOINT_KEY = 'monteserinAcademy_missionCheckpoint';
+
+export function saveMissionCheckpoint(missionId, metadata = {}){
+    try {
+        if(runtimeState.player){
+            gameState.player.x = runtimeState.player.position.x;
+            gameState.player.y = runtimeState.player.position.y;
+            gameState.player.z = runtimeState.player.position.z;
+        }
+
+        const payload = {
+            version: 1,
+            missionId: missionId || 'checkpoint',
+            missionTitle: metadata.name || 'Misión Guardada',
+            safeLocation: metadata.safeLocation || {
+                x: gameState.player.x || 0,
+                y: gameState.player.y || 0,
+                z: gameState.player.z || 0
+            },
+            timestamp: Date.now(),
+            dateFormatted: new Date().toLocaleString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            }),
+            gameState: JSON.parse(JSON.stringify(gameState))
+        };
+
+        localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
+        console.log(`💾 Punto de control seguro guardado [${payload.missionTitle}] (${payload.dateFormatted})`);
+    } catch(err){
+        console.warn('No se pudo guardar el punto de control de misión:', err);
+    }
+}
+
+export function loadMissionCheckpoint(){
+    try {
+        const raw = localStorage.getItem(CHECKPOINT_KEY);
+        if(!raw || typeof raw !== 'string' || !raw.trim()) return false;
+
+        const data = JSON.parse(raw);
+        if(!data || !data.gameState || typeof data.gameState !== 'object') return false;
+
+        // Sobrescribir el estado actual con el snapshot verificado del checkpoint
+        Object.assign(gameState, data.gameState);
+
+        // Si se especificó una ubicación segura para el checkpoint, asegurar posición del jugador
+        if (data.safeLocation) {
+            gameState.player.x = data.safeLocation.x ?? gameState.player.x;
+            gameState.player.y = data.safeLocation.y ?? gameState.player.y;
+            gameState.player.z = data.safeLocation.z ?? gameState.player.z;
+        }
+
+        if(runtimeState.player){
+            runtimeState.player.position.set(
+                gameState.player.x,
+                gameState.player.y,
+                gameState.player.z
+            );
+        }
+
+        // Restaurar inventario y documentos archivados
+        try {
+            restoreInventoryFromGameState();
+            restoreArchiveFromGameState();
+        } catch (err) {
+            console.warn('Error restaurando inventario/archivo desde checkpoint:', err);
+        }
+
+        // Sincronizar también con el guardado principal para persistir la recuperación
+        saveGame();
+        console.log(`✅ Partida reanudada desde el punto de control: ${data.missionTitle}`);
+        return true;
+    } catch(err){
+        console.warn('Error cargando el punto de control de misión:', err);
+        return false;
+    }
+}
+
+export function hasMissionCheckpoint(){
+    try {
+        const raw = localStorage.getItem(CHECKPOINT_KEY);
+        if(!raw || typeof raw !== 'string' || !raw.trim()) return false;
+        const parsed = JSON.parse(raw);
+        return Boolean(parsed && parsed.gameState && typeof parsed.gameState === 'object');
+    } catch {
+        return false;
+    }
+}
+
+export function getMissionCheckpointInfo(){
+    try {
+        const raw = localStorage.getItem(CHECKPOINT_KEY);
+        if(!raw) return null;
+        const parsed = JSON.parse(raw);
+        if(!parsed || !parsed.gameState) return null;
+        return {
+            missionId: parsed.missionId || 'checkpoint',
+            missionTitle: parsed.missionTitle || 'Última Misión Guardada',
+            timestamp: parsed.timestamp || 0,
+            dateFormatted: parsed.dateFormatted || ''
+        };
+    } catch {
+        return null;
+    }
+}
+
+export function deleteMissionCheckpoint(){
+    try {
+        localStorage.removeItem(CHECKPOINT_KEY);
+    } catch {}
+}

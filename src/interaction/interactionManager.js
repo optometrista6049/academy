@@ -7,7 +7,7 @@ from '../state/gameState.js';
 import { isInputLocked }
 from '../systems/inputLockSystem.js';
 
-import { saveGame }
+import { saveGame, saveMissionCheckpoint }
 from '../systems/saveSystem.js';
 
 import {
@@ -422,6 +422,11 @@ export function tryInteraction(){
                     startMissionFromData(mission001);
                     setPandaIdle();
                     updateDiaryContent();
+                    saveGame();
+                    saveMissionCheckpoint('mission_001_start', {
+                        name: 'Misión 1: Encargo de Monty',
+                        safeLocation: { x: 0, y: 0, z: 4 }
+                    });
                 };
 
                 startDialogue(
@@ -444,6 +449,10 @@ export function tryInteraction(){
                     gameState.quests.mission_001 = 'completed';
                     updateDiaryContent();
                     saveGame();
+                    saveMissionCheckpoint('mission_001_complete', {
+                        name: 'Misión 1: Carnet de Aspirante',
+                        safeLocation: { x: 0, y: 0, z: 4 }
+                    });
 
                     // Disparar efecto audiovisual (Opción A: Banner flotante + Chime armónico)
                     // coordinado con la aparición del texto de Monty presentando el Carnet

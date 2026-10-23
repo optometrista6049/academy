@@ -10,6 +10,7 @@ import { gameState } from '../state/gameState.js';
 import { saveGame } from './saveSystem.js';
 import { DEV_CONFIG } from '../debug/devPanel.js';
 import { mountRestRobot3DStage, unmountRestRobot3DStage } from './restRobot3DStage.js';
+import { triggerFullscreen } from '../mobile/screenLockManager.js';
 
 export const BATTERY_CONFIG = {
     MAX_SESSION_SEC: 60 * 60,         // 60 minutos = 3600 seg
@@ -431,7 +432,31 @@ function createHUDWidget() {
 
     hudElement.innerHTML = `
         <div class="robotBatteryCapsule">
-            <div class="robotBatteryAvatar" title="Robot Aspirante">🤖</div>
+            <div class="robotBatteryAvatar" title="Robot Aspirante">
+                <svg class="robotBatteryAvatarSvg" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="robotGoldenGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#fcd34d"/>
+                            <stop offset="60%" stop-color="#f59e0b"/>
+                            <stop offset="100%" stop-color="#d97706"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Antena dorada -->
+                    <line x1="12" y1="2" x2="12" y2="6" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+                    <circle cx="12" cy="2" r="1.6" fill="#fde68a" stroke="#d97706" stroke-width="0.5"/>
+                    <!-- Cabeza dorada / anaranjada acorde con el Robot del jugador -->
+                    <rect x="3.5" y="6" width="17" height="15" rx="4" fill="url(#robotGoldenGrad)" stroke="#b45309" stroke-width="1"/>
+                    <!-- Orejas mecánicas laterales -->
+                    <rect x="1.5" y="10.5" width="2" height="6" rx="1" fill="#b45309"/>
+                    <rect x="20.5" y="10.5" width="2" height="6" rx="1" fill="#b45309"/>
+                    <!-- Visor oscuro con ojos cian -->
+                    <rect x="6" y="9.5" width="12" height="5.5" rx="2" fill="#090d16" stroke="#0284c7" stroke-width="0.7"/>
+                    <circle cx="9" cy="12.2" r="1.3" fill="#38bdf8"/>
+                    <circle cx="15" cy="12.2" r="1.3" fill="#38bdf8"/>
+                    <!-- Línea de sonrisa mecánica -->
+                    <path d="M 8.5 17.5 Q 12 19.5 15.5 17.5" fill="none" stroke="#78350f" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+            </div>
             <div class="robotBatteryBody">
                 <div class="robotBatteryCell cell-1" data-cell="1"></div>
                 <div class="robotBatteryCell cell-2" data-cell="2"></div>
@@ -475,14 +500,14 @@ export function updateHUDVisuals() {
         }
     }
 
-    const cell1 = hudElement.querySelector('.cell-1');
-    const cell2 = hudElement.querySelector('.cell-2');
-    const cell3 = hudElement.querySelector('.cell-3');
+    const cell1 = hudElement.querySelector('[data-cell="1"]');
+    const cell2 = hudElement.querySelector('[data-cell="2"]');
+    const cell3 = hudElement.querySelector('[data-cell="3"]');
 
-    // Resetear clases
-    [cell1, cell2, cell3].forEach(c => {
-        if (c) c.className = 'robotBatteryCell';
-    });
+    // Resetear clases preservando identificadores de celda
+    if (cell1) cell1.className = 'robotBatteryCell cell-1';
+    if (cell2) cell2.className = 'robotBatteryCell cell-2';
+    if (cell3) cell3.className = 'robotBatteryCell cell-3';
 
     if (cells >= 3) {
         if (cell1) cell1.classList.add('cell-active', 'color-high');
@@ -500,6 +525,7 @@ export function updateHUDVisuals() {
         hudElement.classList.remove('batteryWarning');
     } else {
         hudElement.classList.add('batteryDanger');
+        hudElement.classList.remove('batteryWarning');
     }
 }
 
@@ -520,18 +546,37 @@ function createInfoModal() {
     infoModalElement = document.createElement('div');
     infoModalElement.id = 'robotBatteryInfoModal';
     infoModalElement.className = 'robotBatteryInfoOverlay';
+    infoModalElement.style.zIndex = '35000'; // Por encima del botón de registro (z-index 25000)
 
     infoModalElement.innerHTML = `
         <div class="robotBatteryInfoCard">
             <div class="batteryCardHeader">
                 <div style="display:flex;align-items:center;gap:12px;">
-                    <div class="batteryAvatarBig">🤖</div>
+                    <div class="batteryAvatarBig">
+                        <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+                            <defs>
+                                <linearGradient id="modalBotGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#fcd34d"/>
+                                    <stop offset="60%" stop-color="#f59e0b"/>
+                                    <stop offset="100%" stop-color="#d97706"/>
+                                </linearGradient>
+                            </defs>
+                            <line x1="12" y1="2" x2="12" y2="6" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="12" cy="2" r="1.6" fill="#fde68a"/>
+                            <rect x="3.5" y="6" width="17" height="15" rx="4" fill="url(#modalBotGrad)" stroke="#b45309" stroke-width="1"/>
+                            <rect x="1.5" y="10.5" width="2" height="6" rx="1" fill="#b45309"/>
+                            <rect x="20.5" y="10.5" width="2" height="6" rx="1" fill="#b45309"/>
+                            <rect x="6" y="9.5" width="12" height="5.5" rx="2" fill="#090d16" stroke="#0284c7" stroke-width="0.7"/>
+                            <circle cx="9" cy="12.2" r="1.3" fill="#38bdf8"/>
+                            <circle cx="15" cy="12.2" r="1.3" fill="#38bdf8"/>
+                        </svg>
+                    </div>
                     <div>
                         <div class="batteryCardTitle">Batería de Exploración del Robot Aspirante</div>
                         <div class="batteryCardSub">Sistema de descanso inteligente y circuitos saludables</div>
                     </div>
                 </div>
-                <button id="closeBatteryInfoBtn" class="devCloseBtn" title="Cerrar">&times;</button>
+                <button id="closeBatteryInfoBtn" class="batteryCloseModalBtn" title="Cerrar información">&times;</button>
             </div>
 
             <div class="batteryCardBody">
@@ -574,7 +619,7 @@ function createInfoModal() {
             </div>
 
             <div class="batteryCardFooter">
-                <button id="understandBatteryBtn" class="batteryPrimaryBtn">¡Entendido! 👍</button>
+                <button id="understandBatteryBtn" class="batteryPrimaryBtn">¡Entendido! 👍 Cerrar ventana</button>
             </div>
         </div>
     `;
@@ -608,8 +653,8 @@ export function openInfoModal() {
     const cellsVisual = document.getElementById('modalBatteryCellsVisual');
     if (cellsVisual) {
         cellsVisual.innerHTML = `
-            <div class="modalCell ${cells >= 1 ? 'active color-high' : ''}"></div>
-            <div class="modalCell ${cells >= 2 ? 'active color-high' : ''}"></div>
+            <div class="modalCell ${cells >= 1 ? (cells === 1 ? 'active color-low' : (cells === 2 ? 'active color-mid' : 'active color-high')) : ''}"></div>
+            <div class="modalCell ${cells >= 2 ? (cells === 2 ? 'active color-mid' : 'active color-high') : ''}"></div>
             <div class="modalCell ${cells >= 3 ? 'active color-high' : ''}"></div>
         `;
     }
@@ -640,6 +685,11 @@ function createRestOverlay() {
     });
 
     restOverlayElement.innerHTML = `
+        <!-- BOTÓN FLOTANTE DISCRETO PARA RECUPERAR PANTALLA COMPLETA EN CUALQUIER MOMENTO -->
+        <button id="restFullscreenBtn" class="restFullscreenFloatBtn" title="Restaurar Pantalla Completa" aria-label="Pantalla Completa">
+            ⛶ Pantalla Completa
+        </button>
+
         <div class="robotRestCard">
             <!-- CABECERA ILUSTRADA CON ROBOT 3D EN REPOSO -->
             <div class="robotRestIconArea">
@@ -658,7 +708,7 @@ function createRestOverlay() {
                 ¡Excelente sesión de exploración! Los circuitos del robot necesitan enfriarse y Monty se va a echar una siesta. Tómate una buena merienda, descansa la vista y vuelve en cuanto la batería esté lista.
             </p>
 
-            <!-- CONTADOR REGRESIVO EN TIEMPO REAL -->
+            <!-- CONTADOR REGRESIVO EN TIEMPO REAL CON NÚMEROS EN COLOR VERDE -->
             <div class="robotRestCountdownBox">
                 <div class="robotRestCountdownLabel">Batería lista en:</div>
                 <div id="robotRestTimerText" class="robotRestTimerText">03:00:00</div>
@@ -689,7 +739,7 @@ function createRestOverlay() {
                 </div>
             </div>
 
-            <!-- DESBLOQUEO DE DESARROLLADOR / SUPERVISOR -->
+            <!-- DESBLOQUEO DE DESARROLLADOR / SUPERVISOR (ACCESIBLE Y VISIBLE) -->
             <div class="devUnlockContainer">
                 <button id="toggleDevUnlockBtn" class="devUnlockToggleBtn">
                     🛠️ Desbloqueo de Desarrollo / Supervisor (PIN)
@@ -704,6 +754,15 @@ function createRestOverlay() {
     `;
 
     document.body.appendChild(restOverlayElement);
+
+    // Botón de pantalla completa en la pantalla de descanso
+    const fsBtn = restOverlayElement.querySelector('#restFullscreenBtn');
+    if (fsBtn) {
+        fsBtn.onclick = (e) => {
+            e.stopPropagation();
+            triggerFullscreen();
+        };
+    }
 
     // Eventos del formulario de desbloqueo
     const toggleBtn = document.getElementById('toggleDevUnlockBtn');

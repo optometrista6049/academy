@@ -89,6 +89,7 @@ function createCentralFullscreenPrompt() {
     fullscreenPrompt = document.createElement('div');
     fullscreenPrompt.id = 'centralFullscreenPrompt';
     fullscreenPrompt.className = 'centralFullscreenPrompt';
+    fullscreenPrompt.style.zIndex = '2500000';
 
     fullscreenPrompt.innerHTML = `
         <div class="centralFullscreenCard">
@@ -110,6 +111,7 @@ function createCentralFullscreenPrompt() {
 
 export function showCentralFullscreenPrompt() {
     if (!fullscreenPrompt) createCentralFullscreenPrompt();
+    fullscreenPrompt.style.zIndex = '2500000';
     fullscreenPrompt.style.display = 'flex';
     void fullscreenPrompt.offsetWidth;
     fullscreenPrompt.classList.add('visible');
