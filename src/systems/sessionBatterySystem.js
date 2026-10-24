@@ -95,6 +95,16 @@ export function loadBatteryState() {
         // Por defecto inactivo hasta el desarrollo de la Misión 2
         sessionBattery.enabled = false;
     }
+
+    // Blindaje esencial: Mientras el sistema esté inactivo (Misión 1), el tiempo consumido se mantiene estrictamente en 0
+    if (!sessionBattery.enabled) {
+        sessionBattery.consumedSeconds = 0;
+        sessionBattery.cooldownUntil = null;
+        if (gameState.sessionControl) {
+            gameState.sessionControl.consumedSeconds = 0;
+            gameState.sessionControl.cooldownUntil = null;
+        }
+    }
 }
 
 export function saveBatteryState() {
@@ -206,8 +216,9 @@ export function updateSessionBattery(delta) {
         initSessionBatterySystem();
     }
 
-    // Si el sistema está inactivo (hasta Misión 2) y no forzado por dev, no consumir tiempo
+    // Si el sistema está inactivo (hasta Misión 2) y no forzado por dev, no consumir tiempo y mantener siempre en 0
     if (!sessionBattery.enabled) {
+        sessionBattery.consumedSeconds = 0;
         if (hudElement) hudElement.style.display = 'none';
         return;
     }
@@ -424,10 +435,45 @@ function startCountdownTimer() {
         const progressPercent = Math.min(100, Math.max(0, ((BATTERY_CONFIG.COOLDOWN_MS - remainingMs) / BATTERY_CONFIG.COOLDOWN_MS) * 100));
         const progressBar = document.getElementById('robotRestProgressBar');
         if (progressBar) progressBar.style.width = `${progressPercent.toFixed(1)}%`;
+
+        // Cálculo de descanso parcial (1 célula por cada hora completa descansada)
+        const elapsedRestMs = BATTERY_CONFIG.COOLDOWN_MS - remainingMs;
+        const cellsRecovered = Math.min(2, Math.floor(elapsedRestMs / BATTERY_CONFIG.REST_MS_PER_CELL));
+
+        const partialBtn = document.getElementById('resumeWithPartialRestBtn');
+        const partialSub = document.getElementById('resumeWithPartialRestSub');
+        if (partialBtn && partialSub) {
+            if (cellsRecovered >= 1) {
+                partialBtn.style.display = 'flex';
+                partialBtn.innerHTML = `⚡ Reanudar con ${cellsRecovered} Célula${cellsRecovered > 1 ? 's' : ''} (${cellsRecovered * 20} min)`;
+                partialBtn.onclick = () => resumeWithPartialCells(cellsRecovered);
+                partialSub.style.display = 'block';
+                partialSub.innerHTML = `⏱️ Has descansado <strong>${cellsRecovered} hora${cellsRecovered > 1 ? 's' : ''}</strong> (+${cellsRecovered * 20} min recuperados).<br>Puedes entrar ya o seguir descansando hasta el 100% (3 células).`;
+            } else {
+                partialBtn.style.display = 'none';
+                partialSub.style.display = 'block';
+                partialSub.innerHTML = `💤 Enfriamiento recién iniciado (0h descansadas). El Robot Aspirante requiere reposo para recargar.`;
+            }
+        }
     };
 
     updateDisplay();
     countdownInterval = setInterval(updateDisplay, 1000);
+}
+
+export function resumeWithPartialCells(cells) {
+    const validCells = Math.max(1, Math.min(2, cells));
+    sessionBattery.cooldownUntil = null;
+    sessionBattery.consumedSeconds = BATTERY_CONFIG.MAX_SESSION_SEC - (validCells * BATTERY_CONFIG.CELL_SEC);
+    sessionBattery.lastActiveTimestamp = Date.now();
+    sessionBattery.lastNotifiedCell = getRemainingCells();
+    sessionBattery.notified5Min = false;
+    sessionBattery.notified1Min = false;
+    saveBatteryState();
+    hideRestOverlay();
+    if (hudElement) hudElement.style.display = 'flex';
+    updateHUDVisuals();
+    showBatteryToast('⚡ Exploración Reanudada', `Has entrado con ${validCells} célula${validCells > 1 ? 's' : ''} (${validCells * 20} min de juego).`, 'info');
 }
 
 // ======================================================
@@ -709,7 +755,7 @@ function createRestOverlay() {
 
         <div class="robotRestCard">
             <div class="robotRestColsWrapper">
-                <!-- COLUMNA IZQUIERDA: ROBOT 3D Y CUENTA ATRÁS -->
+                <!-- COLUMNA IZQUIERDA: AURA ETÉREA CON ROBOT 3D DURMIENDO Y CUENTA ATRÁS -->
                 <div class="robotRestColLeft">
                     <div class="robotRestIconArea">
                         <div id="robotRest3DCanvasContainer" class="robotRest3DArea"></div>
@@ -720,6 +766,7 @@ function createRestOverlay() {
                         </div>
                     </div>
 
+                    <!-- CUENTA ATRÁS Y PROGRESO -->
                     <div class="robotRestCountdownBox">
                         <div class="robotRestCountdownLabel">Batería lista en:</div>
                         <div id="robotRestTimerText" class="robotRestTimerText">03:00:00</div>
@@ -729,47 +776,47 @@ function createRestOverlay() {
                     </div>
                 </div>
 
-                <!-- COLUMNA DERECHA: TEXTO, CONSEJOS Y DESBLOQUEO -->
+                <!-- COLUMNA DERECHA: TÍTULO, MENSAJE, REANUDACIÓN PARCIAL, CONSEJOS Y DEV UNLOCK -->
                 <div class="robotRestColRight">
                     <h2 class="robotRestTitle">TIEMPO DE ENFRIAMIENTO</h2>
-                    
                     <p class="robotRestMessage">
-                        ¡Excelente sesión de exploración! Los circuitos del robot necesitan enfriarse y Monty se va a echar una siesta. Tómate una buena merienda, descansa la vista y vuelve en cuanto la batería esté lista.
+                        ¡Excelente sesión de exploración! Los circuitos del Robot Aspirante necesitan enfriarse y Monty se va a echar una siesta. Tómate una buena merienda, descansa la vista y vuelve en cuanto la batería esté lista.
                     </p>
+
+                    <!-- CONTENEDOR DE REANUDACIÓN PARCIAL CON CÉLULAS RECUPERADAS -->
+                    <div id="partialRecoveryContainer" style="display:flex;flex-direction:column;align-items:center;width:100%;">
+                        <button id="resumeWithPartialRestBtn" class="resumePartialRestBtn" style="display:none;"></button>
+                        <div id="resumeWithPartialRestSub" class="resumePartialRestSub" style="display:none;"></div>
+                    </div>
 
                     <!-- CONSEJOS DE BIENESTAR -->
                     <div class="robotRestTipsGrid">
                         <div class="restTipCard">
                             <span class="tipIcon">🍎</span>
                             <div class="tipText">
-                                <strong>Merienda sana:</strong> Come una fruta o bebe agua.
+                                <strong>Merienda:</strong> Come una fruta o bebe agua.
                             </div>
                         </div>
                         <div class="restTipCard">
                             <span class="tipIcon">👀</span>
                             <div class="tipText">
-                                <strong>Descanso visual:</strong> Relaja la vista mirando lejos.
+                                <strong>Vista:</strong> Relájala mirando lejos.
                             </div>
                         </div>
                         <div class="restTipCard">
                             <span class="tipIcon">🚶</span>
                             <div class="tipText">
-                                <strong>Estiramiento:</strong> Mueve un poco el cuerpo.
+                                <strong>Pausa:</strong> Estira un poco el cuerpo.
                             </div>
                         </div>
                     </div>
 
-                    <!-- DESBLOQUEO DE DESARROLLADOR / SUPERVISOR (ACCESIBLE Y VISIBLE) -->
+                    <!-- DESBLOQUEO INMEDIATO DE DESARROLLO (SOLO ACTIVO EN DEV) -->
+                    ${DEV_CONFIG.enabled ? `
                     <div class="devUnlockContainer">
-                        <button id="toggleDevUnlockBtn" class="devUnlockToggleBtn">
-                            🛠️ Desbloqueo de Desarrollo / Supervisor (PIN)
-                        </button>
-                        <div id="devUnlockForm" class="devUnlockForm" style="display:none;">
-                            <input type="text" id="devUnlockPinInput" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-form-type="other" data-lpignore="true" class="devUnlockInput pinInputSecure" placeholder="PIN Supervisor (1234)" maxlength="6" />
-                            <button id="submitDevUnlockPin" class="devUnlockSubmitBtn">Desbloquear</button>
-                            ${DEV_CONFIG.enabled ? '<button id="instantDevUnlockBtn" class="devUnlockInstantBtn">⚡ Desbloqueo Inmediato (Modo Dev)</button>' : ''}
-                        </div>
+                        <button id="instantDevUnlockBtn" class="devUnlockInstantBtn">⚡ Desbloqueo Inmediato (Modo Dev)</button>
                     </div>
+                    ` : ''}
                 </div>
             </div>
         </div>
@@ -786,32 +833,7 @@ function createRestOverlay() {
         };
     }
 
-    // Eventos del formulario de desbloqueo
-    const toggleBtn = document.getElementById('toggleDevUnlockBtn');
-    const form = document.getElementById('devUnlockForm');
-    if (toggleBtn && form) {
-        toggleBtn.onclick = () => {
-            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
-        };
-    }
-
-    const pinInput = document.getElementById('devUnlockPinInput');
-    const submitBtn = document.getElementById('submitDevUnlockPin');
-    if (submitBtn && pinInput) {
-        submitBtn.onclick = () => {
-            if (pinInput.value === BATTERY_CONFIG.SUPERVISOR_PIN) {
-                bypassCooldown('PIN Supervisor correcto');
-            } else {
-                pinInput.style.borderColor = '#ef4444';
-                pinInput.value = '';
-                pinInput.placeholder = 'PIN Incorrecto';
-            }
-        };
-        pinInput.onkeydown = (e) => {
-            if (e.key === 'Enter') submitBtn.click();
-        };
-    }
-
+    // Botón directo de desarrollo (sin PIN ni avisos del navegador de contraseñas)
     const instantBtn = document.getElementById('instantDevUnlockBtn');
     if (instantBtn) {
         instantBtn.onclick = () => {
@@ -860,12 +882,57 @@ export function showBatteryToast(title, message, type = 'info') {
 }
 
 // ======================================================
+// ACTIVACIÓN OFICIAL DEL SISTEMA (PARA MISIÓN 2 Y DESBLOQUEO LIMPIO)
+// ======================================================
+
+export function unlockBatterySystem(forceFreshStart = true) {
+    sessionBattery.enabled = true;
+    if (gameState.flags) gameState.flags.batterySystemUnlocked = true;
+    if (gameState.sessionControl) gameState.sessionControl.enabled = true;
+
+    if (forceFreshStart) {
+        // Garantía de arranque limpio al 100%: 3 células completas, 60 minutos íntegros sin penalización previa
+        sessionBattery.consumedSeconds = 0;
+        sessionBattery.cooldownUntil = null;
+        sessionBattery.lastActiveTimestamp = Date.now();
+        sessionBattery.lastNotifiedCell = 3;
+        sessionBattery.notified5Min = false;
+        sessionBattery.notified1Min = false;
+        if (gameState.sessionControl) {
+            gameState.sessionControl.consumedSeconds = 0;
+            gameState.sessionControl.cooldownUntil = null;
+        }
+    }
+
+    saveBatteryState();
+    if (hudElement) hudElement.style.display = 'flex';
+    updateHUDVisuals();
+    showBatteryToast('🔋 Batería de Exploración Calibrada', 'La batería del Robot Aspirante está al 100% (60 minutos de exploración disponibles).', 'success');
+}
+
+// ======================================================
 // FUNCIONES DE CONTROL PARA EL PANEL DE DESARROLLO (DEV TOOLS)
 // ======================================================
 
 export function devSetSystemEnabled(enabled) {
+    const wasEnabled = sessionBattery.enabled;
     sessionBattery.enabled = Boolean(enabled);
     sessionBattery.devForced = sessionBattery.enabled;
+
+    // Si se activa por primera vez o se enciende desde apagado, arranque garantizado al 100%
+    if (sessionBattery.enabled && !wasEnabled) {
+        sessionBattery.consumedSeconds = 0;
+        sessionBattery.cooldownUntil = null;
+        sessionBattery.lastActiveTimestamp = Date.now();
+        sessionBattery.lastNotifiedCell = 3;
+        sessionBattery.notified5Min = false;
+        sessionBattery.notified1Min = false;
+        if (gameState.sessionControl) {
+            gameState.sessionControl.consumedSeconds = 0;
+            gameState.sessionControl.cooldownUntil = null;
+        }
+    }
+
     saveBatteryState();
     if (hudElement) {
         hudElement.style.display = sessionBattery.enabled ? 'flex' : 'none';
@@ -923,3 +990,16 @@ export function devSimulateRestHours(hours) {
 export function devResetToFull() {
     bypassCooldown('Reset completo a cero');
 }
+
+export function devPreviewRestScreen(restedHours) {
+    sessionBattery.enabled = true;
+    sessionBattery.devForced = true;
+    sessionBattery.consumedSeconds = BATTERY_CONFIG.MAX_SESSION_SEC;
+    // Si ha descansado 1h, le quedan 2h. Si descansó 2h, le queda 1h.
+    const remainingHours = Math.max(0.01, 3 - restedHours);
+    sessionBattery.cooldownUntil = Date.now() + (remainingHours * 3600 * 1000);
+    saveBatteryState();
+    showRestOverlay();
+    startCountdownTimer();
+}
+

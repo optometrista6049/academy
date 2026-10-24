@@ -423,10 +423,6 @@ export function tryInteraction(){
                     setPandaIdle();
                     updateDiaryContent();
                     saveGame();
-                    saveMissionCheckpoint('mission_001_start', {
-                        name: 'Misión 1: Encargo de Monty',
-                        safeLocation: { x: 0, y: 0, z: 4 }
-                    });
                 };
 
                 startDialogue(

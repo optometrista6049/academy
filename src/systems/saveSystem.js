@@ -200,48 +200,49 @@ export function loadMissionCheckpoint(){
 
 export function ensureMissionCheckpointFromSave() {
     try {
-        const rawCheckpoint = localStorage.getItem(CHECKPOINT_KEY);
-        if (rawCheckpoint && rawCheckpoint.trim() && rawCheckpoint !== 'undefined' && rawCheckpoint !== 'null') {
-            return true;
-        }
-
         const rawSave = localStorage.getItem(SAVE_KEY);
         if (!rawSave) return false;
         const save = JSON.parse(rawSave);
         if (!save || typeof save !== 'object') return false;
 
-        // Si la partida guardada ya tiene progreso de misiones (ej: mission_001 completada o activa)
-        if (save.quests?.mission_001 === 'completed' || save.flags?.receivedAspirantCard) {
-            const payload = {
-                version: 1,
-                missionId: 'mission_001_complete',
-                missionTitle: 'Misión 1: Carnet de Aspirante',
-                safeLocation: { x: save.player?.x || 0, y: save.player?.y || 0, z: save.player?.z || 4 },
-                timestamp: Date.now(),
-                dateFormatted: new Date().toLocaleString('es-ES', {
-                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                }),
-                gameState: JSON.parse(JSON.stringify(save))
-            };
-            localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
-            console.log('🛡️ Punto de control retroactivo generado desde la partida existente:', payload.missionTitle);
-            return true;
-        } else if (save.quests?.mission_001 === 'active' || save.flags?.metPanda || save.flags?.metMonty) {
-            const payload = {
-                version: 1,
-                missionId: 'mission_001_start',
-                missionTitle: 'Misión 1: Encargo de Monty',
-                safeLocation: { x: save.player?.x || 0, y: save.player?.y || 0, z: save.player?.z || 4 },
-                timestamp: Date.now(),
-                dateFormatted: new Date().toLocaleString('es-ES', {
-                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                }),
-                gameState: JSON.parse(JSON.stringify(save))
-            };
-            localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
-            console.log('🛡️ Punto de control retroactivo generado desde la partida existente:', payload.missionTitle);
+        // Regla estricta: Los puntos de control SEGUROS solo se registran cuando una misión
+        // está 100% COMPLETADA, no durante su evolución o inicios para evitar desincronías.
+        const isMission1Completed = save.quests?.mission_001 === 'completed' || save.flags?.receivedAspirantCard;
+
+        if (isMission1Completed) {
+            const rawCheckpoint = localStorage.getItem(CHECKPOINT_KEY);
+            let shouldWrite = true;
+
+            if (rawCheckpoint && rawCheckpoint.trim() && rawCheckpoint !== 'undefined') {
+                try {
+                    const existing = JSON.parse(rawCheckpoint);
+                    // Si ya existe y es de misión completada válida y reciente, no sobreescribir
+                    if (existing && existing.missionId === 'mission_001_complete' && existing.gameState?.quests?.mission_001 === 'completed') {
+                        shouldWrite = false;
+                    }
+                } catch {
+                    shouldWrite = true;
+                }
+            }
+
+            if (shouldWrite) {
+                const payload = {
+                    version: 1,
+                    missionId: 'mission_001_complete',
+                    missionTitle: 'Misión 1: Carnet de Aspirante (Completada)',
+                    safeLocation: { x: save.player?.x || 0, y: save.player?.y || 0, z: save.player?.z || 4 },
+                    timestamp: Date.now(),
+                    dateFormatted: new Date().toLocaleString('es-ES', {
+                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                    }),
+                    gameState: JSON.parse(JSON.stringify(save))
+                };
+                localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
+                console.log('🛡️ Punto de control seguro de misión completada sincronizado:', payload.missionTitle);
+            }
             return true;
         }
+
         return false;
     } catch {
         return false;

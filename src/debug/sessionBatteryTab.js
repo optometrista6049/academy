@@ -16,6 +16,7 @@ import {
     devSetSystemEnabled,
     devSetConsumedMinutes,
     devSimulateRestHours,
+    devPreviewRestScreen,
     devResetToFull,
     triggerCooldownLock,
     showBatteryToast,
@@ -83,41 +84,41 @@ export function renderSessionBatteryTab(container) {
 
             <!-- SIMULACIÓN RÁPIDA DE TIEMPOS -->
             <div class="devControlGroup">
-                <div class="devGroupTitle">⚡ Simulación de Niveles y Avisos del Robot Aspirante:</div>
+                <div class="devGroupTitle">⚡ Simulación de Niveles y Avisos:</div>
                 <div class="devButtonsGrid">
                     <button class="devActionBtn" id="btnSimFull">
-                        🔋 Batería 100% (60 min)
+                        🔋 100% (60 min)
                     </button>
                     <button class="devActionBtn" id="btnSim40m">
-                        ⚡ 2 Células (40 min / Aviso 1)
+                        ⚡ 2 Células (40 min)
                     </button>
                     <button class="devActionBtn" id="btnSim20m">
-                        ⚠️ 1 Célula (20 min / Aviso 2)
+                        ⚠️ 1 Célula (20 min)
                     </button>
                     <button class="devActionBtn warning" id="btnSim5m">
-                        🚨 Batería Crítica (5 min)
+                        🚨 Aviso 5 min
                     </button>
                     <button class="devActionBtn danger" id="btnSim1m">
-                        ⏱️ Último Minuto (50 seg)
-                    </button>
-                    <button class="devActionBtn danger" id="btnSimLock">
-                        🛑 Forzar Bloqueo 3h (Pantalla Reposo)
+                        ⏱️ Aviso 50 seg
                     </button>
                 </div>
             </div>
 
-            <!-- SIMULACIÓN DE DESCANSO Y RECUPERACIÓN -->
+            <!-- SIMULACIÓN DE BLOQUEO Y DESCANSO (PANTALLA DE REPOSO) -->
             <div class="devControlGroup">
-                <div class="devGroupTitle">🛌 Simulación de Descanso y Recuperación:</div>
+                <div class="devGroupTitle">🛑 Simulación de Bloqueo y Descanso (Pantalla de Reposo):</div>
                 <div class="devButtonsGrid">
-                    <button class="devActionBtn" id="btnRest1h">
-                        ⏩ Simular +1h de Descanso (+1 Célula)
+                    <button class="devActionBtn danger" id="btnPreviewRest0h">
+                        🛑 Bloqueo Inicial (Quedan 3h / 0h descansadas)
                     </button>
-                    <button class="devActionBtn" id="btnRest3h">
-                        ⏩ Simular +3h de Descanso (Recarga 100%)
+                    <button class="devActionBtn" id="btnPreviewRest1h" style="border-color:#10b981;">
+                        🛌 Tras 1h Descansada (Quedan 2h / Reanudar 20 min)
+                    </button>
+                    <button class="devActionBtn" id="btnPreviewRest2h" style="border-color:#10b981;">
+                        🛌 Tras 2h Descansadas (Queda 1h / Reanudar 40 min)
                     </button>
                     <button class="devActionBtn primary" id="btnResetFull">
-                        🔄 Resetear Batería a Cero (100% Lista)
+                        🔄 Batería Llena (100% / 3 Células - 60 min)
                     </button>
                 </div>
             </div>
@@ -206,42 +207,42 @@ function setupEventListeners(container) {
         };
     }
 
-    // Forzar Bloqueo 3 horas
-    const btnSimLock = container.querySelector('#btnSimLock');
-    if (btnSimLock) {
-        btnSimLock.onclick = () => {
-            triggerCooldownLock();
-            showDevToast('🛑 Bloqueo de 3 horas forzado');
+    // Bloqueo Inicial (0h descansadas - Quedan 3h)
+    const btnPreviewRest0h = container.querySelector('#btnPreviewRest0h');
+    if (btnPreviewRest0h) {
+        btnPreviewRest0h.onclick = () => {
+            devPreviewRestScreen(0);
+            showDevToast('🛑 Bloqueo Inicial 3h forzado (0h descansadas)');
             updateLiveMonitor();
         };
     }
 
-    // Simular +1h descanso
-    const btnRest1h = container.querySelector('#btnRest1h');
-    if (btnRest1h) {
-        btnRest1h.onclick = () => {
-            devSimulateRestHours(1);
-            showDevToast('⏩ Simulada +1 hora de descanso (+1 célula)');
+    // Vista previa 1h descansada (botón 1 célula / 20 min)
+    const btnPreviewRest1h = container.querySelector('#btnPreviewRest1h');
+    if (btnPreviewRest1h) {
+        btnPreviewRest1h.onclick = () => {
+            devPreviewRestScreen(1);
+            showDevToast('🛌 Pantalla de Reposo: 1h descansada (botón 1 célula / 20 min activo)');
             updateLiveMonitor();
         };
     }
 
-    // Simular +3h descanso
-    const btnRest3h = container.querySelector('#btnRest3h');
-    if (btnRest3h) {
-        btnRest3h.onclick = () => {
-            devSimulateRestHours(3);
-            showDevToast('⏩ Simuladas +3 horas de descanso (Recarga completa)');
+    // Vista previa 2h descansadas (botón 2 células / 40 min)
+    const btnPreviewRest2h = container.querySelector('#btnPreviewRest2h');
+    if (btnPreviewRest2h) {
+        btnPreviewRest2h.onclick = () => {
+            devPreviewRestScreen(2);
+            showDevToast('🛌 Pantalla de Reposo: 2h descansadas (botón 2 células / 40 min activo)');
             updateLiveMonitor();
         };
     }
 
-    // Reset a cero
+    // Reset / Batería Llena (100% / 3 Células)
     const btnResetFull = container.querySelector('#btnResetFull');
     if (btnResetFull) {
         btnResetFull.onclick = () => {
             devResetToFull();
-            showDevToast('🔄 Batería reseteada al 100% y bloqueos eliminados');
+            showDevToast('🔄 Batería restaurada al 100% (60 min) y bloqueos eliminados');
             updateLiveMonitor();
         };
     }

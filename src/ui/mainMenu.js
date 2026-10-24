@@ -5,90 +5,123 @@ import {
     hasMissionCheckpoint,
     loadMissionCheckpoint,
     getMissionCheckpointInfo
-}
-from '../systems/saveSystem.js';
+} from '../systems/saveSystem.js';
 
 import {
     createControlsScreen
-}
-from './controlsScreen.js';
+} from './controlsScreen.js';
 
 import {
     createCreditsScreen
-}
-from './creditsScreen.js';
+} from './creditsScreen.js';
 
 import {
     showLoadingScreen
-}
-from './loadingScreen.js';
+} from './loadingScreen.js';
 
 import {
     sessionBattery,
     isCooldownActive,
     showRestOverlay
-}
-from '../systems/sessionBatterySystem.js';
+} from '../systems/sessionBatterySystem.js';
 
-export function createMainMenu(onStart){
-
-    const root =
-        document.createElement('div');
-
+export function createMainMenu(onStart) {
+    const root = document.createElement('div');
     root.id = 'mainMenu';
+    root.className = 'mainMenuContainer';
+    // Garantizar carga directa e instantánea del fondo original de Monteserín Academy
+    root.style.backgroundColor = '#090e18';
+    root.style.backgroundImage = 'url(./assets/ui/mainmenu.jpg)';
+    root.style.backgroundSize = 'cover';
+    root.style.backgroundPosition = 'center center';
+    root.style.backgroundRepeat = 'no-repeat';
 
-    Object.assign(
-        root.style,
-        {
-            position:'fixed',
-            inset:'0',
-            background:
-                'url(assets/ui/mainmenu.jpg)',
-            backgroundSize:'cover',
-            backgroundPosition:'center',
-            display:'flex',
-            flexDirection:'column',
-            justifyContent:'center',
-            alignItems:'center',
-            gap:'20px',
-            zIndex:'9999'
-        }
-    );
+    // Contenedor tipo Tarjeta Central con 2 Columnas
+    const menuCard = document.createElement('div');
+    menuCard.className = 'mainMenuCard';
 
-    function createButton(text){
-        const btn =
-            document.createElement('button');
+    // Cabecera del Menú Principal
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.flexDirection = 'column';
+    header.style.alignItems = 'center';
+    header.style.gap = '4px';
+    header.innerHTML = `
+        <h1 class="mainMenuBrandTitle">Monteserín Academy</h1>
+        <div class="mainMenuBrandSub">Aventura Educativa en la Tierra de las Nuevas Oportunidades</div>
+    `;
+    menuCard.appendChild(header);
 
-        btn.innerText = text;
+    // Grid de 2 Columnas
+    const grid = document.createElement('div');
+    grid.className = 'mainMenu2ColGrid';
 
-        Object.assign(
-            btn.style,
-            {
-                width:'320px',
-                padding:'16px',
-                fontSize:'17px',
-                fontWeight:'600',
-                borderRadius:'12px',
-                border:'1px solid rgba(255,255,255,0.15)',
-                cursor:'pointer',
-                background:
-                    'rgba(0,0,0,0.68)',
-                color:'white',
-                backdropFilter:'blur(6px)',
-                transition:'transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease'
-            }
-        );
+    // Columna Izquierda: Acciones de Partida
+    const colLeft = document.createElement('div');
+    colLeft.className = 'mainMenuCol';
 
-        btn.onmouseenter = () => {
-            btn.style.transform = 'scale(1.02)';
-            btn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.6)';
+    // Columna Derecha: Controles y Créditos
+    const colRight = document.createElement('div');
+    colRight.className = 'mainMenuCol';
+
+    grid.appendChild(colLeft);
+    grid.appendChild(colRight);
+    menuCard.appendChild(grid);
+    root.appendChild(menuCard);
+
+    // ======================================================
+    // PANELES DE CONTROLES Y CRÉDITOS (EN DOCUMENT.BODY PARA MÁXIMA PRIORIDAD Z-INDEX)
+    // ======================================================
+    const controlsPanel = createControlsScreen();
+    const creditsPanel = createCreditsScreen();
+    document.body.appendChild(controlsPanel);
+    document.body.appendChild(creditsPanel);
+
+    // ======================================================
+    // MODAL DE TOOLTIP INFORMATIVO CON CIERRE
+    // ======================================================
+    function showOptionInfoTooltip({ title, icon = 'ℹ️', description, statusHtml = '' }) {
+        const overlay = document.createElement('div');
+        overlay.className = 'mainMenuTooltipOverlay';
+
+        const card = document.createElement('div');
+        card.className = 'mainMenuTooltipCard';
+
+        card.innerHTML = `
+            <div class="mainMenuTooltipHeader">
+                <div class="mainMenuTooltipTitle">
+                    <span style="font-size:1.3rem;">${icon}</span>
+                    <span>${title}</span>
+                </div>
+                <button class="mainMenuTooltipCloseBtn" title="Cerrar (Esc)">✕</button>
+            </div>
+            <div class="mainMenuTooltipBody">
+                <div>${description}</div>
+                ${statusHtml ? `<div class="mainMenuTooltipStatusBox">${statusHtml}</div>` : ''}
+            </div>
+            <div class="mainMenuTooltipFooter">
+                <button class="mainMenuTooltipActionClose">Entendido 👍</button>
+            </div>
+        `;
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        const close = () => {
+            overlay.remove();
+            document.removeEventListener('keydown', onKeyDown);
         };
-        btn.onmouseleave = () => {
-            btn.style.transform = 'scale(1)';
-            btn.style.boxShadow = 'none';
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') close();
         };
 
-        return btn;
+        document.addEventListener('keydown', onKeyDown);
+        card.querySelector('.mainMenuTooltipCloseBtn').onclick = close;
+        card.querySelector('.mainMenuTooltipActionClose').onclick = close;
+        overlay.onclick = (e) => {
+            if (e.target === overlay) close();
+        };
     }
 
     // Modal de confirmación para retomar misión
@@ -160,194 +193,177 @@ export function createMainMenu(onStart){
         };
     }
 
-    // =========================
-    // CONTINUAR
-    // =========================
+    // Helper para crear una fila de botón con su icono táctil de información
+    function createMenuRow({
+        text,
+        subtext = '',
+        isCheckpoint = false,
+        onClick,
+        infoData
+    }) {
+        const row = document.createElement('div');
+        row.className = 'mainMenuItemRow';
 
-    const btnContinue =
-        createButton(
-            'CONTINUAR EXPERIENCIA'
-        );
+        const actionBtn = document.createElement('button');
+        actionBtn.className = `mainMenuActionBtn ${isCheckpoint ? 'btnCheckpoint' : ''}`;
+        actionBtn.innerHTML = `
+            <span>${text}</span>
+            ${subtext ? `<span class="mainMenuBtnSubtext">${subtext}</span>` : ''}
+        `;
+        actionBtn.onclick = onClick;
 
-    if(!hasSave()){
+        const infoBtn = document.createElement('button');
+        infoBtn.className = 'mainMenuInfoBtn';
+        infoBtn.title = `Toca para ver información sobre ${text}`;
+        infoBtn.setAttribute('aria-label', `Información de ${text}`);
+        infoBtn.innerHTML = `
+            <span class="mainMenuInfoHandIcon">👆</span>
+            <span class="mainMenuInfoLabel">INFO</span>
+        `;
+        infoBtn.onclick = (e) => {
+            e.stopPropagation();
+            showOptionInfoTooltip(infoData);
+        };
 
-        btnContinue.style.display =
-            'none';
-
+        row.appendChild(actionBtn);
+        row.appendChild(infoBtn);
+        return { row, actionBtn, infoBtn };
     }
 
-    btnContinue.onclick = ()=>{
-
-        if(sessionBattery.enabled && isCooldownActive()){
-            showRestOverlay();
-            return;
-        }
-
-        showLoadingScreen();
-
-        loadGame();
-
-        root.remove();
-
-        setTimeout(()=>{
-
-            onStart();
-
-        },50);
-
+    const cleanupMenu = () => {
+        try { controlsPanel.remove(); } catch (_) {}
+        try { creditsPanel.remove(); } catch (_) {}
+        try { root.remove(); } catch (_) {}
     };
 
-    // =========================
-    // RETOMAR ÚLTIMA MISIÓN (CHECKPOINT SEGURO)
-    // =========================
-
-    const btnResumeMission =
-        createButton(
-            'RETOMAR ÚLTIMA MISIÓN'
-        );
-
-    btnResumeMission.style.background = 'linear-gradient(135deg, rgba(20, 38, 66, 0.82) 0%, rgba(10, 20, 38, 0.9) 100%)';
-    btnResumeMission.style.border = '1px solid rgba(56, 189, 248, 0.45)';
-    btnResumeMission.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.4), 0 0 10px rgba(56, 189, 248, 0.15)';
-
-    const checkpointExists = hasMissionCheckpoint();
-    if (!checkpointExists) {
-        btnResumeMission.style.display = 'none';
-    } else {
-        const cpInfo = getMissionCheckpointInfo();
-        if (cpInfo && cpInfo.missionTitle) {
-            const sub = document.createElement('div');
-            sub.style.fontSize = '11px';
-            sub.style.color = '#38bdf8';
-            sub.style.marginTop = '4px';
-            sub.style.fontWeight = 'normal';
-            sub.innerText = `Punto seguro: ${cpInfo.missionTitle}`;
-            btnResumeMission.appendChild(sub);
-        }
-    }
-
-    btnResumeMission.onclick = () => {
-        if(sessionBattery.enabled && isCooldownActive()){
-            showRestOverlay();
-            return;
-        }
-
-        showCheckpointConfirmModal(() => {
+    // ======================================================
+    // 1. CONTINUAR EXPERIENCIA (COLUMNA IZQUIERDA)
+    // ======================================================
+    const continueItem = createMenuRow({
+        text: 'CONTINUAR EXPERIENCIA',
+        onClick: () => {
+            if (sessionBattery.enabled && isCooldownActive()) {
+                showRestOverlay();
+                return;
+            }
             showLoadingScreen();
-            loadMissionCheckpoint();
-            root.remove();
+            loadGame();
+            cleanupMenu();
             setTimeout(() => {
                 onStart();
             }, 50);
-        });
-    };
-
-    // =========================
-    // NUEVA PARTIDA
-    // =========================
-
-    const btnNew =
-        createButton(
-            'NUEVA EXPERIENCIA'
-        );
-
-    btnNew.onclick = ()=>{
-
-        if(sessionBattery.enabled && isCooldownActive()){
-            showRestOverlay();
-            return;
+        },
+        infoData: {
+            title: 'Continuar Experiencia',
+            icon: '▶️',
+            description: 'Reanuda tu aventura exactamente donde la dejaste en tu última sesión.',
+            statusHtml: '💾 Carga la posición exacta de tu explorador, los objetos en el morral y el progreso en tiempo real de tu partida activa.'
         }
+    });
 
-        showLoadingScreen();
+    if (!hasSave()) {
+        continueItem.row.style.display = 'none';
+    }
+    colLeft.appendChild(continueItem.row);
 
-        deleteSave();
+    // ======================================================
+    // 2. RETOMAR ÚLTIMA MISIÓN (PUNTO SEGURO 100% COMPLETADA)
+    // ======================================================
+    const cpInfo = getMissionCheckpointInfo();
+    const cpSubtext = cpInfo?.missionTitle ? `Punto seguro: ${cpInfo.missionTitle}` : '';
 
-        root.remove();
+    const resumeMissionItem = createMenuRow({
+        text: 'RETOMAR ÚLTIMA MISIÓN',
+        subtext: cpSubtext,
+        isCheckpoint: true,
+        onClick: () => {
+            if (sessionBattery.enabled && isCooldownActive()) {
+                showRestOverlay();
+                return;
+            }
+            showCheckpointConfirmModal(() => {
+                showLoadingScreen();
+                loadMissionCheckpoint();
+                cleanupMenu();
+                setTimeout(() => {
+                    onStart();
+                }, 50);
+            });
+        },
+        infoData: {
+            title: 'Retomar Última Misión',
+            icon: '🛡️',
+            description: 'Restaura el estado seguro registrado al completar al 100% tu última misión.',
+            statusHtml: cpInfo
+                ? `<strong>Misión guardada:</strong> ${cpInfo.missionTitle}<br><strong>Fecha de guardado:</strong> ${cpInfo.dateFormatted || 'Reciente'}<br><br>💡 Diseñado como red de seguridad ante errores de sincronización o bloqueos sin perder todo tu progreso general.`
+                : 'No se detecta ningún punto de control de misión completada todavía.'
+        }
+    });
 
-        setTimeout(()=>{
+    if (!hasMissionCheckpoint()) {
+        resumeMissionItem.row.style.display = 'none';
+    }
+    colLeft.appendChild(resumeMissionItem.row);
 
-            onStart();
+    // ======================================================
+    // 3. NUEVA EXPERIENCIA (COLUMNA IZQUIERDA)
+    // ======================================================
+    const newItem = createMenuRow({
+        text: 'NUEVA EXPERIENCIA',
+        onClick: () => {
+            if (sessionBattery.enabled && isCooldownActive()) {
+                showRestOverlay();
+                return;
+            }
+            showLoadingScreen();
+            deleteSave();
+            cleanupMenu();
+            setTimeout(() => {
+                onStart();
+            }, 50);
+        },
+        infoData: {
+            title: 'Nueva Experiencia',
+            icon: '✨',
+            description: 'Comienza una aventura totalmente nueva desde el inicio en Monteserín Academy.',
+            statusHtml: '⚠️ <strong>Atención:</strong> Iniciar una nueva experiencia reiniciará tu inventario, tus carnets archivados y las misiones desde el principio.'
+        }
+    });
+    colLeft.appendChild(newItem.row);
 
-        },50);
+    // ======================================================
+    // 4. CONTROLES (COLUMNA DERECHA)
+    // ======================================================
+    const controlsItem = createMenuRow({
+        text: 'CONTROLES',
+        onClick: () => {
+            controlsPanel.style.display = 'block';
+        },
+        infoData: {
+            title: 'Guía de Controles',
+            icon: '🎮',
+            description: 'Consulta los botones de movimiento, salto, carrera, interacción y morral de inventario.',
+            statusHtml: '📱 En móvil dispones de joystick virtual y botones táctiles ergonómicos.<br>💻 En ordenador puedes usar teclado (WASD / Flechas, Espacio, Shift, E e I).'
+        }
+    });
+    colRight.appendChild(controlsItem.row);
 
-    };
+    // ======================================================
+    // 5. CRÉDITOS (COLUMNA DERECHA)
+    // ======================================================
+    const creditsItem = createMenuRow({
+        text: 'CRÉDITOS',
+        onClick: () => {
+            creditsPanel.style.display = 'block';
+        },
+        infoData: {
+            title: 'Créditos y Reconocimientos',
+            icon: '📜',
+            description: 'Conoce al equipo detrás de la aventura educativa Monteserín Academy.',
+            statusHtml: '🌟 Diseño pedagógico, arte 3D, paisajes interactivos, música diegética y programación.'
+        }
+    });
+    colRight.appendChild(creditsItem.row);
 
-    // =========================
-    // PANELES
-    // =========================
-
-    const controlsPanel =
-        createControlsScreen();
-
-    const creditsPanel =
-        createCreditsScreen();
-
-    // =========================
-    // CONTROLES
-    // =========================
-
-    const btnControls =
-        createButton(
-            'CONTROLES'
-        );
-
-    btnControls.onclick = ()=>{
-
-        controlsPanel.style.display =
-            'block';
-
-    };
-
-    // =========================
-    // CREDITOS
-    // =========================
-
-    const btnCredits =
-        createButton(
-            'CRÉDITOS'
-        );
-
-    btnCredits.onclick = ()=>{
-
-        creditsPanel.style.display =
-            'block';
-
-    };
-
-    // =========================
-    // APPEND
-    // =========================
-
-    root.appendChild(
-        btnContinue
-    );
-
-    root.appendChild(
-        btnResumeMission
-    );
-
-    root.appendChild(
-        btnNew
-    );
-
-    root.appendChild(
-        btnControls
-    );
-
-    root.appendChild(
-        btnCredits
-    );
-
-    root.appendChild(
-        controlsPanel
-    );
-
-    root.appendChild(
-        creditsPanel
-    );
-
-    document.body.appendChild(
-        root
-    );
-
+    document.body.appendChild(root);
 }
