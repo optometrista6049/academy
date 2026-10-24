@@ -85,9 +85,8 @@ export function loadGame(){
 
 export function deleteSave(){
     try {
-        localStorage.removeItem(
-            SAVE_KEY
-        );
+        localStorage.removeItem(SAVE_KEY);
+        localStorage.removeItem(CHECKPOINT_KEY);
     } catch {}
 }
 
@@ -243,6 +242,10 @@ export function ensureMissionCheckpointFromSave() {
             return true;
         }
 
+        // Si la Misión 1 no está completada al 100%, purgar cualquier checkpoint residual huérfano
+        try {
+            localStorage.removeItem(CHECKPOINT_KEY);
+        } catch {}
         return false;
     } catch {
         return false;
@@ -254,15 +257,34 @@ export function hasMissionCheckpoint(){
         ensureMissionCheckpointFromSave();
         const raw = localStorage.getItem(CHECKPOINT_KEY);
         if(!raw || typeof raw !== 'string' || !raw.trim()) return false;
+        
         const parsed = JSON.parse(raw);
-        return Boolean(parsed && parsed.gameState && typeof parsed.gameState === 'object');
+        if(!parsed || !parsed.gameState || typeof parsed.gameState !== 'object') {
+            try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
+            return false;
+        }
+
+        // Validación estricta: Solo es válido si la misión está formalmente 100% completada
+        const isCompleted = parsed.missionId?.includes('complete') ||
+                            parsed.gameState?.quests?.mission_001 === 'completed' ||
+                            parsed.gameState?.flags?.receivedAspirantCard === true;
+
+        if (!isCompleted) {
+            // Auto-purgar checkpoint huérfano o incompleto (ej: del 23/10)
+            try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
+            return false;
+        }
+
+        return true;
     } catch {
+        try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
         return false;
     }
 }
 
 export function getMissionCheckpointInfo(){
     try {
+        if (!hasMissionCheckpoint()) return null;
         const raw = localStorage.getItem(CHECKPOINT_KEY);
         if(!raw) return null;
         const parsed = JSON.parse(raw);

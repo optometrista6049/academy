@@ -7557,48 +7557,26 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .mainMenuCard {
-    width: min(94vw, 680px);
+    width: min(88vw, 560px);
     max-height: 92dvh;
-    background: rgba(10, 15, 28, 0.70);
-    border: 1px solid rgba(212, 175, 55, 0.4);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75), 0 0 20px rgba(212, 175, 55, 0.15);
-    border-radius: 18px;
-    padding: 14px 20px;
-    backdrop-filter: blur(10px);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    backdrop-filter: none;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 12px;
     box-sizing: border-box;
-    overflow-y: auto;
-}
-
-.mainMenuBrandTitle {
-    font-size: clamp(1.15rem, 3.2vw, 1.65rem);
-    font-weight: 800;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    background: linear-gradient(135deg, #ffffff 0%, #fcd34d 50%, #f59e0b 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-align: center;
-    margin: 0;
-    line-height: 1.15;
-}
-
-.mainMenuBrandSub {
-    font-size: clamp(0.7rem, 1.8vw, 0.8rem);
-    color: #cbd5e1;
-    letter-spacing: 0.4px;
-    text-align: center;
-    margin-top: -6px;
-    margin-bottom: 2px;
+    overflow: visible;
 }
 
 .mainMenu2ColGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
+    gap: 14px;
     width: 100%;
     align-items: stretch;
 }
@@ -7606,7 +7584,7 @@ body.registry-open .devSuiteTriggerBtn,
 .mainMenuCol {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .mainMenuItemRow {
@@ -7618,16 +7596,17 @@ body.registry-open .devSuiteTriggerBtn,
 
 .mainMenuActionBtn {
     flex: 1;
-    min-height: 44px;
+    min-height: 42px;
     padding: 8px 12px;
-    font-size: clamp(0.78rem, 2vw, 0.92rem);
+    font-size: clamp(0.78rem, 2vw, 0.88rem);
     font-weight: 700;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.45);
     cursor: pointer;
-    background: rgba(15, 23, 42, 0.78);
+    background: rgba(10, 24, 18, 0.82);
     color: #ffffff;
     backdrop-filter: blur(8px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(16, 185, 129, 0.08);
     transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
     display: flex;
     flex-direction: column;
@@ -7639,9 +7618,9 @@ body.registry-open .devSuiteTriggerBtn,
 
 .mainMenuActionBtn:hover {
     transform: translateY(-2px);
-    background: rgba(30, 41, 59, 0.9);
-    border-color: rgba(56, 189, 248, 0.6);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 12px rgba(56, 189, 248, 0.25);
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #34d399;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(16, 185, 129, 0.45);
 }
 
 .mainMenuActionBtn:active {
@@ -7650,46 +7629,47 @@ body.registry-open .devSuiteTriggerBtn,
 
 /* Variante especial para retomar misión segura */
 .mainMenuActionBtn.btnCheckpoint {
-    background: linear-gradient(135deg, rgba(16, 37, 66, 0.85) 0%, rgba(10, 24, 46, 0.92) 100%);
-    border: 1px solid rgba(56, 189, 248, 0.5);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px rgba(56, 189, 248, 0.2);
+    background: linear-gradient(135deg, rgba(8, 38, 24, 0.88) 0%, rgba(5, 26, 17, 0.94) 100%);
+    border: 1.5px solid rgba(16, 185, 129, 0.65);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(16, 185, 129, 0.3);
 }
 
 .mainMenuActionBtn.btnCheckpoint:hover {
-    border-color: #38bdf8;
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.4);
+    border-color: #34d399;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 20px rgba(16, 185, 129, 0.5);
 }
 
 .mainMenuBtnSubtext {
-    font-size: 0.72rem;
-    color: #38bdf8;
+    font-size: 0.70rem;
+    color: #6ee7b7;
     font-weight: 500;
     margin-top: 3px;
 }
 
 /* Botón táctil de información / tooltip con icono de mano interactiva */
 .mainMenuInfoBtn {
-    width: 48px;
+    width: 44px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(15, 23, 42, 0.72);
-    border: 1px solid rgba(56, 189, 248, 0.35);
-    border-radius: 12px;
+    background: rgba(10, 26, 18, 0.80);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    border-radius: 10px;
     cursor: pointer;
-    color: #38bdf8;
+    color: #34d399;
     padding: 4px;
     gap: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .mainMenuInfoBtn:hover {
-    background: rgba(14, 165, 233, 0.22);
-    border-color: #38bdf8;
+    background: rgba(16, 185, 129, 0.28);
+    border-color: #34d399;
     transform: scale(1.05);
-    box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
 }
 
 .mainMenuInfoBtn:active {
@@ -7697,16 +7677,16 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .mainMenuInfoHandIcon {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     line-height: 1;
 }
 
 .mainMenuInfoLabel {
-    font-size: 0.6rem;
+    font-size: 0.56rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #7dd3fc;
+    color: #a7f3d0;
 }
 
 /* MODAL TOOLTIP INFORMATIVO DE CADA OPCIÓN */
@@ -7724,9 +7704,9 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .mainMenuTooltipCard {
-    background: linear-gradient(150deg, rgba(15, 23, 42, 0.98), rgba(9, 13, 25, 0.99));
-    border: 1px solid rgba(56, 189, 248, 0.45);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(56, 189, 248, 0.2);
+    background: linear-gradient(150deg, rgba(10, 24, 18, 0.98), rgba(6, 16, 12, 0.99));
+    border: 1.5px solid rgba(16, 185, 129, 0.55);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(16, 185, 129, 0.25);
     border-radius: 18px;
     padding: 20px 22px;
     max-width: 440px;
@@ -7789,12 +7769,12 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .mainMenuTooltipStatusBox {
-    background: rgba(14, 165, 233, 0.08);
-    border: 1px solid rgba(56, 189, 248, 0.25);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
     border-radius: 10px;
     padding: 10px 12px;
     font-size: 0.82rem;
-    color: #7dd3fc;
+    color: #a7f3d0;
 }
 
 .mainMenuTooltipFooter {
@@ -7803,14 +7783,15 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .mainMenuTooltipActionClose {
-    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-    border: 1px solid #38bdf8;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    border: 1px solid #10b981;
     color: #ffffff;
     font-weight: 700;
     font-size: 0.88rem;
     padding: 8px 16px;
     border-radius: 10px;
     cursor: pointer;
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
     transition: transform 0.15s ease, filter 0.15s ease;
 }
 
@@ -7819,27 +7800,40 @@ body.registry-open .devSuiteTriggerBtn,
     transform: scale(1.02);
 }
 
-@media (max-width: 520px) {
+@media (max-width: 650px), (orientation: landscape) and (max-height: 560px) {
+    .mainMenuCard {
+        width: min(88vw, 480px);
+        gap: 6px;
+    }
     .mainMenu2ColGrid {
         gap: 8px;
     }
-    .mainMenuCard {
-        padding: 16px 10px;
+    .mainMenuCol {
+        gap: 6px;
+    }
+    .mainMenuItemRow {
+        gap: 6px;
     }
     .mainMenuActionBtn {
-        min-height: 48px;
-        padding: 8px 6px;
-        font-size: 0.78rem;
+        min-height: 38px;
+        padding: 5px 8px;
+        font-size: 0.74rem;
+        border-radius: 8px;
     }
     .mainMenuInfoBtn {
-        width: 38px;
-        padding: 2px;
+        width: 36px;
+        min-height: 38px;
+        padding: 2px 4px;
+        border-radius: 8px;
     }
     .mainMenuInfoHandIcon {
-        font-size: 0.95rem;
+        font-size: 0.90rem;
     }
     .mainMenuInfoLabel {
-        font-size: 0.55rem;
+        font-size: 0.50rem;
+    }
+    .mainMenuBtnSubtext {
+        font-size: 0.62rem;
     }
 }
 

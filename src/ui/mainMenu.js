@@ -36,21 +36,9 @@ export function createMainMenu(onStart) {
     root.style.backgroundPosition = 'center center';
     root.style.backgroundRepeat = 'no-repeat';
 
-    // Contenedor tipo Tarjeta Central con 2 Columnas
+    // Contenedor de Botones en 2 Columnas (limpio, sin caja translúcida ni textos que tapen el fondo)
     const menuCard = document.createElement('div');
     menuCard.className = 'mainMenuCard';
-
-    // Cabecera del Menú Principal
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.flexDirection = 'column';
-    header.style.alignItems = 'center';
-    header.style.gap = '4px';
-    header.innerHTML = `
-        <h1 class="mainMenuBrandTitle">Monteserín Academy</h1>
-        <div class="mainMenuBrandSub">Aventura Educativa en la Tierra de las Nuevas Oportunidades</div>
-    `;
-    menuCard.appendChild(header);
 
     // Grid de 2 Columnas
     const grid = document.createElement('div');
@@ -146,8 +134,8 @@ export function createMainMenu(onStart) {
         const card = document.createElement('div');
         Object.assign(card.style, {
             background: 'linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(9, 14, 26, 0.98))',
-            border: '1.5px solid rgba(56, 189, 248, 0.5)',
-            boxShadow: '0 12px 36px rgba(0,0,0,0.85), 0 0 24px rgba(56, 189, 248, 0.25)',
+            border: '1.5px solid rgba(16, 185, 129, 0.55)',
+            boxShadow: '0 12px 36px rgba(0,0,0,0.85), 0 0 24px rgba(16, 185, 129, 0.25)',
             borderRadius: '16px',
             padding: '24px',
             maxWidth: '420px',
@@ -161,7 +149,7 @@ export function createMainMenu(onStart) {
 
         card.innerHTML = `
             <div style="font-size:2rem;line-height:1;">🛡️</div>
-            <h3 style="margin:0;font-size:1.15rem;font-weight:800;color:#38bdf8;text-transform:uppercase;letter-spacing:1px;">
+            <h3 style="margin:0;font-size:1.15rem;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:1px;">
                 Retomar Última Misión
             </h3>
             <p style="margin:0;font-size:0.88rem;line-height:1.5;color:#cbd5e1;">
@@ -174,7 +162,7 @@ export function createMainMenu(onStart) {
                 <button id="cancelCheckpointBtn" style="flex:1;padding:12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;">
                     Cancelar
                 </button>
-                <button id="confirmCheckpointBtn" style="flex:1;padding:12px;background:linear-gradient(180deg,#0284c7,#0369a1);border:1px solid #38bdf8;color:#fff;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(2,132,199,0.4);">
+                <button id="confirmCheckpointBtn" style="flex:1;padding:12px;background:linear-gradient(180deg,#059669,#047857);border:1px solid #10b981;color:#fff;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(5,150,105,0.4);">
                     Retomar Misión
                 </button>
             </div>
