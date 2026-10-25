@@ -16,6 +16,7 @@ from '../state/runtimeState.js';
 
 import { restoreInventoryFromGameState } from '../ui/registry/modules/inventoryModuleV2.js';
 import { restoreArchiveFromGameState } from '../ui/registry/modules/archiveModule.js';
+import { resetSessionBatteryForNewGame } from './sessionBatterySystem.js';
 
 export function saveGame(){
     try {
@@ -87,6 +88,10 @@ export function deleteSave(){
     try {
         localStorage.removeItem(SAVE_KEY);
         localStorage.removeItem(CHECKPOINT_KEY);
+        localStorage.removeItem('monteserin_session_battery');
+    } catch {}
+    try {
+        resetSessionBatteryForNewGame();
     } catch {}
 }
 

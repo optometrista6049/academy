@@ -4,13 +4,15 @@ export const altoBusyDialogue = {
 
     speaker:'Señor Alto',
 
+    portrait:'./assets/ui/portraits/alto.png',
+
     pages:[
 
-        'Disculpa.',
+        'Te doy la bienvenida a Monteserín Academy.',
 
-        'Ahora mismo estoy bastante ocupado.',
+        'Ahora mismo estoy analizando algunos datos y sistemas del entorno.',
 
-        'Creo que el Panda quería hablar contigo.'
+        'Creo que Panda quería hablar contigo.'
 
     ]
 

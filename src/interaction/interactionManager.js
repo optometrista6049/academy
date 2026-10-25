@@ -119,7 +119,7 @@ const altoBusyDialogue = {
 
     pages:[
 
-        'Bienvenido a Monteserín Academy.',
+        'Te doy la bienvenida a Monteserín Academy.',
 
         'Ahora mismo estoy analizando algunos datos y sistemas del entorno.',
 

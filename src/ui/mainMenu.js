@@ -22,7 +22,8 @@ import {
 import {
     sessionBattery,
     isCooldownActive,
-    showRestOverlay
+    showRestOverlay,
+    resetSessionBatteryForNewGame
 } from '../systems/sessionBatterySystem.js';
 
 export function createMainMenu(onStart) {
@@ -299,10 +300,7 @@ export function createMainMenu(onStart) {
     const newItem = createMenuRow({
         text: 'NUEVA EXPERIENCIA',
         onClick: () => {
-            if (sessionBattery.enabled && isCooldownActive()) {
-                showRestOverlay();
-                return;
-            }
+            resetSessionBatteryForNewGame();
             showLoadingScreen();
             deleteSave();
             cleanupMenu();

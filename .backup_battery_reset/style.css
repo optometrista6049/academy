@@ -1,0 +1,7840 @@
+/* =====================================================
+GENERAL
+===================================================== */
+
+html,
+body{
+
+    margin:0;
+    padding:0;
+
+    width:100%;
+    height:100dvh;
+
+    overflow:hidden;
+
+    background:black;
+
+    touch-action:none;
+
+}
+
+/* =====================================================
+CANVAS
+===================================================== */
+
+canvas{
+
+    display:block;
+
+}
+
+/* =====================================================
+BOOT
+===================================================== */
+
+/* -------------------------
+BOOT SCREEN
+------------------------- */
+
+#bootScreen{
+
+    position:fixed;
+
+    inset:0;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    overflow:hidden;
+
+    z-index:99999;
+
+}
+
+/* -------------------------
+BACKGROUND IMAGE
+------------------------- */
+
+#bootBackground{
+
+    position:absolute;
+
+    inset:0;
+
+    background-image:
+    url('../assets/ui/boot/bootBackground.jpg');
+
+    background-size:cover;
+
+    background-position:center;
+
+    background-repeat:no-repeat;
+
+    z-index:0;
+
+    pointer-events:none;
+
+}
+
+/* -------------------------
+DARK OVERLAY
+------------------------- */
+
+#bootOverlay{
+
+    position:absolute;
+
+    inset:0;
+
+    background:
+    rgba(0,0,0,0.45);
+
+    z-index:1;
+
+    pointer-events:none;
+
+}
+
+/* -------------------------
+BOOT PANEL
+------------------------- */
+
+#bootPanel{
+
+    position:relative;
+
+    z-index:2;
+
+    text-align:center;
+
+    color:white;
+
+    padding:40px;
+
+    max-width:700px;
+
+}
+
+/* -------------------------
+TITLE
+------------------------- */
+
+#bootPanel h1{
+
+    font-size:clamp(
+        38px,
+        6vw,
+        72px
+    );
+
+    margin-bottom:20px;
+
+    text-shadow:
+    0 0 20px rgba(0,0,0,0.9);
+
+}
+
+/* -------------------------
+TEXT
+------------------------- */
+
+.bootText{
+
+    opacity:0.95;
+
+    margin-bottom:30px;
+
+    font-size:clamp(
+        16px,
+        2vw,
+        24px
+    );
+
+    line-height:1.5;
+
+    text-shadow:
+    0 0 12px rgba(0,0,0,0.9);
+
+}
+
+/* -------------------------
+BUTTON
+------------------------- */
+
+#startButton{
+
+    padding:16px 32px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:
+    rgba(255,255,255,0.12);
+
+    color:white;
+
+    font-size:18px;
+
+    cursor:pointer;
+
+    backdrop-filter:blur(6px);
+
+    border:
+    1px solid rgba(255,255,255,0.2);
+
+    transition:0.2s;
+
+}
+
+#startButton:hover{
+
+    transform:scale(1.05);
+
+}
+
+/* =====================================================
+ORIENTATION
+===================================================== */
+
+#orientationOverlay{
+
+    position:fixed;
+
+    inset:0;
+
+    display:none;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:black;
+
+    z-index:999999;
+
+}
+
+#orientationText{
+
+    color:white;
+
+    font-size:28px;
+
+    text-align:center;
+
+    padding:40px;
+
+}
+
+/* =====================================================
+GAME UI
+===================================================== */
+
+/* =====================================================
+   DIALOGUE SYSTEM
+===================================================== */
+
+.dialogue{
+
+    position:fixed;
+
+    left:50%;
+
+    bottom:2vh;
+
+    transform:translateX(-50%) translateY(12px) scale(0.98);
+
+    display:none;
+
+    opacity:0;
+
+    flex-direction:column;
+
+    box-sizing:border-box;
+
+    width:min(92vw,920px);
+
+    height:auto;
+
+    min-height:105px;
+
+    max-height:min(48vh, 220px);
+
+    padding:.65rem 1rem;
+
+    border-radius:18px;
+
+    border:2px solid #d6b06a;
+
+    background:rgba(15,15,15,.88);
+
+    backdrop-filter:blur(6px);
+
+    color:white;
+
+    z-index:15000;
+
+    transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1), transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+
+}
+
+.dialogue.active-dialogue{
+
+    opacity:1;
+
+    transform:translateX(-50%) translateY(0) scale(1);
+
+}
+
+/* =====================================================
+   HEADER
+===================================================== */
+
+.dialogue-header{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:.8rem;
+
+    margin-bottom:.5rem;
+
+}
+
+/* =====================================================
+   PORTRAIT
+===================================================== */
+
+.dialogue-portrait-container{
+
+    flex:0 0 auto;
+
+    width:clamp(
+
+        36px,
+
+        5vh,
+
+        70px
+
+    );
+
+    height:clamp(
+
+        36px,
+
+        5vh,
+
+        70px
+
+    );
+
+    border-radius:12px;
+
+    overflow:hidden;
+
+    border:2px solid #d6b06a;
+
+}
+
+.dialogue-portrait{
+
+    width:100%;
+
+    height:100%;
+
+    object-fit:cover;
+
+    display:block;
+
+}
+
+/* =====================================================
+   SPEAKER
+===================================================== */
+
+.dialogue-speaker{
+
+    margin:0;
+
+    color:#f2d08a;
+
+    font-weight:bold;
+
+    font-size:clamp(
+
+        1rem,
+
+        2vh,
+
+        1.6rem
+
+    );
+
+}
+
+/* =====================================================
+   BODY
+===================================================== */
+
+.dialogue-body{
+
+    display:flex;
+
+    flex-direction:column;
+
+    overflow:hidden;
+
+}
+
+/* =====================================================
+   TEXT
+===================================================== */
+
+.dialogue-text{
+
+    margin:0;
+
+    padding:.45rem .45rem .45rem 0;
+
+    line-height:1.45;
+
+    white-space:pre-line;
+
+    overflow-y:auto;
+
+    overflow-x:hidden;
+
+    scrollbar-width:thin;
+
+    scrollbar-color:#ffd54f rgba(255,255,255,0.12);
+
+    touch-action:pan-y;
+
+    -webkit-overflow-scrolling:touch;
+
+    height:auto;
+
+    min-height:50px;
+
+    max-height:24vh;
+
+    font-size:clamp(
+
+        .92rem,
+
+        2.5vh,
+
+        1.25rem
+
+    );
+
+    border-top:
+
+        1px solid rgba(
+
+            255,
+
+            255,
+
+            255,
+
+            .15
+
+        );
+
+    border-bottom:
+
+        1px solid rgba(
+
+            255,
+
+            255,
+
+            255,
+
+            .15
+
+        );
+
+}
+
+/* =====================================================
+   SCROLLBAR
+===================================================== */
+
+.dialogue-text::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+.dialogue-text::-webkit-scrollbar-track{
+
+    background:rgba(255,255,255,0.12);
+
+    border-radius:10px;
+
+    margin:2px 0;
+
+}
+
+.dialogue-text::-webkit-scrollbar-thumb{
+
+    background:#ffd54f;
+
+    border-radius:20px;
+
+    box-shadow:0 0 6px rgba(255,213,79,0.55);
+
+}
+
+.dialogue-text::-webkit-scrollbar-thumb:hover{
+
+    background:#ffe082;
+
+}
+
+/* =====================================================
+   SCROLL HINT BADGE
+===================================================== */
+
+.dialogue-scroll-hint{
+
+    margin-left:auto;
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:.35rem;
+
+    padding:.25rem .65rem;
+
+    background:rgba(214,176,106,0.18);
+
+    border:1px solid rgba(255,213,79,0.7);
+
+    border-radius:20px;
+
+    font-size:clamp(0.72rem, 1.4vh, 0.88rem);
+
+    font-weight:600;
+
+    color:#fcedba;
+
+    letter-spacing:0.02em;
+
+    user-select:none;
+
+    -webkit-user-select:none;
+
+    opacity:0;
+
+    pointer-events:none;
+
+    transition:opacity 0.25s ease, transform 0.25s ease;
+
+    cursor:pointer;
+
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+
+}
+
+.dialogue-scroll-hint:hover{
+
+    background:rgba(214,176,106,0.32);
+
+    border-color:#ffd54f;
+
+}
+
+.scroll-hint-icon{
+
+    font-size:1em;
+
+}
+
+.scroll-hint-arrow{
+
+    display:inline-block;
+
+    color:#ffd54f;
+
+    font-weight:bold;
+
+    animation:scrollBounce 1.2s infinite ease-in-out;
+
+}
+
+@keyframes scrollBounce{
+
+    0%, 100%{
+
+        transform:translateY(0);
+
+    }
+
+    50%{
+
+        transform:translateY(3px);
+
+    }
+
+}
+
+/* =====================================================
+   FOOTER
+===================================================== */
+
+.dialogue-footer{
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    margin-top:.6rem;
+
+}
+
+/* =====================================================
+   BUTTON
+===================================================== */
+
+.dialogue-button{
+
+    padding:
+
+        clamp(
+
+            .35rem,
+
+            .7vh,
+
+            .7rem
+
+        )
+
+        clamp(
+
+            .8rem,
+
+            1.5vw,
+
+            1.4rem
+
+        );
+
+    border:none;
+
+    border-radius:10px;
+
+    background:#d6b06a;
+
+    color:#1b1b1b;
+
+    font-weight:bold;
+
+    cursor:pointer;
+
+    transition:
+
+        background .2s,
+
+        transform .2s;
+
+    font-size:clamp(
+
+        .85rem,
+
+        1.6vh,
+
+        1rem
+
+    );
+
+}
+
+.dialogue-button:hover{
+
+    background:#e8c987;
+
+    transform:scale(1.03);
+
+}
+
+.dialogue-button:active{
+
+    transform:scale(.98);
+
+}
+
+/* =====================================================
+   HORIZONTAL MOBILE & SMALL HEIGHT SCREENS
+===================================================== */
+
+@media (max-height: 520px) {
+
+    .dialogue {
+        bottom: max(6px, env(safe-area-inset-bottom, 6px));
+        padding: 0.45rem 0.95rem;
+        width: min(92vw, 860px);
+        height: auto;
+        min-height: 105px;
+        max-height: min(48vh, 185px);
+    }
+
+    .dialogue-header {
+        margin-bottom: 0.20rem;
+        gap: 0.5rem;
+    }
+
+    .dialogue-portrait-container {
+        width: 5.4vh;
+        height: 5.4vh;
+        min-width: 32px;
+        min-height: 32px;
+    }
+
+    .dialogue-speaker {
+        font-size: clamp(0.90rem, 3.2vh, 1.15rem);
+    }
+
+    .dialogue-text {
+        height: auto;
+        min-height: 52px;
+        max-height: 24vh;
+        font-size: clamp(0.90rem, 2.7vh, 1.08rem);
+        line-height: 1.45;
+        padding: 0.2rem 0.4rem 0.2rem 0;
+    }
+
+    .dialogue-footer {
+        margin-top: 0.25rem;
+    }
+
+    .dialogue-button {
+        padding: clamp(0.28rem, 1vh, 0.45rem) clamp(0.8rem, 2vw, 1.25rem);
+        font-size: clamp(0.82rem, 2.3vh, 0.95rem);
+    }
+
+    .dialogue-scroll-hint {
+        padding: 0.15rem 0.45rem;
+        font-size: clamp(10px, 1.25vh, 12px);
+        gap: 0.25rem;
+    }
+
+}
+
+@media (max-width:480px){
+
+    .dialogue-scroll-hint{
+
+        padding:.15rem .45rem;
+
+        font-size:.72rem;
+
+    }
+
+}
+
+/* =====================================================
+   ESCENARIO CINEMÁTICO DE ESTUDIO (OPCIÓN 1 - DIÁLOGOS NPC)
+===================================================== */
+
+.dialogue-stage-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 14500;
+    pointer-events: none;
+    display: none;
+    opacity: 0;
+    /* Transición envolvente profunda de mayor duración y suavidad */
+    transition: opacity 1.20s cubic-bezier(0.22, 0.65, 0.35, 1);
+    overflow: hidden;
+    background: #050a08;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.dialogue-stage-overlay.visible {
+    opacity: 1;
+}
+
+/* Doble viñeta cinematográfica: viñeta de estudio ultra-difuminada sin círculos rígidos */
+.dialogue-stage-backdrop {
+    position: absolute;
+    inset: 0;
+    /* Difuminado suave y expansivo tipo estudio: halos amplios y degradados continuos sin cortes circulares */
+    background: 
+        radial-gradient(ellipse 85% 65% at 50% 38%, rgba(22, 42, 32, 0.65) 0%, rgba(12, 22, 17, 0.85) 45%, rgba(6, 12, 9, 0.96) 75%, #050a08 100%),
+        radial-gradient(ellipse 55% 45% at 50% 36%, rgba(212, 175, 55, 0.09) 0%, rgba(46, 204, 113, 0.04) 40%, transparent 75%);
+    opacity: 0;
+    transition: opacity 1.25s cubic-bezier(0.22, 0.65, 0.35, 1);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-backdrop {
+    opacity: 1;
+}
+
+/* Transición cinematográfica envolvente desde la periferia:
+   Cierra suavemente hacia el centro y se disuelve por completo en el fondo,
+   sin dejar ningún aro o círculo residual marcado */
+.dialogue-stage-iris {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 250vmax;
+    height: 250vmax;
+    margin-left: -125vmax;
+    margin-top: -125vmax;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+    /* Difuminado progresivo y suave con blur para eliminar bordes duros */
+    background: radial-gradient(circle at 50% 50%, 
+        transparent 0%, 
+        transparent 35%, 
+        rgba(5, 10, 8, 0.40) 55%, 
+        rgba(5, 10, 8, 0.85) 75%, 
+        #050a08 90%
+    );
+    box-shadow: 0 0 0 125vmax #050a08;
+    transform: scale(2.2);
+    opacity: 0;
+    filter: blur(14px);
+    will-change: transform, opacity;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-iris {
+    animation: irisCinematicSweep 1.35s cubic-bezier(0.22, 0.65, 0.35, 1) forwards;
+}
+
+@keyframes irisCinematicSweep {
+    0% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.95;
+    }
+    85% {
+        transform: scale(0.60);
+        opacity: 0.85;
+    }
+    100% {
+        transform: scale(0.25);
+        opacity: 0;
+    }
+}
+
+/* En pantallas panorámicas / horizontal: logo en esquina superior derecha para acompañar la escena con NPC a la izquierda */
+.dialogue-stage-watermark {
+    position: absolute;
+    top: clamp(18px, 12%, 80px);
+    right: clamp(24px, 4.5vw, 64px);
+    left: auto;
+    transform: scale(0.96);
+    width: min(220px, 22vw);
+    height: auto;
+    max-height: 28vh;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 1.20s cubic-bezier(0.16, 1, 0.3, 1) 0.15s,
+                transform 1.20s cubic-bezier(0.16, 1, 0.3, 1) 0.15s;
+    will-change: opacity, transform;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-watermark {
+    opacity: 0.82;
+    transform: scale(1);
+}
+
+@media (max-height: 520px) {
+    .dialogue-stage-watermark {
+        top: 10px;
+        right: max(16px, env(safe-area-inset-right, 16px));
+        left: auto;
+        width: min(150px, 18vw);
+        max-height: 24vh;
+    }
+}
+
+/* En móvil portrait: logo en esquina superior derecha proporcionado */
+@media (orientation: portrait) {
+    .dialogue-stage-watermark {
+        top: max(14px, env(safe-area-inset-top, 14px));
+        right: max(16px, env(safe-area-inset-right, 16px));
+        left: auto;
+        width: min(150px, 34vw);
+        max-height: 20vh;
+        opacity: 0;
+        transform: scale(0.92);
+    }
+    .dialogue-stage-overlay.visible .dialogue-stage-watermark {
+        opacity: 0.82;
+        transform: scale(1);
+    }
+}
+
+.dialogue-stage-logo-img {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    display: block;
+    filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.75));
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.dialogue-stage-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.96);
+    transition: opacity 1.15s cubic-bezier(0.16, 1, 0.3, 1) 0.10s,
+                transform 1.15s cubic-bezier(0.16, 1, 0.3, 1) 0.10s;
+    will-change: opacity, transform;
+}
+
+.dialogue-stage-overlay.visible .dialogue-stage-canvas {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* =====================================================
+   ADAPTACIONES DE LA CAJA DE DIÁLOGO EN MODO NPC (.npc-mode)
+===================================================== */
+
+.dialogue.npc-mode {
+    border: 2px solid rgba(212, 175, 55, 0.85);
+    background: linear-gradient(180deg, rgba(16, 22, 19, 0.94) 0%, rgba(9, 14, 12, 0.96) 100%);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 24px rgba(46, 204, 113, 0.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-radius: 20px;
+    padding: 0.65rem 1.25rem;
+    left: auto;
+    right: max(20px, env(safe-area-inset-right, 20px));
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    transform: translateY(14px) scale(0.98);
+    width: min(46vw, 440px);
+    max-width: 48vw;
+    height: auto;
+    min-height: 115px;
+    max-height: min(82vh, 320px);
+    box-sizing: border-box;
+}
+
+.dialogue.npc-mode.active-dialogue {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+@media (max-width: 768px), (max-height: 520px) {
+    .dialogue.npc-mode {
+        left: auto;
+        right: max(14px, env(safe-area-inset-right, 14px));
+        bottom: max(10px, env(safe-area-inset-bottom, 10px));
+        transform: translateY(14px) scale(0.98);
+        width: min(46vw, 410px);
+        max-width: 48vw;
+        padding: 0.45rem 0.95rem;
+        border-radius: 16px;
+        height: auto;
+        min-height: 110px;
+        max-height: min(88vh, calc(100vh - 20px));
+    }
+
+    .dialogue.npc-mode.active-dialogue {
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (orientation: portrait) {
+    .dialogue.npc-mode {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%) translateY(14px) scale(0.98);
+        width: min(92vw, 560px);
+        max-width: 94vw;
+        bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    }
+
+    .dialogue.npc-mode.active-dialogue {
+        transform: translateX(-50%) translateY(0) scale(1);
+    }
+}
+
+.dialogue.npc-mode .dialogue-header {
+    gap: 0;
+    margin-bottom: 0.35rem;
+}
+
+.dialogue.npc-mode .dialogue-speaker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.25) 0%, rgba(212, 175, 55, 0.05) 100%);
+    border-left: 3px solid #d6b06a;
+    padding: 3px 14px 3px 10px;
+    border-radius: 4px 10px 10px 4px;
+    font-size: clamp(1rem, 2.2vh, 1.35rem);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #f7e4a8;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+}
+
+.dialogue.npc-mode .dialogue-text {
+    font-size: clamp(0.94rem, 2.6vh, 1.16rem);
+    line-height: 1.45;
+    color: #f2f4f8;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    height: auto;
+    min-height: 52px;
+    max-height: 24vh;
+}
+
+.dialogue.npc-mode .dialogue-button {
+    background: linear-gradient(180deg, #d6b06a 0%, #aa8436 100%);
+    border: 1px solid #f7e4a8;
+    color: #12151c;
+    font-weight: 700;
+    box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35);
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.dialogue.npc-mode .dialogue-button:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.12);
+}
+
+.dialogue.npc-mode .dialogue-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 0.35rem;
+    width: 100%;
+    padding-right: 4px;
+}
+
+@media (max-height: 520px) {
+    .dialogue.npc-mode .dialogue-header {
+        margin-bottom: 0.20rem;
+    }
+    .dialogue.npc-mode .dialogue-speaker {
+        padding: 2px 10px 2px 8px;
+        font-size: clamp(0.88rem, 3.2vh, 1.12rem);
+    }
+    .dialogue.npc-mode .dialogue-text {
+        font-size: clamp(0.88rem, 2.7vh, 1.05rem);
+        line-height: 1.42;
+        min-height: 54px;
+        max-height: min(48vh, 180px);
+        padding: 0.15rem 0.35rem 0.15rem 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .dialogue.npc-mode .dialogue-footer {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin-top: 0.25rem;
+        width: 100%;
+        padding-right: 4px;
+    }
+    .dialogue.npc-mode .dialogue-button {
+        padding: clamp(0.28rem, 1vh, 0.42rem) clamp(0.8rem, 2vw, 1.25rem);
+        font-size: clamp(0.82rem, 2.3vh, 0.95rem);
+    }
+}
+
+/* =======================================================
+   REGISTRO
+======================================================= */
+
+#registryBase{
+
+    position:fixed;
+
+    left:50%;
+
+    bottom:0;
+
+    transform:translateX(-50%);
+
+   width:clamp(86px,10.8vw,185px);
+
+    height:22px;
+
+    z-index:24999 !important;
+
+    pointer-events:none;
+
+    border-radius:16px 16px 0 0;
+
+   background:
+
+linear-gradient(
+    180deg,
+    #b18a55 0%,
+    #8e673b 18%,
+    #6f4f2d 45%,
+    #4c3522 72%,
+    #2f241b 100%
+),
+
+linear-gradient(
+    90deg,
+    rgba(255,215,150,.16) 0%,
+    rgba(255,255,255,.03) 25%,
+    rgba(0,0,0,.12) 50%,
+    rgba(255,220,160,.05) 75%,
+    rgba(255,190,120,.12) 100%
+);
+
+    border-top:1px solid rgba(255,220,160,.28);
+
+    border-left:1px solid rgba(255,220,160,.10);
+
+    border-right:1px solid rgba(255,220,160,.10);
+
+    box-shadow:
+
+        inset 0 2px 2px rgba(255,255,255,.10),
+
+        inset 0 -2px 4px rgba(0,0,0,.45),
+
+        0 -4px 10px rgba(0,0,0,.40);
+
+    overflow:visible;
+
+}
+
+#registryBase::before{
+
+    content:"";
+
+    position:absolute;
+
+    inset:0;
+
+    border-radius:inherit;
+
+    opacity:.28;
+
+    background:
+
+        repeating-linear-gradient(
+
+            90deg,
+
+            rgba(255,255,255,.08) 0px,
+
+            rgba(255,255,255,0) 2px,
+
+            rgba(0,0,0,.10) 4px,
+
+            rgba(0,0,0,0) 7px
+
+        ),
+
+        linear-gradient(
+
+            90deg,
+
+            rgba(255,210,140,.10),
+
+            rgba(0,0,0,0),
+
+            rgba(255,210,140,.08)
+
+        );
+
+}
+
+#registryBase::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:50%;
+
+    bottom:100%;
+
+    transform:translateX(-50%);
+
+    width:92%;
+
+    height:18px;
+
+    background:
+
+        radial-gradient(
+
+            ellipse at 18% 100%,
+
+            rgba(240,240,240,.18),
+
+            transparent 60%
+
+        ),
+
+        radial-gradient(
+
+            ellipse at 82% 100%,
+
+            rgba(240,240,240,.18),
+
+            transparent 60%
+
+        ),
+
+        radial-gradient(
+
+            ellipse at center,
+
+            rgba(255,255,255,.10),
+
+            transparent 72%
+
+        );
+
+    filter:blur(9px);
+
+    opacity:.55;
+
+}
+
+#registryButton{
+
+    position:fixed;
+
+    left:50%;
+
+    bottom:-2px;
+
+    transform:translateX(-50%);
+
+    width:clamp(64px,4.8vw,126px);
+
+    height:auto;
+
+    z-index:25000 !important;
+
+    user-select:none;
+
+    -webkit-user-drag:none;
+
+    cursor:pointer;
+
+    pointer-events:auto !important;
+
+    transition: filter 0.8s ease, transform 0.8s ease;
+
+}
+
+.registry-open #registryButton{
+
+    z-index: 25000 !important;
+
+    cursor: pointer;
+
+    pointer-events: auto !important;
+
+}
+
+/* =====================================================
+   OPCIÓN R1: OCULTACIÓN LIMPIA DEL BOTÓN DE REGISTRO
+   DURANTE DIÁLOGOS Y CINEMÁTICAS
+===================================================== */
+body.in-dialogue #registryButton:not(.registry-spotlight),
+body.in-dialogue #registryBase:not(.registry-spotlight),
+.dialogue.active-dialogue ~ #registryButton:not(.registry-spotlight),
+.dialogue.active-dialogue ~ #registryBase:not(.registry-spotlight),
+.dialogue-stage-overlay.visible ~ #registryButton:not(.registry-spotlight),
+.dialogue-stage-overlay.visible ~ #registryBase:not(.registry-spotlight) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateX(-50%) translateY(40px) scale(0.9) !important;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* =====================================================
+   OPCIÓN C3: CAJA DE COORDENADAS SUPERIOR IZQUIERDA
+   SUBORDINADA Y OCULTA AL ABRIR REGISTRO O EN DIÁLOGO
+===================================================== */
+#worldEditor {
+    z-index: 100 !important;
+    transition: opacity 0.25s ease, transform 0.25s ease !important;
+}
+
+body.registry-open #worldEditor,
+body.in-dialogue #worldEditor,
+.dialogue.active-dialogue ~ #worldEditor,
+.dialogue-stage-overlay.visible ~ #worldEditor {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translateY(-8px) !important;
+    display: none !important;
+}
+
+/*======================================================
+   ANIMACIONES DESBLOQUEO REGISTRO
+======================================================*/
+
+/* Estado spotlight para emerger por encima del diálogo (z-index diálogo = 15000) */
+#registryBase.registry-spotlight{
+
+    z-index: 24999 !important;
+
+}
+
+#registryButton.registry-spotlight{
+
+    z-index: 25000 !important;
+
+}
+
+.registry-unlocked-reveal{
+
+    animation: registrySlideUp 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+}
+
+@keyframes registrySlideUp{
+
+    0%{
+
+        transform: translate(-50%, 120%);
+
+        opacity: 0;
+
+    }
+
+    100%{
+
+        transform: translate(-50%, 0);
+
+        opacity: 1;
+
+    }
+
+}
+
+.registry-attention-pulse{
+
+    animation: registryAttentionGlow 1.6s infinite ease-in-out !important;
+
+}
+
+@keyframes registryAttentionGlow{
+
+    0%, 100%{
+
+        filter: drop-shadow(0 0 7px rgba(255, 215, 79, 0.7)) drop-shadow(0 0 16px rgba(255, 179, 0, 0.45));
+
+        transform: translateX(-50%) scale(1);
+
+    }
+
+    50%{
+
+        filter: drop-shadow(0 0 14px rgba(255, 235, 120, 1)) drop-shadow(0 0 32px rgba(255, 180, 0, 0.95)) drop-shadow(0 0 50px rgba(214, 176, 106, 0.8)) brightness(1.32);
+
+        transform: translateX(-50%) scale(1.09);
+
+    }
+
+}
+
+.registry-intake-pulse{
+
+    animation: registryIntakeGlow 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+
+}
+
+@keyframes registryIntakeGlow{
+
+    0%{
+
+        filter: drop-shadow(0 0 14px rgba(255, 230, 100, 1)) drop-shadow(0 0 38px rgba(255, 180, 0, 0.95)) brightness(1.65);
+
+        transform: translateX(-50%) scale(1.24);
+
+    }
+
+    40%{
+
+        filter: drop-shadow(0 0 20px rgba(255, 245, 160, 1)) drop-shadow(0 0 45px rgba(255, 190, 40, 0.9)) brightness(1.38);
+
+        transform: translateX(-50%) scale(1.12);
+
+    }
+
+    100%{
+
+        filter: drop-shadow(0 0 0px rgba(255, 215, 79, 0)) brightness(1);
+
+        transform: translateX(-50%) scale(1);
+
+    }
+
+}
+
+/*======================================================
+
+VENTANA REGISTRO
+
+======================================================*/
+
+#registry[hidden]{
+
+    display:none !important;
+
+}
+
+#registry{
+
+    position:fixed;
+
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+
+    display:flex;
+    flex-direction:column;
+
+    width:min(96vw,1600px);
+    height:min(92vh,950px);
+
+    box-sizing:border-box;
+
+    padding:24px;
+
+    background:rgba(46,31,20,.60);
+
+    backdrop-filter:blur(8px) brightness(.92) sepia(.18);
+
+    border:1px solid rgba(205,170,110,.18);
+
+    border-radius:18px;
+
+    box-shadow:
+        0 0 24px rgba(0,0,0,.55),
+        inset 0 0 18px rgba(255,220,160,.04);
+
+    overflow:hidden;
+
+    z-index:20000;
+
+}
+
+#registryCloseBtn{
+    position:absolute;
+    top:14px;
+    right:18px;
+    width:36px;
+    height:36px;
+    border-radius:50%;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(214,176,106,.45);
+    color:#f2d08a;
+    font-size:1.4rem;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    z-index:25010;
+    transition:background .2s ease, transform .2s ease, border-color .2s ease;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+}
+
+#registryCloseBtn:hover,
+#registryCloseBtn:active{
+    background:rgba(214,176,106,.35);
+    color:#ffffff;
+    border-color:#d6b06a;
+    transform:scale(1.08);
+}
+
+/* Asegurar que cuando Registro está abierto en móvil, el botón y etiqueta de interacción nunca queden por encima */
+body.registry-open #mobileInteractionButton,
+body.registry-open #mobileInteractionLabel,
+body:has(#registry:not([hidden])) #mobileInteractionButton,
+body:has(#registry:not([hidden])) #mobileInteractionLabel {
+    display: none !important;
+    pointer-events: none !important;
+}
+
+#registryHeaderIcon{
+
+    width:clamp(110px,10vw,180px);
+
+    height:auto;
+
+    user-select:none;
+
+    -webkit-user-drag:none;
+
+    margin-bottom:26px;
+
+}
+
+
+/*======================================================
+
+NAVEGACIÓN REGISTRO
+
+======================================================*/
+
+#registryNav{
+
+    width:100%;
+
+    display:flex;
+
+    align-items:stretch;
+
+    gap:18px;
+
+    margin-bottom:24px;
+
+    padding-bottom:18px;
+
+    border-bottom:1px solid rgba(190,150,95,.25);
+
+}
+
+.registryTab{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:flex-start;
+
+    gap:.55rem;
+
+    flex:1;
+
+    min-width:235px;
+
+    min-height:88px;
+
+    padding:1.30rem 1.70rem;
+
+    border:none;
+
+    border-radius:14px;
+
+    background:transparent;
+
+    color:#dfc08a;
+
+    font-size:1.28rem;
+
+    font-family:inherit;
+
+    font-weight:600;
+
+    cursor:default;
+
+    transition:
+
+        background .18s ease,
+
+        transform .18s ease,
+
+        box-shadow .18s ease;
+
+}
+
+.registryTab.active{
+
+    color:#fff6df;
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255,205,120,.28),
+            rgba(175,112,40,.18)
+        );
+
+    border:
+        1px solid rgba(255,225,165,.32);
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,255,255,.12),
+
+        inset 0 -1px 10px rgba(0,0,0,.25),
+
+        0 0 16px rgba(255,195,105,.14),
+
+        0 6px 18px rgba(0,0,0,.30);
+
+    transform:
+        translateY(-2px)
+        scale(1.015);
+
+}
+
+.registryTab:hover{
+
+    background:
+
+        rgba(255,220,140,.08);
+
+}
+
+/*==========================================================
+REGISTRY TAB ICONS
+==========================================================*/
+
+.registryTabIcon{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    width:3.35rem;
+
+    height:3.35rem;
+
+    margin-right:.60rem;
+
+    flex-shrink:0;
+
+}
+
+.registryTabShortcut{
+
+    width:3.15rem;
+
+    height:3.15rem;
+
+    flex-shrink:0;
+
+    object-fit:contain;
+
+    pointer-events:none;
+
+    user-select:none;
+
+    margin-right:.10rem;
+
+    align-self:center;
+
+}
+
+.registryTabIcon svg{
+
+    width:100%;
+
+    height:100%;
+
+    display:block;
+
+    opacity:0.92;
+
+    transition:
+
+        opacity .18s ease,
+
+        transform .18s ease,
+
+        filter .18s ease;
+		
+	transform:scale(1.12);	
+
+}
+
+.registryTab:hover .registryTabIcon svg{
+
+    opacity:1;
+
+    transform:scale(1.08);
+
+}
+
+.registryTab.active .registryTabIcon svg{
+
+    opacity:1;
+
+    transform:scale(1.22);
+
+    filter:
+
+        drop-shadow(
+            0 0 .45rem rgba(255,225,165,.85)
+        )
+
+        drop-shadow(
+            0 0 .85rem rgba(255,190,90,.40)
+        );
+
+}
+
+.registryTab.active .registryTabTitle{
+
+    color:#fff8ea;
+
+    font-weight:700;
+
+    text-shadow:
+
+        0 0 8px rgba(255,225,170,.22);
+
+}
+
+.registryTab.active{
+
+    position:relative;
+
+}
+
+.registryTab.active::before{
+
+    content:"";
+
+    position:absolute;
+
+    left:0;
+
+    top:10%;
+
+    bottom:10%;
+
+    width:5px;
+
+    border-radius:4px;
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(255,235,185,.95),
+
+            rgba(225,165,70,.85)
+
+        );
+
+    box-shadow:
+
+        0 0 10px rgba(255,210,140,.35);
+
+}
+
+/*======================================================
+
+CONTENIDO REGISTRO
+
+======================================================*/
+
+#registryContent{
+
+    flex:1;
+
+    display:flex;
+
+    flex-direction:column;
+
+    width:100%;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+    border-radius:14px;
+
+    background:rgba(255,245,220,.02);
+
+    border:1px solid rgba(205,170,110,.08);
+
+}
+
+/*=====================================================
+REGISTRY INVENTORY
+=====================================================*/
+
+/*-----------------------------------------------------
+MÓDULO
+-----------------------------------------------------*/
+
+/*-----------------------------------------------------*
+ * CONTENEDOR INVENTARIO
+ *-----------------------------------------------------*/
+
+
+
+/*===================================================*
+**************NUEVO DISEÑO E INVENTARIO*************
+===================================================*/
+
+/* =======================================================
+   INVENTORY MODULE V2
+   ======================================================= */
+
+#inventoryModule{
+
+    display:flex;
+    flex-direction:row;
+
+    width:100%;
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    overflow:hidden;
+
+}
+
+
+
+
+
+
+#inventoryBody{
+
+    display:flex;
+
+    flex-direction:row;
+
+    flex:1;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+    padding-top:14px;
+
+}
+#inventoryGridPanel{
+
+    flex:6;
+
+    min-width:0;
+
+    min-height:0;
+
+    display:flex;
+
+    padding:clamp(8px,.7vw,14px);
+
+    box-sizing:border-box;
+
+    overflow:hidden;
+
+    border-radius:clamp(10px,.8vw,18px);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(20,12,8,.20),
+            rgba(0,0,0,.30)
+        );
+
+    box-shadow:
+        inset 0 2px 6px rgba(0,0,0,.35),
+        inset 0 -1px 0 rgba(255,220,180,.04);
+
+}
+
+
+
+#inventorySlots{
+
+    display:grid;
+
+    grid-template-columns:repeat(5,1fr);
+
+    grid-template-rows:repeat(4,1fr);
+
+    gap:clamp(4px,.45vw,10px);
+
+    width:100%;
+    height:100%;
+
+    box-sizing:border-box;
+
+}
+
+/*=====================================================
+PANEL DERECHO V2
+=====================================================*/
+
+#inventoryInfoPanel{
+
+    flex:5;
+
+    display:flex;
+
+    flex-direction:column;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+}
+
+/*-----------------------------------------------------
+CONTENIDO PANEL DERECHO
+-----------------------------------------------------*/
+
+#inventoryInfoContent{
+
+    display:flex;
+
+    flex-direction:column;
+
+    flex:1;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:auto;
+
+    padding:clamp(10px,.8vw,18px);
+
+    gap:clamp(10px,.8vw,18px);
+
+    box-sizing:border-box;
+
+}
+
+#inventoryPreviewHeader{
+display:flex;
+
+align-items:flex-start;
+
+gap:clamp(10px,.8vw,18px);
+
+width:100%;
+
+flex-shrink:0;
+}
+
+#inventoryPreviewImage{
+
+    width:clamp(72px,8vw,110px);
+
+    aspect-ratio:1;
+
+    flex-shrink:0;
+
+    border-radius:clamp(8px,.6vw,14px);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255,235,205,.03) 0%,
+            rgba(0,0,0,.06) 100%
+        );
+
+    border:
+        1px solid rgba(198,150,96,.42);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255,230,190,.10),
+        inset 0 -2px 5px rgba(0,0,0,.32);
+
+    background-repeat:no-repeat;
+
+    background-position:center;
+
+    background-size:contain;
+
+    overflow:hidden;
+
+}
+
+#inventoryPreviewTitle{
+flex:1;
+
+min-width:0;
+
+font-size:clamp(18px,1.3vw,26px);
+
+font-weight:700;
+
+line-height:1.2;
+
+color:#ffffff;
+
+word-break:break-word;
+}
+
+#inventoryDescription{
+
+    flex:1;
+
+    color:#d7e3ef;
+
+    line-height:1.5;
+
+}
+
+#inventoryActions{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    gap:12px;
+
+}
+
+#inventoryActions button{
+
+    flex:1;
+
+}
+
+.inventoryCell img{
+
+    width:80%;
+
+    height:80%;
+
+    object-fit:contain;
+
+    pointer-events:none;
+
+    user-select:none;
+
+}
+
+/*=====================================================
+BASE DE TODOS LOS MÓDULOS DEL REGISTRO
+=====================================================*/
+
+.registryModule{
+
+    display:none;
+
+    width:100%;
+
+    height:100%;
+
+    min-width:0;
+
+    min-height:0;
+
+    overflow:hidden;
+
+}
+.registryModule.active{
+
+    display:block;
+
+}
+
+/*-----------------------------------------------------
+PANEL IZQUIERDO
+-----------------------------------------------------*/
+
+#inventoryGrid{
+
+    display:flex;
+
+    flex-direction:column;
+
+    flex-shrink:0;    
+
+    min-width:315px;   
+
+    min-height:0;
+
+    overflow:hidden;
+
+}
+
+/*-----------------------------------------------------
+PANEL DERECHO
+-----------------------------------------------------*/
+
+#inventoryInfo{
+
+    display:flex;
+
+    flex-direction:column;    
+
+    min-width:0;
+
+    min-height:0;
+
+    width:auto;
+
+    height:100%;
+
+    overflow:hidden;
+
+}
+
+/*-----------------------------------------------------*
+ * CABECERA PANEL DERECHO
+ *-----------------------------------------------------*/
+
+#inventoryHeader{
+
+    display:grid;
+
+    grid-template-columns:
+
+        auto
+
+        minmax(0,1fr);
+
+    column-gap:18px;
+
+    align-items:center;
+
+    width:100%;
+
+    flex-shrink:0;
+
+    padding-bottom:14px;
+
+    border-bottom:
+
+        1px solid rgba(210,170,110,.18);
+
+}
+
+/*-----------------------------------------------------*
+ * MINIATURA
+ *-----------------------------------------------------*/
+
+#inventoryThumbnail{
+
+    width:
+        clamp(72px,7vw,110px);
+
+    aspect-ratio:1;
+
+    object-fit:contain;
+
+    flex-shrink:0;
+
+    display:none;
+
+}
+
+/*-----------------------------------------------------*
+ * BLOQUE CENTRAL
+ *-----------------------------------------------------*/
+
+#inventoryMeta{
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:center;
+
+    align-items:flex-start;
+
+    gap:12px;
+
+    min-width:0;
+
+}
+
+
+
+
+
+
+
+/*-----------------------------------------------------
+CASILLAS INVENTARIO
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    position:relative;
+
+    overflow:hidden;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:clamp(6px,0.55vw,12px);
+
+    border:
+
+        1px solid
+
+        rgba(210,145,80,0.38);
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(90,58,34,0.72) 0%,
+
+            rgba(58,36,22,0.82) 55%,
+
+            rgba(30,18,12,0.92) 100%
+
+        );
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,220,170,0.14),
+
+        inset 0 -2px 5px rgba(0,0,0,0.45),
+
+        0 0 8px rgba(0,0,0,0.18);
+
+    transition:
+
+        border-color .18s,
+
+        transform .18s,
+
+        box-shadow .18s;
+
+}
+
+/*-----------------------------------------------------
+TEXTURA SUPERIOR
+-----------------------------------------------------*/
+
+.inventoryCell::before{
+
+    content:"";
+
+    position:absolute;
+
+    inset:0;
+
+    background:
+
+        linear-gradient(
+
+            90deg,
+
+            rgba(255,255,255,0.03),
+
+            rgba(255,255,255,0),
+
+            rgba(255,255,255,0.05),
+
+            rgba(255,255,255,0)
+
+        );
+
+    opacity:.45;
+
+    pointer-events:none;
+
+}
+
+/*-----------------------------------------------------
+BRILLO INFERIOR
+-----------------------------------------------------*/
+
+.inventoryCell::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:8%;
+
+    right:8%;
+
+    bottom:6%;
+
+    height:18%;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            ellipse,
+
+            rgba(255,170,90,0.18),
+
+            transparent 70%
+
+        );
+
+    pointer-events:none;
+
+}
+/*-----------------------------------------------------
+CASILLA VACÍA
+-----------------------------------------------------*/
+
+.inventoryCell.empty{
+
+    opacity:0.88;
+
+}
+
+/*-----------------------------------------------------
+CASILLA OCUPADA
+-----------------------------------------------------*/
+
+.inventoryCell.occupied{
+
+    border-color:
+
+        rgba(255,195,110,0.72);
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,235,200,0.22),
+
+        inset 0 -2px 6px rgba(0,0,0,0.48),
+
+        0 0 12px rgba(255,165,70,0.18);
+
+}
+
+/*-----------------------------------------------------
+CASILLA SELECCIONADA
+-----------------------------------------------------*/
+
+.inventoryCell.selected{
+
+    border-color:
+
+        rgba(255,220,140,0.95);
+
+    transform:scale(1.035);
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,255,255,0.20),
+
+        inset 0 -2px 6px rgba(0,0,0,0.55),
+
+        0 0 18px rgba(255,175,70,0.38);
+
+}
+
+/*-----------------------------------------------------
+HOVER (SOLO ESCRITORIO)
+-----------------------------------------------------*/
+
+@media (hover:hover){
+
+    .inventoryCell:hover{
+
+        border-color:
+
+            rgba(255,205,120,0.82);
+
+        transform:translateY(-1px);
+
+        box-shadow:
+
+            inset 0 1px 0 rgba(255,240,200,0.20),
+
+            inset 0 -2px 6px rgba(0,0,0,0.50),
+
+            0 0 14px rgba(255,170,70,0.28);
+
+    }
+
+}
+
+/*-----------------------------------------------------
+ICONO DEL OBJETO
+-----------------------------------------------------*/
+
+.inventoryCell img{
+
+    width:78%;
+
+    height:78%;
+
+    object-fit:contain;
+
+    user-select:none;
+
+    pointer-events:none;
+
+    filter:
+
+        drop-shadow(
+
+            0 2px 3px
+
+            rgba(0,0,0,0.35)
+
+        );
+
+}
+
+
+/*-----------------------------------------------------*
+* PANEL DERECHO DEL INVENTARIO
+*-----------------------------------------------------*/
+
+#inventoryPreview{
+
+    position:relative;
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:flex-start;
+
+    align-items:center;
+
+    flex:1;
+
+    width:100%;
+    height:100%;
+
+    min-width:0;
+    min-height:0;
+
+    overflow:hidden;
+
+    padding:
+        clamp(12px,1vw,24px);
+
+    border-radius:
+        clamp(10px,0.9vw,18px);
+
+    background:
+        linear-gradient(
+            180deg,
+            rgba(86,58,34,0.46) 0%,
+            rgba(55,36,22,0.60) 52%,
+            rgba(28,18,12,0.78) 100%
+        );
+
+    border:
+        1px solid rgba(210,150,90,.32);
+
+    box-shadow:
+        inset 0 1px 0 rgba(255,220,180,.12),
+        inset 0 -2px 6px rgba(0,0,0,.45),
+        0 0 12px rgba(0,0,0,.18);
+
+}
+/*-----------------------------------------------------
+TÍTULO
+-----------------------------------------------------*/
+
+#inventoryTitle{
+
+    font-family:Georgia,serif;
+
+    font-weight:bold;
+
+    color:#ecd0a1;
+
+    font-size:
+
+        clamp(22px,1.55vw,34px);
+
+    line-height:1.1;
+
+    text-shadow:
+
+        0 2px 5px
+
+        rgba(0,0,0,.45);
+
+    margin:0;
+
+}
+
+/*-----------------------------------------------------*
+ * ACCIONES
+ *-----------------------------------------------------*/
+
+#inventoryActions{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:10px;
+
+    width:100%;
+
+}
+
+
+/*-----------------------------------------------------
+DESCRIPCIÓN
+-----------------------------------------------------*/
+
+#inventoryDescription{
+
+    flex:1;
+
+    overflow-y:auto;
+
+    font-size:
+
+        clamp(15px,0.92vw,18px);
+
+    line-height:1.55;
+
+    color:
+
+        rgba(240,230,210,.95);
+
+    white-space:pre-wrap;
+
+    padding-right:6px;
+
+}
+
+/*-----------------------------------------------------
+RELIEVE GENERAL DEL GRID
+-----------------------------------------------------*/
+
+
+/*-----------------------------------------------------
+PROFUNDIDAD INDIVIDUAL
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    isolation:isolate;
+
+}
+
+.inventoryCell::before{
+
+    z-index:0;
+
+}
+
+.inventoryCell::after{
+
+    z-index:1;
+
+}
+
+.inventoryCell>*{
+
+    position:relative;
+
+    z-index:2;
+
+}
+/*-----------------------------------------------------
+BRILLO SUPERIOR
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(110,74,42,.72) 0%,
+
+            rgba(70,44,26,.82) 48%,
+
+            rgba(34,20,12,.94) 100%
+
+        );
+
+}
+/*-----------------------------------------------------
+MARCO EXTERIOR
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    outline:
+
+        1px solid
+
+        rgba(255,210,150,.05);
+
+    outline-offset:-1px;
+
+}
+/*-----------------------------------------------------
+SEPARACIÓN ENTRE CASILLAS
+-----------------------------------------------------*/
+
+.inventoryCell{
+
+    box-shadow:
+
+        inset 0 1px 0 rgba(255,235,195,.12),
+
+        inset 0 -2px 5px rgba(0,0,0,.55),
+
+        0 2px 4px rgba(0,0,0,.16);
+
+}
+
+
+
+/*-----------------------------------------------------*
+ * BOTONES DEL PANEL DERECHO
+ *-----------------------------------------------------*/
+
+#inventoryActions button{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    padding:
+        8px 16px;
+
+    border:none;
+
+    border-radius:10px;
+
+    background:
+        rgba(120,82,48,.88);
+
+    color:#f4e2c3;
+
+    font-size:
+        clamp(13px,.82vw,16px);
+
+    font-family:inherit;
+
+    cursor:pointer;
+
+    transition:
+        background .18s ease,
+        transform .15s ease;
+
+}
+
+#inventoryActions button:hover{
+
+    background:
+        rgba(160,110,62,.95);
+
+}
+
+#inventoryActions button:active{
+
+    transform:scale(.96);
+
+}
+
+/*==========================================================
+REGISTRY HELP BAR
+==========================================================*/
+
+#registryHelp{
+
+    display:none !important;
+
+    justify-content:center;
+
+    align-items:center;
+
+    flex-wrap:wrap;
+
+    gap:1.8rem;
+
+    width:100%;
+
+    min-height:3rem;
+
+    padding:0.65rem 1.25rem;
+
+    box-sizing:border-box;
+
+    border-top:1px solid rgba(255,220,160,0.12);
+
+    background:
+
+        linear-gradient(
+
+            to bottom,
+
+            rgba(42,28,16,0.70),
+
+            rgba(20,14,8,0.82)
+
+        );
+
+}
+
+.registryHelpItem{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:0.65rem;
+
+    color:#d8c7a4;
+
+    font-size:0.82rem;
+
+    user-select:none;
+
+}
+
+.registryHelpKey{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    min-width:3rem;
+
+    height:1.9rem;
+
+    padding:0 0.65rem;
+
+    border-radius:0.45rem;
+
+    background:
+
+        linear-gradient(
+
+            to bottom,
+
+            rgba(255,225,165,0.20),
+
+            rgba(170,120,60,0.15)
+
+        );
+
+    border:1px solid rgba(255,235,185,0.22);
+
+    color:#fff6de;
+
+    font-weight:bold;
+
+    font-size:0.80rem;
+
+    letter-spacing:0.03rem;
+
+    box-shadow:
+
+        inset 0 1px rgba(255,255,255,0.05),
+
+        0 1px 2px rgba(0,0,0,0.35);
+
+    transition:
+
+        transform .15s ease,
+
+        background .20s ease;
+
+}
+
+.registryHelpItem:hover .registryHelpKey{
+
+    transform:translateY(-1px);
+
+    background:
+
+        linear-gradient(
+
+            to bottom,
+
+            rgba(255,235,180,0.26),
+
+            rgba(185,140,80,0.18)
+
+        );
+
+}
+
+/*=====================================================
+ARCHIVE MODULE
+=====================================================*/
+
+#archiveModule{
+
+   
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:100%;
+
+    padding:2rem;
+
+}
+
+#archiveTitle{
+
+    font-size:1.8rem;
+
+    font-weight:700;
+
+    color:#f2ddb4;
+
+    margin-bottom:1.5rem;
+
+}
+
+#archiveContent{
+
+    flex:1;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:16px;
+
+    border:1px solid rgba(210,170,110,.20);
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(70,48,30,.45),
+
+            rgba(34,22,14,.65)
+
+        );
+
+    color:#d5c4a3;
+
+    font-size:1rem;
+
+}
+
+/*======================================================
+DIARY MODULE
+======================================================*/
+
+#diaryModule{
+
+    
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:100%;
+
+    padding:clamp(18px,2vw,28px);
+
+}
+
+/*======================================================
+ESTRUCTURA COMÚN DE LOS MÓDULOS
+======================================================*/
+
+.registryModuleTitle{
+
+    font-size:1.9rem;
+
+    font-weight:700;
+
+    color:#f3e3b5;
+
+    margin-bottom:1.5rem;
+
+    letter-spacing:.04em;
+
+}
+
+.registryModulePlaceholder{
+
+    flex:1;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:14px;
+
+    border:1px solid rgba(210,170,110,.20);
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            rgba(72,48,30,.45),
+
+            rgba(34,22,14,.68)
+
+        );
+
+    color:#d3c3a0;
+
+    font-size:1rem;
+
+    text-align:center;
+
+    padding:2rem;
+
+}
+
+/*======================================================
+HELP MODULE
+======================================================*/
+
+#helpModule{
+
+    
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:100%;
+
+    padding:clamp(18px,2vw,28px);
+
+}
+
+
+
+/*=========================================================
+FORZAR OCULTACIÓN DE MÓDULOS HIDDEN
+=========================================================*/
+
+#registryContent > [hidden]{
+
+    display:none !important;
+
+}
+
+
+
+/*=====================================================*/
+/* WORKSPACE INVENTARIO */
+/*=====================================================*/
+
+#inventoryWorkspace{
+
+    display:flex;
+
+    flex-direction:row;
+
+    align-items:stretch;
+
+    width:100%;
+
+    height:100%;
+
+    gap:clamp(12px,1vw,24px);
+
+}
+
+#inventoryLeft{
+
+    flex:0 0 auto;
+
+}
+
+#inventoryRight{
+
+    flex:1 1 auto;
+
+    min-width:0;
+
+    display:flex;
+
+}
+
+/*=========================================================
+REGISTRY · RESPONSIVE MOBILE (LANDSCAPE / HORIZONTAL)
+Arquitectura Sidebar Lateral Izquierda (Opción A)
+- Máxima altura vertical recuperada para lectura y descripción
+- Ergonomía táctil bimanual para smartphone en horizontal
+=========================================================*/
+
+@media (max-width: 1024px), (max-height: 560px) {
+
+    /*--------------------------------------
+    MARCO PRINCIPAL DEL REGISTRO
+    --------------------------------------*/
+    #registry {
+        flex-direction: row !important;
+        width: min(99vw, 1280px) !important;
+        height: min(97vh, 600px) !important;
+        padding: clamp(4px, 1.2vh, 8px) clamp(6px, 1.2vw, 10px) !important;
+        gap: clamp(5px, 1vw, 8px) !important;
+        border-radius: 12px !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    /* Botón de cierre en esquina superior derecha */
+    #registryCloseBtn {
+        top: 4px !important;
+        right: 6px !important;
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 1.15rem !important;
+        z-index: 25020 !important;
+    }
+
+    #registryHeaderIcon {
+        display: none !important;
+    }
+
+    /* Botón DevTools en móvil: compacto en esquina superior derecha */
+    .devSuiteTriggerBtn {
+        top: 8px !important;
+        right: 10px !important;
+        bottom: auto !important;
+        padding: 4px 10px !important;
+        font-size: 0.72rem !important;
+        border-radius: 16px !important;
+    }
+
+    /*--------------------------------------
+    BARRA LATERAL IZQUIERDA (SIDEBAR COMPACTO)
+    --------------------------------------*/
+    #registryNav {
+        width: clamp(52px, 8vw, 64px) !important;
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        gap: clamp(2px, 0.8vh, 5px) !important;
+        margin: 0 !important;
+        margin-bottom: 0 !important;
+        padding: 0 !important;
+        padding-right: 4px !important;
+        border-bottom: none !important;
+        border-right: 1px solid rgba(190, 150, 95, 0.28) !important;
+        flex-shrink: 0 !important;
+    }
+
+    .registryTab {
+        width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 !important;
+        max-height: 64px !important;
+        min-height: 36px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
+        text-align: center !important;
+        gap: 1px !important;
+        padding: 2px 1px !important;
+        border-radius: 8px !important;
+        border: 1px solid transparent !important;
+        cursor: pointer !important;
+    }
+
+    .registryTab.active {
+        color: #fff6df !important;
+        background: linear-gradient(180deg, rgba(255, 205, 120, 0.32), rgba(175, 112, 40, 0.22)) !important;
+        border: 1px solid rgba(255, 225, 165, 0.4) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 0 12px rgba(255, 195, 105, 0.18) !important;
+        transform: none !important;
+    }
+
+    .registryTabIcon {
+        width: clamp(16px, 3.2vh, 22px) !important;
+        height: clamp(16px, 3.2vh, 22px) !important;
+        margin-right: 0 !important;
+        margin-bottom: 1px !important;
+    }
+
+    .registryTabTitle {
+        font-size: clamp(0.58rem, 1.5vh, 0.68rem) !important;
+        font-weight: 600 !important;
+        line-height: 1.05 !important;
+        letter-spacing: 0.01em !important;
+        white-space: nowrap !important;
+    }
+
+    .registryTabShortcut {
+        display: none !important;
+    }
+
+    /*--------------------------------------
+    CONTENEDOR DE CONTENIDO PRINCIPAL (SIN ESPACIO MUERTO A LA DERECHA)
+    --------------------------------------*/
+    #registryContent {
+        flex: 1 !important;
+        min-width: 0 !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        padding-right: 2px !important;
+        gap: 0 !important;
+    }
+
+    #registryHelp {
+        display: none !important;
+    }
+
+    /*--------------------------------------
+    MÓDULO INVENTARIO (V2)
+    --------------------------------------*/
+    #inventoryModule {
+        height: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    #inventoryBody {
+        display: flex !important;
+        flex-direction: row !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        gap: clamp(6px, 1vw, 10px) !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+    }
+
+    #inventoryGridPanel {
+        flex: 4.8 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        padding: clamp(4px, 0.8vh, 8px) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        border-radius: 10px !important;
+    }
+
+    #inventorySlots {
+        display: grid !important;
+        grid-template-columns: repeat(5, 1fr) !important;
+        grid-template-rows: repeat(4, 1fr) !important;
+        gap: clamp(2px, 0.5vh, 4px) !important;
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    .inventoryCell {
+        border-radius: 6px !important;
+    }
+
+    #inventoryInfoPanel {
+        flex: 7.2 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        background: rgba(20, 14, 9, 0.45) !important;
+        border: 1px solid rgba(214, 176, 106, 0.25) !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }
+
+    #inventoryInfoContent {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 100% !important;
+        padding: clamp(6px, 1.2vh, 10px) !important;
+        gap: clamp(4px, 1vh, 8px) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+
+    /* Cabecera en fila: miniatura + título con holgura para el botón ✕ */
+    #inventoryPreviewHeader {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+        width: 100% !important;
+        flex-shrink: 0 !important;
+        border-bottom: 1px solid rgba(214, 176, 106, 0.2) !important;
+        padding-bottom: 5px !important;
+        padding-right: 28px !important;
+        box-sizing: border-box !important;
+    }
+
+    #inventoryPreviewImage {
+        width: clamp(34px, 5.8vh, 44px) !important;
+        height: clamp(34px, 5.8vh, 44px) !important;
+        aspect-ratio: 1 !important;
+        border-radius: 6px !important;
+        flex-shrink: 0 !important;
+    }
+
+    #inventoryPreviewTitle {
+        font-size: clamp(0.82rem, 2.3vh, 1rem) !important;
+        font-weight: 700 !important;
+        line-height: 1.15 !important;
+        color: #ffffff !important;
+        flex: 1 !important;
+        word-break: break-word !important;
+    }
+
+    /* Área de descripción liberada con anchura y altura completa */
+    #inventoryDescription {
+        flex: 1 !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        font-size: clamp(0.78rem, 2.2vh, 0.88rem) !important;
+        line-height: 1.45 !important;
+        color: #d7e3ef !important;
+        padding-right: 4px !important;
+    }
+
+    #inventoryActions {
+        display: flex !important;
+        gap: 8px !important;
+        flex-shrink: 0 !important;
+        margin-top: auto !important;
+        padding-top: 4px !important;
+        border-top: 1px solid rgba(214, 176, 106, 0.15) !important;
+    }
+
+    #inventoryOpenButton,
+    #inventorySaveButton {
+        padding: 4px 12px !important;
+        font-size: 0.78rem !important;
+        min-height: 30px !important;
+        border-radius: 6px !important;
+    }
+
+    /*--------------------------------------
+    MÓDULO DIARIO DE MISIONES
+    --------------------------------------*/
+    #diaryModule {
+        height: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: clamp(4px, 1vh, 8px) clamp(6px, 1vw, 10px) !important;
+        overflow: hidden !important;
+    }
+
+    #diaryPanel {
+        height: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .diaryHeader {
+        margin-bottom: 4px !important;
+        padding-bottom: 3px !important;
+        padding-right: 28px !important;
+        box-sizing: border-box !important;
+        flex-shrink: 0 !important;
+    }
+
+    .diaryTitle {
+        font-size: 0.95rem !important;
+        margin: 0 !important;
+    }
+
+    .diarySubtitle {
+        display: none !important; /* Ahorra 35px críticos */
+    }
+
+    .diaryColumnsWrapper {
+        flex: 1 !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        overflow: hidden !important;
+    }
+
+    .diaryLeftColumn {
+        width: 38% !important;
+        padding: 6px 8px !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .diaryColumnHeader {
+        font-size: 0.7rem !important;
+        margin-bottom: 4px !important;
+        padding-bottom: 3px !important;
+    }
+
+    .diaryListContainer {
+        gap: 4px !important;
+    }
+
+    .diaryListItem {
+        padding: 6px 8px !important;
+        gap: 2px !important;
+        border-radius: 8px !important;
+    }
+
+    .diaryItemTitle {
+        font-size: 0.78rem !important;
+        line-height: 1.2 !important;
+    }
+
+    .diaryMissionBadge {
+        font-size: 0.64rem !important;
+        padding: 1px 5px !important;
+    }
+
+    .diaryRightColumn {
+        width: 62% !important;
+        padding: 8px 12px !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        flex: 1 !important;
+    }
+
+    .diaryDetailCard {
+        gap: 6px !important;
+    }
+
+    .diaryDetailTopRow {
+        padding-bottom: 4px !important;
+    }
+
+    .diaryDetailTitle {
+        font-size: 0.92rem !important;
+    }
+
+    .diaryDetailDesc {
+        font-size: 0.78rem !important;
+        line-height: 1.35 !important;
+    }
+
+    .diaryProgressHeader {
+        font-size: 0.72rem !important;
+        margin-top: 2px !important;
+    }
+
+    .diaryObjectivesList {
+        gap: 4px !important;
+        padding: 6px 8px !important;
+    }
+
+    .diaryObjectiveItem {
+        font-size: 0.76rem !important;
+        line-height: 1.3 !important;
+        gap: 4px !important;
+    }
+
+    /*--------------------------------------
+    MÓDULO ARCHIVO DE DOCUMENTOS
+    --------------------------------------*/
+    #archiveModule {
+        height: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: clamp(4px, 1vh, 8px) clamp(6px, 1vw, 10px) !important;
+        overflow: hidden !important;
+    }
+
+    #archivePanel {
+        height: 100% !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+    }
+
+    .archiveHeader {
+        margin-bottom: 4px !important;
+        padding-bottom: 3px !important;
+        padding-right: 28px !important;
+        box-sizing: border-box !important;
+        flex-shrink: 0 !important;
+    }
+
+    .archiveMainTitle {
+        font-size: 0.95rem !important;
+        margin: 0 !important;
+    }
+
+    .archiveSubtitle {
+        display: none !important;
+    }
+
+    .archiveColumnsWrapper {
+        flex: 1 !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        overflow: hidden !important;
+    }
+
+    .archiveLeftColumn {
+        width: 38% !important;
+        padding: 6px 8px !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .archiveColumnHeader {
+        font-size: 0.7rem !important;
+        margin-bottom: 4px !important;
+        padding-bottom: 3px !important;
+    }
+
+    .archiveRightColumn {
+        width: 62% !important;
+        padding: 8px 12px !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        flex: 1 !important;
+    }
+
+    .archiveDetailCard {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 8px !important;
+        align-items: flex-start !important;
+    }
+
+    .archivePreviewFrame {
+        width: clamp(60px, 12vw, 90px) !important;
+        flex-shrink: 0 !important;
+        border-radius: 6px !important;
+    }
+
+    .archiveDetailInfo {
+        flex: 1 !important;
+        gap: 4px !important;
+    }
+
+    .archiveDetailTitleRow {
+        padding-bottom: 2px !important;
+    }
+
+    .archiveDetailTitle {
+        font-size: 0.88rem !important;
+    }
+
+    .archiveOfficialBadge {
+        font-size: 0.62rem !important;
+        padding: 1px 4px !important;
+    }
+
+    .archiveDetailDesc {
+        font-size: 0.78rem !important;
+        line-height: 1.35 !important;
+        margin: 2px 0 !important;
+    }
+
+    .archiveDetailActions {
+        display: flex !important;
+        gap: 6px !important;
+        margin-top: 4px !important;
+    }
+
+    .archiveBtn {
+        padding: 3px 8px !important;
+        font-size: 0.72rem !important;
+        min-height: 26px !important;
+    }
+
+    /*--------------------------------------
+    MÓDULO AYUDA
+    --------------------------------------*/
+    #helpModule {
+        height: 100% !important;
+        min-height: 0 !important;
+        padding: clamp(8px, 1.4vh, 14px) !important;
+        overflow-y: auto !important;
+    }
+}
+
+/*======================================================
+   DOCUMENT VIEWER (MODAL UNIVERSAL A PANTALLA COMPLETA)
+======================================================*/
+
+.documentViewerOverlay{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    bottom:0;
+    width:100vw;
+    height:100vh;
+    background:rgba(8, 6, 5, 0.92);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    z-index:9999999;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    box-sizing:border-box;
+    padding:clamp(10px, 2.5vw, 24px);
+    animation:fadeInViewer 0.22s ease-out forwards;
+    user-select:none;
+}
+
+@keyframes fadeInViewer {
+    from { opacity:0; transform:scale(0.98); }
+    to { opacity:1; transform:scale(1); }
+}
+
+.documentViewerContainer{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    max-width:96vw;
+    max-height:96vh;
+    width:auto;
+    height:auto;
+    background:rgba(20, 15, 11, 0.96);
+    border:2px solid rgba(214, 176, 106, 0.65);
+    border-radius:14px;
+    box-shadow:0 12px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(214, 176, 106, 0.25);
+    overflow:hidden;
+    position:relative;
+}
+
+.documentViewerHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    width:100%;
+    padding:0.6rem 1.2rem;
+    background:rgba(32, 22, 15, 0.95);
+    border-bottom:1px solid rgba(214, 176, 106, 0.3);
+    box-sizing:border-box;
+    z-index:5;
+}
+
+.documentViewerTitleArea{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.documentViewerTitle{
+    font-size:clamp(0.92rem, 1.6vw, 1.15rem);
+    font-weight:700;
+    color:#f2d08a;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+}
+
+.documentViewerZoomBadge{
+    font-family:monospace, system-ui, sans-serif;
+    font-size:0.75rem;
+    font-weight:700;
+    color:#ffd54f;
+    background:rgba(214, 176, 106, 0.15);
+    border:1px solid rgba(214, 176, 106, 0.35);
+    padding:2px 7px;
+    border-radius:12px;
+}
+
+.documentViewerToolbar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.viewerToolBtn{
+    background:rgba(255, 255, 255, 0.08);
+    border:1px solid rgba(214, 176, 106, 0.35);
+    color:#f2d08a;
+    font-size:1.15rem;
+    font-weight:700;
+    line-height:1;
+    width:36px;
+    height:36px;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition:all 0.15s ease;
+}
+
+.viewerToolBtn:hover{
+    background:rgba(214, 176, 106, 0.3);
+    border-color:#f2d08a;
+    color:#fff;
+    transform:scale(1.05);
+}
+
+.viewerToolBtn:active{
+    transform:scale(0.95);
+}
+
+.viewerResetBtn{
+    font-size:1.25rem;
+}
+
+.documentViewerCloseBtn{
+    background:rgba(239, 68, 68, 0.2);
+    border:1px solid rgba(239, 68, 68, 0.45);
+    color:#fca5a5;
+    font-size:1.75rem;
+    line-height:1;
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    transition:all 0.18s ease;
+    margin-left:4px;
+}
+
+.documentViewerCloseBtn:hover{
+    background:#ef4444;
+    border-color:#ef4444;
+    color:#fff;
+    transform:scale(1.08);
+}
+
+.documentViewerCloseBtn:active{
+    transform:scale(0.92);
+}
+
+.documentViewerFrame{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    padding:clamp(6px, 1.2vw, 14px);
+    background:rgba(0, 0, 0, 0.45);
+    max-height:calc(96vh - 58px);
+    box-sizing:border-box;
+    overflow:hidden;
+    touch-action:none;
+}
+
+.documentViewerImage{
+    max-width:88vw;
+    max-height:calc(92vh - 75px);
+    width:auto;
+    height:auto;
+    object-fit:contain;
+    border-radius:6px;
+    box-shadow:0 4px 24px rgba(0,0,0,0.6);
+    user-select:none;
+    -webkit-user-drag:none;
+    transform-origin:center center;
+    will-change:transform;
+    cursor:zoom-in;
+}
+
+/* =========================================================
+   DOCUMENT VIEWER · RESPONSIVE MÓVIL (PANTALLA COMPLETA 100%)
+   Horizontal (Landscape) y Vertical (Portrait) en smartphones
+   ========================================================= */
+@media (max-width: 900px), (max-height: 560px) {
+    .documentViewerOverlay{
+        padding:0 !important;
+        background:rgba(3, 3, 4, 0.98) !important;
+    }
+
+    .documentViewerContainer{
+        width:100vw !important;
+        height:100vh !important;
+        max-width:100vw !important;
+        max-height:100vh !important;
+        border:none !important;
+        border-radius:0 !important;
+        box-shadow:none !important;
+        background:transparent !important;
+    }
+
+    .documentViewerHeader{
+        position:absolute !important;
+        top:0 !important;
+        left:0 !important;
+        right:0 !important;
+        padding:8px 12px !important;
+        background:linear-gradient(180deg, rgba(12, 9, 6, 0.88) 0%, rgba(12, 9, 6, 0.5) 80%, transparent 100%) !important;
+        border-bottom:none !important;
+        backdrop-filter:blur(8px) !important;
+        -webkit-backdrop-filter:blur(8px) !important;
+    }
+
+    .documentViewerTitle{
+        font-size:0.8rem !important;
+        max-width:38vw !important;
+        white-space:nowrap !important;
+        overflow:hidden !important;
+        text-overflow:ellipsis !important;
+    }
+
+    .documentViewerFrame{
+        width:100vw !important;
+        height:100vh !important;
+        max-height:100vh !important;
+        padding:0 !important;
+        background:transparent !important;
+    }
+
+    .documentViewerImage{
+        max-width:100vw !important;
+        max-height:100vh !important;
+        width:100% !important;
+        height:100% !important;
+        object-fit:contain !important;
+        border-radius:0 !important;
+        box-shadow:none !important;
+    }
+
+    .documentViewerCloseBtn{
+        width:42px !important;
+        height:42px !important;
+        font-size:1.85rem !important;
+        background:rgba(239, 68, 68, 0.3) !important;
+        border-color:rgba(239, 68, 68, 0.6) !important;
+    }
+
+    .viewerToolBtn{
+        width:34px !important;
+        height:34px !important;
+        font-size:1.05rem !important;
+    }
+}
+
+/* Scrollbar estilizada */
+.styledScrollbar::-webkit-scrollbar{
+    width:7px;
+    height:7px;
+}
+.styledScrollbar::-webkit-scrollbar-track{
+    background:rgba(0,0,0,0.25);
+    border-radius:4px;
+}
+.styledScrollbar::-webkit-scrollbar-thumb{
+    background:rgba(214, 176, 106, 0.45);
+    border-radius:4px;
+    transition:background 0.2s ease;
+}
+.styledScrollbar::-webkit-scrollbar-thumb:hover{
+    background:rgba(214, 176, 106, 0.8);
+}
+.styledScrollbar{
+    scrollbar-width:thin;
+    scrollbar-color:rgba(214, 176, 106, 0.45) rgba(0,0,0,0.25);
+}
+
+/*======================================================
+   DIARY MODULE (DISEÑO HORIZONTAL DE 2 COLUMNAS)
+======================================================*/
+
+#diaryModule{
+    width:100%;
+    height:100%;
+    box-sizing:border-box;
+    padding:1rem 1.6rem;
+    color:#f5e6cc;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+}
+
+#diaryPanel{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    width:100%;
+    overflow:hidden;
+}
+
+.diaryHeader{
+    border-bottom:1px solid rgba(214,176,106,0.25);
+    padding-bottom:0.5rem;
+    margin-bottom:0.75rem;
+    flex-shrink:0;
+}
+
+.diaryTitle{
+    margin:0 0 0.2rem 0;
+    font-size:clamp(1.15rem, 2.2vw, 1.45rem);
+    color:#f2d08a;
+    font-weight:700;
+    letter-spacing:0.03em;
+}
+
+.diarySubtitle{
+    margin:0;
+    font-size:clamp(0.78rem, 1.2vw, 0.88rem);
+    color:rgba(255,255,255,0.6);
+}
+
+.diaryColumnsWrapper{
+    display:flex;
+    flex-direction:row;
+    gap:1.2rem;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+}
+
+.diaryLeftColumn{
+    width:38%;
+    display:flex;
+    flex-direction:column;
+    background:rgba(20, 14, 9, 0.4);
+    border:1px solid rgba(214, 176, 106, 0.25);
+    border-radius:12px;
+    padding:0.8rem;
+    min-height:0;
+}
+
+.diaryColumnHeader{
+    font-size:0.8rem;
+    font-weight:700;
+    color:#d6b06a;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-bottom:0.6rem;
+    padding-bottom:0.4rem;
+    border-bottom:1px solid rgba(214, 176, 106, 0.2);
+    flex-shrink:0;
+}
+
+.diaryListContainer{
+    display:flex;
+    flex-direction:column;
+    gap:0.6rem;
+    flex:1;
+    overflow-y:auto;
+    padding-right:0.3rem;
+}
+
+.diaryListItem{
+    background:rgba(30, 20, 12, 0.6);
+    border:1px solid rgba(214, 176, 106, 0.3);
+    border-radius:10px;
+    padding:0.75rem 0.9rem;
+    cursor:pointer;
+    transition:all 0.2s ease;
+    display:flex;
+    flex-direction:column;
+    gap:0.35rem;
+}
+
+.diaryListItem:hover{
+    border-color:rgba(214, 176, 106, 0.7);
+    background:rgba(42, 28, 17, 0.75);
+    transform:translateX(3px);
+}
+
+.diaryListItem.selected{
+    border-color:#d6b06a;
+    background:rgba(52, 34, 19, 0.9);
+    box-shadow:0 0 12px rgba(214, 176, 106, 0.3);
+}
+
+.diaryItemTopRow{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+}
+
+.diaryItemTitle{
+    font-size:clamp(0.85rem, 1.3vw, 0.98rem);
+    color:#fff8e7;
+    font-weight:600;
+    line-height:1.25;
+}
+
+.diaryMissionBadge{
+    padding:0.2rem 0.55rem;
+    border-radius:16px;
+    font-size:0.7rem;
+    font-weight:700;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+}
+
+.diaryMissionBadge.active{
+    background:rgba(255, 215, 79, 0.2);
+    color:#ffd54f;
+    border:1px solid rgba(255, 215, 79, 0.6);
+    box-shadow:0 0 8px rgba(255, 215, 79, 0.3);
+}
+
+.diaryMissionBadge.completed{
+    background:rgba(46, 204, 113, 0.2);
+    color:#2ecc71;
+    border:1px solid rgba(46, 204, 113, 0.6);
+}
+
+/* Columna Derecha: Detalle */
+.diaryRightColumn{
+    width:62%;
+    display:flex;
+    flex-direction:column;
+    background:rgba(20, 14, 9, 0.55);
+    border:1px solid rgba(214, 176, 106, 0.3);
+    border-radius:12px;
+    padding:1rem 1.2rem;
+    overflow-y:auto;
+    min-height:0;
+}
+
+.diaryDetailCard{
+    display:flex;
+    flex-direction:column;
+    gap:0.75rem;
+}
+
+.diaryDetailTopRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:0.8rem;
+    border-bottom:1px solid rgba(214, 176, 106, 0.25);
+    padding-bottom:0.6rem;
+}
+
+.diaryDetailTitle{
+    margin:0;
+    font-size:clamp(1rem, 1.8vw, 1.3rem);
+    color:#fff8e7;
+    font-weight:700;
+}
+
+.diaryDetailDesc{
+    margin:0;
+    font-size:clamp(0.82rem, 1.3vw, 0.92rem);
+    color:rgba(255,255,255,0.8);
+    line-height:1.45;
+}
+
+.diaryProgressHeader{
+    font-size:0.82rem;
+    font-weight:700;
+    color:#d6b06a;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    margin-top:0.3rem;
+}
+
+.diaryObjectivesList{
+    display:flex;
+    flex-direction:column;
+    gap:0.55rem;
+    background:rgba(0,0,0,0.3);
+    padding:0.75rem 0.9rem;
+    border-radius:10px;
+    border-left:3px solid #d6b06a;
+}
+
+.diaryObjectiveItem{
+    display:flex;
+    align-items:flex-start;
+    gap:0.6rem;
+    font-size:clamp(0.82rem, 1.3vw, 0.92rem);
+    line-height:1.35;
+}
+
+.diaryObjectiveItem.completed{
+    color:#a8e6cf;
+}
+
+.diaryObjectiveItem.active{
+    color:#ffe082;
+    font-weight:600;
+}
+
+.diaryObjectiveItem.locked{
+    color:rgba(255,255,255,0.38);
+}
+
+.diaryObjectiveStatus{
+    font-size:0.95rem;
+    flex-shrink:0;
+    line-height:1.2;
+}
+
+.diaryObjectiveContent{
+    flex:1;
+}
+
+.diaryObjectiveText{
+    color:inherit;
+}
+
+.diaryEmptyCard{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    margin:auto;
+    padding:2.5rem 1.5rem;
+    gap:0.6rem;
+    color:rgba(255,255,255,0.5);
+}
+
+.diaryEmptyIcon{
+    font-size:2.5rem;
+}
+
+.diaryEmptyTitle{
+    font-size:1.15rem;
+    color:#f2d08a;
+    font-weight:600;
+}
+
+.diaryEmptyText{
+    font-size:0.9rem;
+    max-width:380px;
+    line-height:1.4;
+}
+
+/*======================================================
+   ARCHIVE MODULE (DISEÑO HORIZONTAL DE 2 COLUMNAS)
+======================================================*/
+
+#archiveModule{
+    width:100%;
+    height:100%;
+    box-sizing:border-box;
+    padding:1rem 1.6rem;
+    color:#f5e6cc;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+}
+
+#archivePanel{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    width:100%;
+    overflow:hidden;
+}
+
+.archiveHeader{
+    border-bottom:1px solid rgba(214,176,106,0.25);
+    padding-bottom:0.5rem;
+    margin-bottom:0.75rem;
+    flex-shrink:0;
+}
+
+.archiveMainTitle{
+    margin:0 0 0.2rem 0;
+    font-size:clamp(1.15rem, 2.2vw, 1.45rem);
+    color:#f2d08a;
+    font-weight:700;
+    letter-spacing:0.03em;
+}
+
+.archiveSubtitle{
+    margin:0;
+    font-size:clamp(0.78rem, 1.2vw, 0.88rem);
+    color:rgba(255,255,255,0.6);
+}
+
+.archiveColumnsWrapper{
+    display:flex;
+    flex-direction:row;
+    gap:1.2rem;
+    flex:1;
+    min-height:0;
+    overflow:hidden;
+}
+
+.archiveLeftColumn{
+    width:38%;
+    display:flex;
+    flex-direction:column;
+    background:rgba(20, 14, 9, 0.4);
+    border:1px solid rgba(214, 176, 106, 0.25);
+    border-radius:12px;
+    padding:0.8rem;
+    min-height:0;
+}
+
+.archiveColumnHeader{
+    font-size:0.8rem;
+    font-weight:700;
+    color:#d6b06a;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-bottom:0.6rem;
+    padding-bottom:0.4rem;
+    border-bottom:1px solid rgba(214, 176, 106, 0.2);
+    flex-shrink:0;
+}
+
+.archiveListContainer{
+    display:flex;
+    flex-direction:column;
+    gap:0.6rem;
+    flex:1;
+    overflow-y:auto;
+    padding-right:0.3rem;
+}
+
+.archiveListItem{
+    display:flex;
+    align-items:center;
+    gap:0.75rem;
+    background:rgba(30, 20, 12, 0.6);
+    border:1px solid rgba(214, 176, 106, 0.3);
+    border-radius:10px;
+    padding:0.55rem 0.75rem;
+    cursor:pointer;
+    transition:all 0.2s ease;
+}
+
+.archiveListItem:hover{
+    border-color:rgba(214, 176, 106, 0.7);
+    background:rgba(42, 28, 17, 0.75);
+    transform:translateX(3px);
+}
+
+.archiveListItem.selected{
+    border-color:#d6b06a;
+    background:rgba(52, 34, 19, 0.9);
+    box-shadow:0 0 12px rgba(214, 176, 106, 0.3);
+}
+
+.archiveItemThumb{
+    width:48px;
+    height:36px;
+    object-fit:cover;
+    border-radius:5px;
+    border:1px solid rgba(214, 176, 106, 0.4);
+    flex-shrink:0;
+}
+
+.archiveItemMeta{
+    display:flex;
+    flex-direction:column;
+    gap:0.2rem;
+    overflow:hidden;
+}
+
+.archiveItemTitle{
+    font-size:clamp(0.85rem, 1.3vw, 0.95rem);
+    color:#fff8e7;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.archiveItemBadge{
+    align-self:flex-start;
+    padding:0.15rem 0.45rem;
+    border-radius:12px;
+    font-size:0.65rem;
+    background:rgba(46, 204, 113, 0.2);
+    color:#2ecc71;
+    border:1px solid rgba(46, 204, 113, 0.5);
+    font-weight:600;
+}
+
+/* Columna Derecha: Detalle de Archivo */
+.archiveRightColumn{
+    width:62%;
+    display:flex;
+    flex-direction:column;
+    background:rgba(20, 14, 9, 0.55);
+    border:1px solid rgba(214, 176, 106, 0.3);
+    border-radius:12px;
+    padding:1rem 1.2rem;
+    overflow-y:auto;
+    min-height:0;
+}
+
+.archiveDetailCard{
+    display:flex;
+    flex-direction:row;
+    gap:1.2rem;
+    align-items:flex-start;
+}
+
+.archivePreviewFrame{
+    width:42%;
+    flex-shrink:0;
+    border:2px solid rgba(214, 176, 106, 0.5);
+    border-radius:10px;
+    overflow:hidden;
+    background:rgba(0,0,0,0.4);
+    box-shadow:0 6px 18px rgba(0,0,0,0.5);
+    cursor:pointer;
+    transition:transform 0.25s ease, border-color 0.25s ease;
+}
+
+.archivePreviewFrame:hover{
+    transform:scale(1.02);
+    border-color:#d6b06a;
+}
+
+.archivePreviewImage{
+    width:100%;
+    height:auto;
+    display:block;
+    object-fit:contain;
+}
+
+.archiveDetailInfo{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    gap:0.75rem;
+}
+
+.archiveDetailTitleRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:0.6rem;
+    border-bottom:1px solid rgba(214, 176, 106, 0.2);
+    padding-bottom:0.5rem;
+}
+
+.archiveDetailTitle{
+    margin:0;
+    font-size:clamp(1rem, 1.8vw, 1.25rem);
+    color:#fff8e7;
+    font-weight:700;
+}
+
+.archiveOfficialBadge{
+    padding:0.2rem 0.5rem;
+    border-radius:14px;
+    font-size:0.68rem;
+    font-weight:700;
+    letter-spacing:0.04em;
+    background:rgba(214, 176, 106, 0.2);
+    color:#ffd54f;
+    border:1px solid rgba(214, 176, 106, 0.6);
+    text-transform:uppercase;
+}
+
+.archiveDetailDesc{
+    margin:0;
+    font-size:clamp(0.82rem, 1.3vw, 0.92rem);
+    color:rgba(255,255,255,0.85);
+    line-height:1.45;
+}
+
+.archiveDetailActions{
+    display:flex;
+    align-items:center;
+    gap:0.8rem;
+    margin-top:0.4rem;
+}
+
+.archiveBtn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:0.4rem;
+    padding:0.55rem 1.1rem;
+    border-radius:8px;
+    font-size:0.88rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s ease;
+    border:none;
+}
+
+.archiveBtnOpen{
+    background:#2e7d32;
+    color:#ffffff;
+    border:1px solid #4caf50;
+    box-shadow:0 3px 8px rgba(46, 125, 50, 0.4);
+}
+
+.archiveBtnOpen:hover{
+    background:#388e3c;
+    transform:translateY(-2px);
+    box-shadow:0 5px 12px rgba(46, 125, 50, 0.6);
+}
+
+.archiveBtnDownload{
+    background:#d6b06a;
+    color:#1a1209;
+    border:1px solid #f2d08a;
+    box-shadow:0 3px 8px rgba(214, 176, 106, 0.35);
+}
+
+.archiveBtnDownload:hover{
+    background:#f2d08a;
+    transform:translateY(-2px);
+    box-shadow:0 5px 12px rgba(214, 176, 106, 0.6);
+}
+
+/* Aviso de inventario */
+.inventoryNotice{
+    margin-top:0.6rem;
+    padding:0.5rem 0.8rem;
+    background:rgba(30, 20, 10, 0.8);
+    border:1px solid #d6b06a;
+    border-radius:8px;
+    color:#ffd54f;
+    font-size:0.82rem;
+    text-align:center;
+    line-height:1.35;
+    opacity:0;
+    transition:opacity 0.3s ease;
+    pointer-events:none;
+}
+
+.archiveEmptyState{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    margin:auto;
+    padding:2.5rem 1.5rem;
+    gap:0.75rem;
+    color:rgba(255,255,255,0.55);
+}
+
+.archiveEmptyIcon{
+    font-size:2.8rem;
+    opacity:0.8;
+}
+
+.archiveEmptyTitle{
+    font-size:1.15rem;
+    color:#f2d08a;
+    font-weight:600;
+}
+
+.archiveEmptyText{
+    font-size:0.9rem;
+    max-width:420px;
+    line-height:1.45;
+}
+
+/*======================================================
+   ITEM OBTAINED BANNER (OPCIÓN A)
+======================================================*/
+
+.itemObtainedBanner{
+    position:fixed;
+    top:16px;
+    left:50%;
+    transform:translateX(-50%) translateY(-35px);
+    display:none;
+    align-items:center;
+    gap:14px;
+    background:rgba(20, 14, 9, 0.94);
+    border:1.5px solid rgba(214, 176, 106, 0.85);
+    border-radius:12px;
+    padding:8px 16px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.7), 0 0 20px rgba(214, 176, 106, 0.35);
+    z-index:999999;
+    opacity:0;
+    pointer-events:auto;
+    cursor:pointer;
+    transition:transform 0.35s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.35s ease;
+    max-width:90vw;
+    box-sizing:border-box;
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+}
+
+.itemObtainedBanner.visible{
+    transform:translateX(-50%) translateY(0);
+    opacity:1;
+}
+
+.itemObtainedBanner.exit{
+    transform:translateX(-50%) translateY(-30px);
+    opacity:0;
+}
+
+.itemObtainedThumbFrame{
+    width:52px;
+    height:38px;
+    border-radius:6px;
+    overflow:hidden;
+    border:1.5px solid rgba(214, 176, 106, 0.7);
+    box-shadow:0 0 10px rgba(214, 176, 106, 0.4);
+    flex-shrink:0;
+    background:#000;
+}
+
+.itemObtainedThumb{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+}
+
+.itemObtainedContent{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+}
+
+.itemObtainedHeaderTitle{
+    font-size:clamp(0.68rem, 1.1vw, 0.78rem);
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:#ffd54f;
+    line-height:1.2;
+}
+
+.itemObtainedItemName{
+    font-size:clamp(0.88rem, 1.4vw, 1.05rem);
+    font-weight:700;
+    color:#ffffff;
+    line-height:1.2;
+    text-shadow:0 1px 4px rgba(0,0,0,0.6);
+}
+
+.itemObtainedSubtitle{
+    font-size:clamp(0.68rem, 1.1vw, 0.78rem);
+    color:#a8e6cf;
+    font-weight:500;
+    line-height:1.2;
+}
+
+.itemObtainedClose{
+    background:transparent;
+    border:none;
+    color:rgba(214, 176, 106, 0.7);
+    font-size:1.4rem;
+    line-height:1;
+    margin-left:4px;
+    cursor:pointer;
+    padding:2px 6px;
+    transition:color 0.2s ease, transform 0.2s ease;
+}
+
+.itemObtainedClose:hover{
+    color:#ffd54f;
+    transform:scale(1.15);
+}
+
+/*======================================================
+   DEVELOPER SUITE (DEV PANEL & TOOLS)
+======================================================*/
+
+.devSuiteTriggerBtn{
+    position:fixed;
+    top:12px;
+    right:14px;
+    bottom:auto;
+    z-index:99998;
+    background:rgba(20, 24, 20, 0.85);
+    color:#d4af37;
+    border:1px solid rgba(212, 175, 55, 0.6);
+    border-radius:20px;
+    padding:6px 14px;
+    font-size:0.78rem;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,0.5);
+    backdrop-filter:blur(6px);
+    transition:all 0.2s ease;
+    user-select:none;
+}
+
+.devSuiteTriggerBtn:hover{
+    background:rgba(30, 40, 30, 0.95);
+    color:#fff;
+    border-color:#ffd54f;
+    transform:scale(1.05);
+}
+
+/* Ocultar botón DevTools durante diálogos, cinemáticas y cuando el registro esté abierto */
+body.in-dialogue .devSuiteTriggerBtn,
+body.in-cinematic .devSuiteTriggerBtn,
+body.registry-open .devSuiteTriggerBtn,
+.dialogue.active-dialogue ~ .devSuiteTriggerBtn,
+.dialogue-stage-overlay.visible ~ .devSuiteTriggerBtn {
+    opacity:0 !important;
+    pointer-events:none !important;
+    display:none !important;
+}
+
+.devSuiteOverlay{
+    position:fixed;
+    inset:0;
+    background:rgba(8, 10, 8, 0.88);
+    backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px);
+    z-index:1000000;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    box-sizing:border-box;
+}
+
+.devSuiteCard{
+    display:flex;
+    flex-direction:column;
+    width:92vw;
+    max-width:1050px;
+    height:88vh;
+    max-height:760px;
+    background:rgba(22, 28, 24, 0.98);
+    border:2px solid rgba(212, 175, 55, 0.7);
+    border-radius:14px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.85), 0 0 24px rgba(46, 204, 113, 0.2);
+    overflow:hidden;
+    position:relative;
+}
+
+.devSuiteHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 20px;
+    background:rgba(14, 18, 15, 0.95);
+    border-bottom:1px solid rgba(212, 175, 55, 0.3);
+}
+
+.devSuiteBrand{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.devSuiteIcon{
+    font-size:1.6rem;
+}
+
+.devSuiteTitle{
+    font-size:1.05rem;
+    font-weight:800;
+    color:#ffd54f;
+    letter-spacing:0.04em;
+}
+
+.devSuiteSubtitle{
+    font-size:0.75rem;
+    color:rgba(255,255,255,0.6);
+}
+
+.devModeBadge{
+    background:rgba(46, 204, 113, 0.2);
+    color:#2ecc71;
+    border:1px solid rgba(46, 204, 113, 0.6);
+    padding:3px 10px;
+    border-radius:12px;
+    font-size:0.7rem;
+    font-weight:800;
+    letter-spacing:0.06em;
+}
+
+.devCloseBtn{
+    background:transparent;
+    border:none;
+    color:#d4af37;
+    font-size:1.8rem;
+    line-height:1;
+    cursor:pointer;
+    padding:2px 8px;
+    transition:color 0.2s, transform 0.2s;
+}
+
+.devCloseBtn:hover{
+    color:#fff;
+    transform:scale(1.2);
+}
+
+.devSuiteTabs{
+    display:flex;
+    background:rgba(18, 22, 19, 0.95);
+    border-bottom:1px solid rgba(212, 175, 55, 0.25);
+    padding:0 16px;
+    gap:6px;
+}
+
+.devTabBtn{
+    padding:10px 18px;
+    background:transparent;
+    border:none;
+    border-bottom:3px solid transparent;
+    color:rgba(255,255,255,0.65);
+    font-size:0.85rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s ease;
+}
+
+.devTabBtn:hover{
+    color:#fff;
+}
+
+.devTabBtn.active{
+    color:#ffd54f;
+    border-bottom-color:#ffd54f;
+    background:rgba(255, 215, 79, 0.08);
+}
+
+.devSuiteContent{
+    flex:1;
+    overflow-y:auto;
+    padding:16px 20px;
+    color:#e0e8e4;
+}
+
+/* PESTAÑA MISIONES */
+.devSectionIntro{
+    background:rgba(46, 204, 113, 0.08);
+    border-left:3px solid #2ecc71;
+    padding:10px 14px;
+    border-radius:6px;
+    font-size:0.82rem;
+    line-height:1.45;
+    margin-bottom:14px;
+    color:#d4f4e2;
+}
+
+.devPresetList{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.devPresetCard{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:rgba(16, 22, 18, 0.85);
+    border:1px solid rgba(212, 175, 55, 0.3);
+    border-radius:10px;
+    padding:12px 16px;
+    gap:14px;
+    transition:border-color 0.2s;
+}
+
+.devPresetCard:hover{
+    border-color:rgba(212, 175, 55, 0.7);
+    background:rgba(22, 32, 26, 0.95);
+}
+
+.devPresetName{
+    font-size:0.95rem;
+    font-weight:700;
+    color:#fff8e7;
+    margin-bottom:3px;
+}
+
+.devPresetDesc{
+    font-size:0.8rem;
+    color:rgba(255,255,255,0.65);
+    line-height:1.35;
+}
+
+.devActionBtn{
+    background:#2e7d32;
+    color:#fff;
+    border:1px solid #4caf50;
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:0.82rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s ease;
+    white-space:normal;
+    word-break:break-word;
+    text-align:center;
+    line-height:1.25;
+    min-height:42px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-sizing:border-box;
+}
+
+.devActionBtn:hover{
+    background:#388e3c;
+    transform:translateY(-1px);
+}
+
+.devActionBtn.primary{
+    background:#0284c7;
+    border-color:#38bdf8;
+    color:#fff;
+}
+.devActionBtn.primary:hover{
+    background:#0369a1;
+}
+
+.devActionBtn.danger{
+    background:#991b1b;
+    border-color:#ef4444;
+    color:#fff;
+}
+.devActionBtn.danger:hover{
+    background:#b91c1c;
+}
+
+.devActionBtn.warning{
+    background:#b45309;
+    border-color:#f59e0b;
+    color:#fff;
+}
+.devActionBtn.warning:hover{
+    background:#d97706;
+}
+
+.devDangerBtn{
+    background:#c0392b;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:7px 14px;
+    font-size:0.82rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s;
+}
+
+.devDangerBtn:hover{
+    background:#e74c3c;
+}
+
+/* PESTAÑA ACOPLE 3D */
+.devEquipWrapper{
+    display:flex;
+    gap:16px;
+    height:100%;
+    min-height:480px;
+}
+
+.devEquipLeft{
+    width:44%;
+    display:flex;
+    flex-direction:column;
+    background:rgba(14, 18, 15, 0.6);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:10px;
+    padding:12px 14px;
+    overflow-y:auto;
+    max-height:calc(88vh - 130px);
+}
+
+.devEquipRight{
+    width:56%;
+    display:flex;
+    flex-direction:column;
+    height:100%;
+    min-height:460px;
+}
+
+.devViewportFrame{
+    flex:1;
+    position:relative;
+    border-radius:10px;
+    overflow:hidden;
+    border:1.5px solid rgba(212, 175, 55, 0.5);
+    background:radial-gradient(circle at center, #132219 0%, #080c09 100%);
+    box-shadow:inset 0 0 30px rgba(0,0,0,0.8), 0 4px 18px rgba(0,0,0,0.6);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:440px;
+}
+
+#devEquipment3DCanvas{
+    width:100% !important;
+    height:100% !important;
+    display:block;
+    touch-action:none;
+    cursor:grab;
+}
+
+#devEquipment3DCanvas:active{
+    cursor:grabbing;
+}
+
+.devViewportTopBar{
+    position:absolute;
+    top:10px;
+    left:10px;
+    right:10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    pointer-events:none;
+    z-index:10;
+    gap:8px;
+}
+
+.devViewportHint{
+    background:rgba(14, 20, 16, 0.88);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    border-radius:16px;
+    padding:4px 12px;
+    font-size:0.70rem;
+    color:#ffd54f;
+    pointer-events:none;
+    white-space:nowrap;
+    backdrop-filter:blur(4px);
+    box-shadow:0 2px 8px rgba(0,0,0,0.5);
+    text-overflow:ellipsis;
+    overflow:hidden;
+}
+
+.devZoomQuickBtns{
+    display:flex;
+    gap:4px;
+    pointer-events:auto;
+}
+
+.devQuickZoomBtn{
+    background:rgba(14, 20, 16, 0.9);
+    border:1px solid rgba(212, 175, 55, 0.5);
+    color:#ffd54f;
+    border-radius:6px;
+    padding:3px 9px;
+    font-size:0.75rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.15s;
+    box-shadow:0 2px 6px rgba(0,0,0,0.5);
+}
+
+.devQuickZoomBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+    border-color:#ffd54f;
+    transform:scale(1.05);
+}
+
+.dev3DLoading{
+    position:absolute;
+    color:#ffd54f;
+    font-size:0.85rem;
+    font-weight:700;
+    z-index:5;
+    pointer-events:none;
+    text-shadow:0 1px 4px rgba(0,0,0,0.8);
+}
+
+.devSectionTitle{
+    font-size:0.82rem;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:#ffd54f;
+    margin-bottom:8px;
+}
+
+.devButtonGroup{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+}
+
+.devBtn{
+    flex:1;
+    min-width:90px;
+    padding:8px 8px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(212, 175, 55, 0.3);
+    border-radius:8px;
+    color:#e0e8e4;
+    font-size:0.78rem;
+    font-weight:600;
+    cursor:pointer;
+    transition:all 0.2s;
+    text-align:center;
+}
+
+.devBtn.active{
+    background:#d4af37;
+    color:#121814;
+    border-color:#ffd54f;
+    font-weight:800;
+}
+
+.devItemGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(100px, 1fr));
+    gap:8px;
+}
+
+.devItemBtn{
+    padding:8px 6px;
+    background:rgba(30, 42, 34, 0.7);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    border-radius:8px;
+    color:#fff8e7;
+    font-size:0.78rem;
+    font-weight:600;
+    cursor:pointer;
+    transition:all 0.2s;
+    text-align:center;
+}
+
+.devItemBtn:hover{
+    background:#2e7d32;
+    border-color:#4caf50;
+    transform:translateY(-2px);
+}
+
+.devItemBtn.activeItem{
+    background:#2e7d32 !important;
+    border-color:#4caf50 !important;
+    color:#fff !important;
+    box-shadow:0 0 10px rgba(46, 204, 113, 0.4);
+    font-weight:700;
+}
+
+.devSliders{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+}
+
+.sliderSubHeader{
+    font-size:0.75rem;
+    font-weight:700;
+    color:#e0e8e4;
+    padding-bottom:2px;
+    border-bottom:1px solid rgba(212, 175, 55, 0.2);
+}
+
+.sliderGroup{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+}
+
+.sliderGroup label{
+    font-size:0.73rem;
+    color:#bdc3c7;
+    display:flex;
+    justify-content:space-between;
+}
+
+.sliderGroup input[type="range"]{
+    accent-color:#ffd54f;
+    cursor:pointer;
+    width:100%;
+}
+
+.scaleToggleWrap{
+    display:flex;
+    align-items:center;
+}
+
+.scaleToggleLabel{
+    font-size:0.72rem;
+    color:#d4af37;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:4px;
+}
+
+.scaleToggleLabel input[type="checkbox"]{
+    accent-color:#2ecc71;
+    cursor:pointer;
+}
+
+.scalePresetRow{
+    display:flex;
+    gap:4px;
+    flex-wrap:wrap;
+    margin-top:4px;
+}
+
+.scalePresetBtn{
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(212, 175, 55, 0.3);
+    border-radius:6px;
+    color:#cbd5e1;
+    font-size:0.70rem;
+    font-weight:600;
+    padding:3px 6px;
+    cursor:pointer;
+    transition:all 0.15s;
+    flex:1;
+    text-align:center;
+    min-width:38px;
+}
+
+.scalePresetBtn:hover{
+    background:rgba(212, 175, 55, 0.2);
+    border-color:#ffd54f;
+    color:#fff;
+}
+
+.scalePresetBtn.activeScale{
+    background:#2e7d32;
+    border-color:#4caf50;
+    color:#fff;
+    font-weight:700;
+}
+
+.devSmallBtn{
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    border-radius:6px;
+    color:#ffd54f;
+    font-size:0.68rem;
+    font-weight:700;
+    padding:2px 8px;
+    cursor:pointer;
+    transition:all 0.15s;
+}
+
+.devSmallBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.devCamPresetGroup{
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:6px;
+}
+
+.devCamBtn{
+    background:rgba(30, 42, 34, 0.8);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    border-radius:7px;
+    color:#f1f5f9;
+    font-size:0.74rem;
+    font-weight:600;
+    padding:6px 6px;
+    cursor:pointer;
+    transition:all 0.15s;
+    text-align:center;
+}
+
+.devCamBtn:hover{
+    background:rgba(212, 175, 55, 0.25);
+    border-color:#ffd54f;
+}
+
+.devCamBtn.activeCam{
+    background:#d4af37;
+    color:#0e1410;
+    border-color:#ffd54f;
+    font-weight:800;
+}
+
+.devSecondaryBtn{
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    border-radius:8px;
+    color:#ffd54f;
+    font-size:0.76rem;
+    font-weight:700;
+    padding:6px 12px;
+    cursor:pointer;
+    transition:all 0.15s;
+    text-align:center;
+}
+
+.devSecondaryBtn:hover{
+    background:rgba(212, 175, 55, 0.2);
+}
+
+.devSecondaryBtn.btnPaused{
+    background:#e67e22;
+    border-color:#f39c12;
+    color:#fff;
+}
+
+.devCopyBox{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.devCopyMsg{
+    font-size:0.72rem;
+    color:#2ecc71;
+    font-weight:700;
+    min-height:16px;
+    margin-top:3px;
+}
+
+/* PESTAÑA GESTOR DE SLOTS */
+.devSlotGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+    gap:14px;
+}
+
+.devSlotCard{
+    display:flex;
+    flex-direction:column;
+    background:rgba(14, 20, 16, 0.85);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    border-radius:10px;
+    padding:12px;
+    gap:8px;
+}
+
+.devSlotHeader{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+}
+
+.devSlotBadge{
+    align-self:flex-start;
+    background:#d4af37;
+    color:#0e1410;
+    font-size:0.65rem;
+    font-weight:800;
+    padding:2px 6px;
+    border-radius:6px;
+}
+
+.devSlotTitle{
+    margin:0;
+    font-size:0.88rem;
+    color:#fff8e7;
+    font-weight:700;
+}
+
+.devSlotDesc{
+    margin:0;
+    font-size:0.75rem;
+    color:rgba(255,255,255,0.65);
+    line-height:1.3;
+}
+
+.devSlotPreviewFrame{
+    height:110px;
+    border-radius:8px;
+    border:1px solid rgba(212, 175, 55, 0.4);
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#080c09;
+}
+
+.devSlotPreviewFrame img{
+    max-width:100%;
+    max-height:100%;
+    object-fit:contain;
+}
+
+.devSlotPreviewFrame.checkerBg{
+    background:repeating-conic-gradient(#111 0% 25%, #222 0% 50%) 50% / 16px 16px;
+}
+
+.devSlotMeta{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    font-size:0.7rem;
+    color:#a0b0a8;
+}
+
+.devSlotMeta code{
+    color:#ffd54f;
+    font-size:0.65rem;
+}
+
+.devFileBtn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    background:rgba(212, 175, 55, 0.15);
+    border:1px solid rgba(212, 175, 55, 0.6);
+    color:#ffd54f;
+    border-radius:8px;
+    padding:8px 12px;
+    font-size:0.78rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s;
+    text-align:center;
+}
+
+.devFileBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.devSlotInputs{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+}
+
+.devInputText, .devTextarea, .devSelect{
+    background:rgba(0,0,0,0.5);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    border-radius:6px;
+    padding:6px 10px;
+    color:#fff;
+    font-size:0.78rem;
+}
+
+.devTextarea{
+    height:50px;
+    resize:none;
+}
+
+.devStatusMsg{
+    font-size:0.75rem;
+    line-height:1.3;
+}
+.devStatusMsg.success{ color:#2ecc71; }
+.devStatusMsg.error{ color:#e74c3c; }
+
+.devToast{
+    position:absolute;
+    bottom:14px;
+    left:50%;
+    transform:translateX(-50%) translateY(30px);
+    background:rgba(20, 28, 22, 0.95);
+    border:1.5px solid #2ecc71;
+    color:#a3f7c4;
+    padding:8px 18px;
+    border-radius:8px;
+    font-size:0.85rem;
+    font-weight:700;
+    box-shadow:0 6px 20px rgba(0,0,0,0.7);
+    opacity:0;
+    pointer-events:none;
+    transition:all 0.25s ease;
+}
+
+.devToast.visible, .devToast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+}
+
+/* ======================================================
+   PESTAÑA GENERADOR 3D CON THREE.JS Y PROMPTS
+   ====================================================== */
+.devGenWrapper{
+    display:flex;
+    gap:16px;
+    height:100%;
+    min-height:540px;
+}
+
+.devGenLeft{
+    width:48%;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    padding-right:6px;
+    overflow-y:auto;
+}
+
+.devGenRight{
+    width:52%;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+}
+
+.devPromptWrap{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    background:rgba(14, 20, 16, 0.6);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:10px;
+    padding:10px;
+}
+
+.devPromptTextarea{
+    width:100%;
+    height:64px;
+    background:rgba(0, 0, 0, 0.6);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    border-radius:8px;
+    padding:8px 10px;
+    color:#fff8e7;
+    font-size:0.8rem;
+    font-family:inherit;
+    resize:none;
+    line-height:1.4;
+    transition:border-color 0.2s, box-shadow 0.2s;
+}
+
+.devPromptTextarea:focus{
+    outline:none;
+    border-color:#d4af37;
+    box-shadow:0 0 8px rgba(212, 175, 55, 0.3);
+}
+
+.devPromptChips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+    margin-top:2px;
+}
+
+.devChipBtn{
+    background:rgba(212, 175, 55, 0.12);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    color:#e0e8e4;
+    border-radius:12px;
+    padding:3px 8px;
+    font-size:0.7rem;
+    cursor:pointer;
+    transition:all 0.15s ease;
+    white-space:nowrap;
+}
+
+.devChipBtn:hover{
+    background:rgba(212, 175, 55, 0.35);
+    border-color:#d4af37;
+    color:#fff;
+    transform:translateY(-1px);
+}
+
+.devPropGrid{
+    display:flex;
+    gap:8px;
+    background:rgba(14, 20, 16, 0.5);
+    border:1px solid rgba(255, 255, 255, 0.1);
+    border-radius:8px;
+    padding:8px;
+}
+
+.devPropField{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    flex:1;
+}
+
+.devPropField label{
+    font-size:0.7rem;
+    color:rgba(255, 255, 255, 0.6);
+    font-weight:600;
+}
+
+.devTextInput, .devSelectInput{
+    background:rgba(0, 0, 0, 0.5);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    border-radius:6px;
+    padding:5px 8px;
+    color:#fff;
+    font-size:0.78rem;
+    outline:none;
+}
+
+.devTextInput:focus, .devSelectInput:focus{
+    border-color:#d4af37;
+}
+
+.devCodeEditorWrap{
+    display:flex;
+    flex-direction:column;
+    border:1px solid rgba(212, 175, 55, 0.35);
+    border-radius:8px;
+    background:#080d0a;
+    overflow:hidden;
+}
+
+.devCodeTextarea{
+    width:100%;
+    height:180px;
+    background:transparent;
+    border:none;
+    padding:10px;
+    color:#86efac;
+    font-family:'Courier New', Courier, monospace, 'Fira Code';
+    font-size:0.75rem;
+    line-height:1.45;
+    resize:vertical;
+    outline:none;
+    tab-size:2;
+}
+
+.devCompileStatus{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 10px;
+    background:rgba(0, 0, 0, 0.4);
+    border:1px solid rgba(255, 255, 255, 0.08);
+    border-radius:6px;
+    font-size:0.72rem;
+}
+
+.devMetricsBadge{
+    margin-left:auto;
+    font-size:0.68rem;
+    color:#9ca3af;
+    background:rgba(255, 255, 255, 0.08);
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.devSaveActionsBar{
+    display:flex;
+    gap:8px;
+    margin-top:4px;
+}
+
+.devSaveBtn{
+    flex:1;
+    background:#d4af37;
+    color:#0e1410;
+    border:none;
+    border-radius:8px;
+    padding:8px 14px;
+    font-size:0.82rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s ease;
+}
+
+.devSaveBtn:hover{
+    background:#e5c158;
+    transform:translateY(-1px);
+    box-shadow:0 4px 12px rgba(212, 175, 55, 0.35);
+}
+
+/* 3D VIEWPORT STUDIO */
+.devGenViewportWrap{
+    position:relative;
+    width:100%;
+    height:300px;
+    background:#080d0a;
+    border:1.5px solid rgba(212, 175, 55, 0.4);
+    border-radius:12px;
+    overflow:hidden;
+    box-shadow:inset 0 0 30px rgba(0, 0, 0, 0.8);
+}
+
+.devGenCanvasContainer{
+    width:100%;
+    height:100%;
+    position:relative;
+}
+
+.devGenCanvasContainer canvas{
+    width:100% !important;
+    height:100% !important;
+    display:block;
+}
+
+.devTopLeftTools, .devTopRightTools{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    pointer-events:auto;
+}
+
+.devViewportBadge{
+    background:rgba(14, 20, 16, 0.9);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    border-radius:12px;
+    padding:3px 10px;
+    font-size:0.72rem;
+    font-weight:700;
+    color:#d4af37;
+}
+
+.devCamBtn.activeCam{
+    background:#2e7d32;
+    border-color:#4caf50;
+    color:#fff;
+}
+
+/* BANDEJA DE BIBLIOTECA */
+.devLibrarySection{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    background:rgba(14, 20, 16, 0.7);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:10px;
+    padding:10px;
+    max-height:220px;
+    overflow-y:auto;
+}
+
+.devLibraryHeader{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+.devLibraryTools{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.devLibraryGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+    gap:8px;
+    margin-top:4px;
+}
+
+.devLibCard{
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    background:rgba(20, 28, 22, 0.85);
+    border:1px solid rgba(212, 175, 55, 0.2);
+    border-radius:8px;
+    padding:8px 10px;
+    gap:6px;
+    transition:all 0.2s ease;
+}
+
+.devLibCard:hover{
+    border-color:rgba(212, 175, 55, 0.6);
+    background:rgba(26, 38, 30, 0.95);
+}
+
+.devLibCard.activeCard{
+    border-color:#d4af37;
+    background:rgba(34, 52, 40, 0.95);
+    box-shadow:0 0 10px rgba(212, 175, 55, 0.2);
+}
+
+.devLibCardTop{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.devLibIcon{
+    font-size:1.3rem;
+    line-height:1;
+}
+
+.devLibMeta{
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+}
+
+.devLibName{
+    font-size:0.78rem;
+    font-weight:700;
+    color:#fff8e7;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.devLibSocket{
+    font-size:0.68rem;
+    color:rgba(255, 255, 255, 0.5);
+}
+
+.devLibActions{
+    display:flex;
+    gap:4px;
+    justify-content:flex-end;
+    border-top:1px solid rgba(255, 255, 255, 0.06);
+    padding-top:4px;
+}
+
+.devCustomItemBtn{
+    border-color:rgba(212, 175, 55, 0.5) !important;
+}
+
+.devCustomItemBtn:hover{
+    border-color:#d4af37 !important;
+}
+
+/* ======================================================
+   MODO DIOS & WORLD EDITOR HUD (BOTTOM DOCK)
+   ====================================================== */
+.devGodModeBar{
+    position:fixed;
+    bottom:16px;
+    left:50%;
+    transform:translateX(-50%);
+    width:min(1040px, 94vw);
+    background:rgba(12, 18, 14, 0.94);
+    border:1.5px solid rgba(212, 175, 55, 0.55);
+    border-radius:14px;
+    box-shadow:0 20px 50px rgba(0, 0, 0, 0.85);
+    padding:12px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    z-index:999999;
+    color:#fff8e7;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    user-select:none;
+    transition:transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.devGodModeBar.collapsed{
+    transform:translateX(-50%) translateY(calc(100% - 32px));
+}
+
+.godCollapseBtn{
+    position:absolute;
+    top:-28px;
+    right:20px;
+    background:rgba(14, 20, 16, 0.95);
+    border:1px solid rgba(212, 175, 55, 0.5);
+    border-bottom:none;
+    border-radius:8px 8px 0 0;
+    color:#ffd54f;
+    font-size:0.75rem;
+    font-weight:700;
+    padding:4px 12px;
+    cursor:pointer;
+    transition:background 0.2s, color 0.2s;
+}
+
+.godCollapseBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.godBarHeader{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom:1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom:8px;
+}
+
+.godBarTitle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:0.88rem;
+    font-weight:800;
+    letter-spacing:0.5px;
+    color:#ffd54f;
+}
+
+.godDotLive{
+    width:8px;
+    height:8px;
+    background:#10b981;
+    border-radius:50%;
+    display:inline-block;
+}
+
+.godBarActions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.godPillBtn, .godActionBtn{
+    background:rgba(255, 255, 255, 0.08);
+    border:1px solid rgba(255, 255, 255, 0.15);
+    color:#fff;
+    border-radius:6px;
+    padding:5px 12px;
+    font-size:0.75rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.18s ease;
+}
+
+.godPillBtn:hover, .godActionBtn:hover{
+    transform:translateY(-1px);
+    filter:brightness(1.15);
+}
+
+.godExitBtn{
+    background:#b91c1c !important;
+    border-color:#ef4444 !important;
+}
+
+.godControlsRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.godToolGroup{
+    display:flex;
+    background:rgba(0, 0, 0, 0.55);
+    border:1px solid rgba(212, 175, 55, 0.3);
+    border-radius:8px;
+    padding:3px;
+    gap:4px;
+}
+
+.godToolBtn{
+    background:transparent;
+    border:none;
+    color:#a0b0a8;
+    padding:5px 12px;
+    border-radius:6px;
+    font-size:0.78rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.15s ease;
+}
+
+.godToolBtn.active{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.godTransformGroup{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:rgba(0, 0, 0, 0.45);
+    border:1px solid rgba(255, 255, 255, 0.1);
+    border-radius:8px;
+    padding:4px 10px;
+}
+
+.godMiniInputGroup{
+    display:flex;
+    align-items:center;
+    gap:5px;
+    font-size:0.75rem;
+}
+
+.godMiniInputGroup label{
+    color:#a0b0a8;
+    font-weight:600;
+}
+
+.godMiniBtn{
+    background:rgba(212, 175, 55, 0.15);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    color:#ffd54f;
+    border-radius:4px;
+    padding:2px 7px;
+    font-size:0.72rem;
+    font-weight:700;
+    cursor:pointer;
+}
+
+.godMiniBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.godUploadBtn{
+    background:rgba(212, 175, 55, 0.15);
+    border:1px solid rgba(212, 175, 55, 0.6);
+    color:#ffd54f;
+    border-radius:8px;
+    padding:6px 12px;
+    font-size:0.78rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.2s;
+}
+
+.godUploadBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.godCatalogTabs{
+    display:flex;
+    gap:6px;
+    border-bottom:1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom:6px;
+}
+
+.godCatTabBtn{
+    background:transparent;
+    border:none;
+    color:#a0b0a8;
+    padding:4px 10px;
+    font-size:0.75rem;
+    font-weight:700;
+    cursor:pointer;
+    border-radius:6px;
+    transition:all 0.15s ease;
+}
+
+.godCatTabBtn.active{
+    background:rgba(212, 175, 55, 0.2);
+    color:#ffd54f;
+}
+
+.godItemsScroll{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding:4px 2px;
+    max-height:85px;
+}
+
+.godItemCard{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:rgba(20, 28, 22, 0.85);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:8px;
+    padding:6px 12px;
+    cursor:pointer;
+    white-space:nowrap;
+    flex-shrink:0;
+    transition:all 0.18s ease;
+    color:#fff8e7;
+}
+
+.godItemCard:hover{
+    border-color:rgba(212, 175, 55, 0.6);
+    background:rgba(28, 40, 32, 0.95);
+    transform:translateY(-1px);
+}
+
+.godItemCard.active{
+    border-color:#d4af37;
+    background:rgba(38, 56, 44, 0.98);
+    box-shadow:0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.godItemIcon{
+    font-size:1.15rem;
+}
+
+.godItemLabel{
+    font-size:0.75rem;
+    font-weight:700;
+}
+
+.godBarFooter{
+    font-size:0.7rem;
+    color:#94a3b8;
+    border-top:1px solid rgba(255, 255, 255, 0.06);
+    padding-top:6px;
+}
+
+.godEmptyMsg{
+    font-size:0.75rem;
+    color:#94a3b8;
+    padding:8px 4px;
+}
+
+/* ======================================================
+   PESTAÑA DEV SUITE: WORLD EDITOR (MODO DIOS Y ESCENARIO)
+   ====================================================== */
+.devWorldWrapper{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    height:100%;
+    overflow-y:auto;
+    padding-right:6px;
+}
+
+.devWorldHero{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:linear-gradient(135deg, rgba(20, 32, 24, 0.95), rgba(10, 16, 12, 0.98));
+    border:1.5px solid rgba(212, 175, 55, 0.5);
+    border-radius:12px;
+    padding:16px 20px;
+    gap:16px;
+}
+
+.devWorldHeroInfo{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+}
+
+.devWorldHeroTitle{
+    display:flex;
+    align-items:center;
+    gap:12px;
+}
+
+.devWorldHeroIcon{
+    font-size:2rem;
+}
+
+.devWorldHeroTitle h3{
+    margin:0;
+    font-size:1.1rem;
+    color:#ffd54f;
+    font-weight:800;
+}
+
+.devWorldHeroTitle p{
+    margin:2px 0 0 0;
+    font-size:0.78rem;
+    color:#a0b0a8;
+}
+
+.devEnterGodBtn{
+    background:#10b981;
+    color:#0e1410;
+    border:none;
+    border-radius:10px;
+    padding:12px 22px;
+    font-size:0.92rem;
+    font-weight:800;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:all 0.2s ease;
+    box-shadow:0 6px 18px rgba(16, 185, 129, 0.35);
+}
+
+.devEnterGodBtn:hover{
+    background:#34d399;
+    transform:translateY(-2px);
+    box-shadow:0 8px 24px rgba(16, 185, 129, 0.5);
+}
+
+.devWorldStats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:10px;
+}
+
+.devWorldStatCard{
+    display:flex;
+    flex-direction:column;
+    background:rgba(14, 20, 16, 0.7);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:8px;
+    padding:10px 14px;
+}
+
+.devStatNum{
+    font-size:1.25rem;
+    font-weight:800;
+    color:#ffd54f;
+}
+
+.devStatLabel{
+    font-size:0.7rem;
+    color:#a0b0a8;
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+}
+
+.devWorldSection{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    background:rgba(14, 20, 16, 0.6);
+    border:1px solid rgba(212, 175, 55, 0.2);
+    border-radius:10px;
+    padding:14px;
+}
+
+.devWorldSectionHeader{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.devWorldSectionTitle{
+    margin:0;
+    font-size:0.95rem;
+    color:#fff8e7;
+    font-weight:800;
+}
+
+.devWorldSectionDesc{
+    margin:2px 0 0 0;
+    font-size:0.75rem;
+    color:#94a3b8;
+}
+
+.devWorldHeaderActions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+.devWorldActionBtn{
+    background:rgba(255, 255, 255, 0.08);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    color:#ffd54f;
+    border-radius:6px;
+    padding:6px 12px;
+    font-size:0.75rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.15s ease;
+}
+
+.devWorldActionBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.devWorldActionBtn.primary{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.devWorldActionBtn.primary:hover{
+    background:#ffd54f;
+}
+
+.devWorldActionBtn.danger{
+    border-color:#ef4444;
+    color:#ef4444;
+}
+
+.devWorldActionBtn.danger:hover{
+    background:#b91c1c;
+    color:#fff;
+}
+
+.devUploadedGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));
+    gap:10px;
+    margin-top:4px;
+}
+
+.devUploadedCard{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:rgba(20, 28, 22, 0.85);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:8px;
+    padding:10px;
+}
+
+.devUploadedIcon{
+    font-size:1.6rem;
+}
+
+.devUploadedMeta{
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    flex:1;
+}
+
+.devUploadedName{
+    font-size:0.8rem;
+    font-weight:700;
+    color:#fff8e7;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.devUploadedUrl{
+    font-size:0.65rem;
+    color:#94a3b8;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.devUploadedActions{
+    display:flex;
+    align-items:center;
+    gap:4px;
+}
+
+.devMiniActionBtn{
+    background:rgba(212, 175, 55, 0.15);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    color:#ffd54f;
+    border-radius:4px;
+    padding:4px 8px;
+    font-size:0.7rem;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:all 0.15s ease;
+}
+
+.devMiniActionBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.devMiniActionBtn.danger{
+    border-color:rgba(239, 68, 68, 0.5);
+    color:#ef4444;
+}
+
+.devMiniActionBtn.danger:hover{
+    background:#b91c1c;
+    color:#fff;
+}
+
+.devPlacedTableWrap{
+    max-height:260px;
+    overflow-y:auto;
+    border:1px solid rgba(255, 255, 255, 0.08);
+    border-radius:8px;
+}
+
+.devPlacedTable{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.75rem;
+    text-align:left;
+}
+
+.devPlacedTable th{
+    background:rgba(0, 0, 0, 0.6);
+    color:#ffd54f;
+    padding:8px 10px;
+    font-weight:700;
+    border-bottom:1px solid rgba(255, 255, 255, 0.1);
+    position:sticky;
+    top:0;
+}
+
+.devPlacedTable td{
+    padding:8px 10px;
+    border-bottom:1px solid rgba(255, 255, 255, 0.04);
+    color:#e0e8e4;
+}
+
+.devPlacedTable tr:hover{
+    background:rgba(255, 255, 255, 0.04);
+}
+
+.devPlacedColName{
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.devPlacedIcon{
+    font-size:1.1rem;
+}
+
+.devSourceBadge{
+    font-size:0.65rem;
+    font-weight:800;
+    padding:2px 6px;
+    border-radius:4px;
+}
+
+.devSourceBadge.custom{
+    background:rgba(16, 185, 129, 0.2);
+    color:#34d399;
+}
+
+.devSourceBadge.system{
+    background:rgba(59, 130, 246, 0.2);
+    color:#60a5fa;
+}
+
+.devSourceBadge.glb{
+    background:rgba(245, 158, 11, 0.2);
+    color:#fbbf24;
+}
+
+.devCoordsCol{
+    font-family:monospace;
+    font-size:0.7rem;
+    color:#a0b0a8;
+}
+
+.devTableActions{
+    display:flex;
+    gap:4px;
+}
+
+.devTableBtn{
+    background:rgba(255, 255, 255, 0.08);
+    border:1px solid rgba(255, 255, 255, 0.15);
+    color:#fff;
+    border-radius:4px;
+    padding:3px 8px;
+    font-size:0.7rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.15s ease;
+}
+
+.devTableBtn:hover{
+    background:#d4af37;
+    color:#0e1410;
+}
+
+.devTableBtn.danger:hover{
+    background:#b91c1c;
+    color:#fff;
+}
+
+.devWorldEmptyBox{
+    padding:24px;
+    text-align:center;
+    color:#94a3b8;
+    font-size:0.78rem;
+}
+
+.devWorldControlsGuide{
+    background:rgba(0, 0, 0, 0.55);
+    border:1px solid rgba(255, 255, 255, 0.1);
+    border-radius:10px;
+    padding:12px 16px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+}
+
+.devGuideTitle{
+    font-size:0.78rem;
+    font-weight:800;
+    color:#ffd54f;
+}
+
+.devGuideGrid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:6px 12px;
+}
+
+.devGuideItem{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:0.72rem;
+    color:#e0e8e4;
+}
+
+.devGuideItem kbd{
+    background:rgba(212, 175, 55, 0.15);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    color:#ffd54f;
+    padding:2px 6px;
+    border-radius:4px;
+    font-family:monospace;
+    font-weight:700;
+    font-size:0.7rem;
+}
+
+/* =========================================================
+   SISTEMA DE BATERÍA DE EXPLORACIÓN / CONTROL DE TIEMPO (HÍBRIDO 3)
+   ========================================================= */
+
+/* --- WIDGET HUD DE BATERÍA (PARTE CENTRAL SUPERIOR) --- */
+.robotBatteryHUD {
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20050;
+    display: none; /* Inactivo por defecto hasta activación */
+    align-items: center;
+    gap: 8px;
+    background: rgba(10, 16, 26, 0.88);
+    border: 1px solid rgba(0, 240, 255, 0.45);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65), 0 0 14px rgba(0, 240, 255, 0.25);
+    padding: 6px 14px;
+    border-radius: 24px;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.robotBatteryHUD:hover {
+    transform: translateX(-50%) scale(1.04);
+    border-color: rgba(0, 240, 255, 0.75);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.75), 0 0 18px rgba(0, 240, 255, 0.4);
+}
+
+.robotBatteryHUD.batteryWarning {
+    border-color: rgba(245, 158, 11, 0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 12px rgba(245, 158, 11, 0.2);
+}
+
+.robotBatteryHUD.batteryDanger {
+    border-color: rgba(239, 68, 68, 0.6);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 14px rgba(239, 68, 68, 0.35);
+}
+
+.robotBatteryCapsule {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.robotBatteryAvatar {
+    font-size: 1.15rem;
+    line-height: 1;
+    filter: drop-shadow(0 0 4px rgba(0, 240, 255, 0.5));
+}
+
+.robotBatteryBody {
+    display: flex;
+    gap: 3px;
+    padding: 3px 4px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+}
+
+.robotBatteryTerminal {
+    width: 3px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 0 2px 2px 0;
+}
+
+.robotBatteryCell {
+    width: 10px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.robotBatteryCell.cell-active.color-high {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+}
+
+.robotBatteryCell.cell-active.color-mid {
+    background: #f59e0b;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+}
+
+.robotBatteryCell.cell-active.color-low {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+}
+
+.robotBatteryInfo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.robotBatteryTime {
+    font-family: monospace, system-ui, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    letter-spacing: 0.5px;
+}
+
+.robotBatteryInfoBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    font-size: 0.70rem;
+    font-weight: 800;
+    font-family: system-ui, sans-serif;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.18);
+    border: 1px solid rgba(56, 189, 248, 0.55);
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.3);
+    margin-left: 2px;
+    flex-shrink: 0;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.robotBatteryHUD:hover .robotBatteryInfoBadge {
+    transform: scale(1.15);
+    background: rgba(56, 189, 248, 0.35);
+    color: #ffffff;
+}
+
+@media (max-width: 650px), (max-height: 500px) {
+    .robotBatteryHUD {
+        top: 6px;
+        left: 50%;
+        transform: translateX(-50%) scale(0.82);
+        transform-origin: top center;
+        padding: 3px 8px;
+        gap: 5px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+    }
+    .robotBatteryCell {
+        width: 7px;
+        height: 12px;
+    }
+    .robotBatteryTime {
+        font-size: 0.70rem;
+    }
+    .robotBatteryInfoBadge {
+        display: inline-flex;
+        width: 15px;
+        height: 15px;
+        font-size: 0.65rem;
+    }
+}
+
+/* Animaciones de pulso */
+@keyframes hudPulseKeyframe {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.08); filter: brightness(1.3); }
+    100% { transform: scale(1); }
+}
+
+@keyframes hudUrgentPulseKeyframe {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.12); filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.8)); }
+    50% { transform: scale(0.98); }
+    75% { transform: scale(1.1); filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.8)); }
+    100% { transform: scale(1); }
+}
+
+.hudPulseAnim {
+    animation: hudPulseKeyframe 0.6s ease 3;
+}
+
+.hudUrgentPulseAnim {
+    animation: hudUrgentPulseKeyframe 0.5s ease 5;
+}
+
+/* --- TOAST NOTIFICATIONS DE BATERÍA --- */
+.robotBatteryToast {
+    position: fixed;
+    top: 68px;
+    left: 14px;
+    z-index: 20100;
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+    border-radius: 12px;
+    padding: 10px 14px;
+    max-width: 340px;
+    color: #f1f5f9;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    display: none;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+}
+
+.robotBatteryToast.visible {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.robotBatteryToast.toast-warning {
+    border-color: rgba(245, 158, 11, 0.6);
+}
+
+.robotBatteryToast.toast-danger {
+    border-color: rgba(239, 68, 68, 0.7);
+}
+
+.robotBatteryToast.toast-success {
+    border-color: rgba(16, 185, 129, 0.7);
+}
+
+.robotBatteryToast .toastHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+    color: #38bdf8;
+}
+
+.robotBatteryToast.toast-warning .toastHeader {
+    color: #fbbf24;
+}
+
+.robotBatteryToast.toast-danger .toastHeader {
+    color: #f87171;
+}
+
+.robotBatteryToast.toast-success .toastHeader {
+    color: #34d399;
+}
+
+/* --- MODAL DE INFORMACIÓN DETALLADA (CLICK EN BATERÍA) --- */
+.robotBatteryInfoOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 35000 !important;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.robotBatteryInfoCard {
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(11, 15, 25, 0.98));
+    border: 1px solid rgba(0, 240, 255, 0.35);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.2);
+    border-radius: 16px;
+    width: min(92vw, 480px);
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    color: #e2e8f0;
+    box-sizing: border-box;
+}
+
+.batteryCardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 12px;
+}
+
+.batteryCloseModalBtn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #e2e8f0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.batteryCloseModalBtn:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #ef4444;
+    transform: scale(1.1);
+}
+
+.batteryAvatarBig {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.batteryCardTitle {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #38bdf8;
+}
+
+.batteryCardSub {
+    font-size: 0.72rem;
+    color: #94a3b8;
+}
+
+.batteryStatusBox {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.batteryStatusBigVal {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #f8fafc;
+    font-family: monospace, system-ui;
+}
+
+.batteryStatusCells {
+    display: flex;
+    gap: 8px;
+}
+
+.modalCell {
+    width: 28px;
+    height: 12px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.modalCell.active.color-high {
+    background: #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.7);
+}
+
+.modalCell.active.color-mid {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.7);
+}
+
+.modalCell.active.color-low {
+    background: #ef4444;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.7);
+}
+
+.batteryStatusNote {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.batteryRulesBox {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ruleItem {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: #cbd5e1;
+}
+
+.ruleIcon {
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.batteryCardFooter {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.batteryPrimaryBtn {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    color: #ffffff;
+    font-weight: 700;
+    padding: 8px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.batteryPrimaryBtn:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #0369a1, #075985);
+}
+
+/* --- PANTALLA DE REPOSO (BLOQUEO DE 3 HORAS DE ENFRIAMIENTO) --- */
+.robotRestOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 2000000;
+    background: rgba(3, 7, 18, 0.96);
+    backdrop-filter: blur(14px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    user-select: none;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+}
+
+.restFullscreenFloatBtn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 2500005;
+    background: rgba(15, 23, 42, 0.88);
+    border: 1.5px solid rgba(56, 189, 248, 0.6);
+    color: #38bdf8;
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7), 0 0 12px rgba(56, 189, 248, 0.3);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.restFullscreenFloatBtn:hover {
+    transform: scale(1.05);
+    background: rgba(14, 165, 233, 0.25);
+    color: #ffffff;
+}
+
+.restFullscreenFloatBtn:active {
+    transform: scale(0.96);
+}
+
+.robotRestCard {
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.95), rgba(9, 12, 22, 0.98));
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(212, 175, 55, 0.15);
+    border-radius: 20px;
+    width: min(95vw, 760px);
+    max-height: 94dvh;
+    overflow-y: auto;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    color: #f1f5f9;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(56, 189, 248, 0.6) rgba(0, 0, 0, 0.4);
+}
+
+.robotRestCard::-webkit-scrollbar,
+.robotBatteryInfoCard::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+    display: block;
+}
+
+.robotRestCard::-webkit-scrollbar-track,
+.robotBatteryInfoCard::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+}
+
+.robotRestCard::-webkit-scrollbar-thumb,
+.robotBatteryInfoCard::-webkit-scrollbar-thumb {
+    background: rgba(56, 189, 248, 0.6);
+    border-radius: 4px;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+}
+
+.robotRestColsWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    width: 100%;
+}
+
+.robotRestColLeft {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.robotRestColRight {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    text-align: center;
+}
+
+.robotRestIconArea {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 4px 0 8px 0;
+}
+
+.robotRest3DArea {
+    width: 210px;
+    height: 170px;
+    position: relative;
+    overflow: visible;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 24px;
+    /* Aura etérea difusa y envolvente sin borde rígido que corte la cabeza */
+    background: radial-gradient(ellipse at 50% 60%, rgba(14, 165, 233, 0.24) 0%, rgba(56, 189, 248, 0.10) 45%, rgba(15, 23, 42, 0) 72%);
+    box-shadow: none;
+}
+
+/* Efecto aura niebla pulsante y etérea alrededor del robot durmiendo */
+.robotRest3DArea::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    background: radial-gradient(ellipse at 50% 65%, rgba(56, 189, 248, 0.20) 0%, rgba(245, 158, 11, 0.10) 38%, rgba(15, 23, 42, 0) 70%);
+    filter: blur(14px);
+    pointer-events: none;
+    z-index: 1;
+    animation: restAuraPulse 4s infinite ease-in-out;
+}
+
+@keyframes restAuraPulse {
+    0%, 100% { opacity: 0.75; transform: scale(0.96); }
+    50% { opacity: 1; transform: scale(1.04); }
+}
+
+.robotRest3DCanvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    position: relative;
+    z-index: 2;
+    border-radius: 0;
+}
+
+.robotSleepingFloatingZ {
+    position: absolute;
+    top: 6px;
+    right: 18px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.sleepZ {
+    position: absolute;
+    font-weight: 800;
+    font-family: system-ui, sans-serif;
+    opacity: 0;
+    -webkit-animation: sleepZAnim 2.4s infinite ease-in;
+    animation: sleepZAnim 2.4s infinite ease-in;
+}
+
+/* Opción C: Efecto Gradiente Naranja Dorado a Verde Neón de Recarga */
+.sleepZ.z1 { 
+    top: 0px; 
+    right: 0px; 
+    font-size: 0.95rem; 
+    color: #f59e0b; 
+    text-shadow: 0 0 8px rgba(245, 158, 11, 0.95); 
+    animation-delay: 0s; 
+    -webkit-animation-delay: 0s; 
+}
+.sleepZ.z2 { 
+    top: -8px; 
+    right: -6px; 
+    font-size: 1.15rem; 
+    color: #fbbf24; 
+    text-shadow: 0 0 9px rgba(251, 191, 36, 0.95); 
+    animation-delay: 0.8s; 
+    -webkit-animation-delay: 0.8s; 
+}
+.sleepZ.z3 { 
+    top: -16px; 
+    right: -12px; 
+    font-size: 1.35rem; 
+    color: #10b981; 
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.95); 
+    animation-delay: 1.6s; 
+    -webkit-animation-delay: 1.6s; 
+}
+
+@-webkit-keyframes sleepZAnim {
+    0% { opacity: 0; -webkit-transform: translate(0, 0) scale(0.6); }
+    50% { opacity: 0.95; }
+    100% { opacity: 0; -webkit-transform: translate(6px, -12px) scale(1.1); }
+}
+
+@keyframes sleepZAnim {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+    50% { opacity: 0.95; }
+    100% { opacity: 0; transform: translate(6px, -12px) scale(1.1); }
+}
+
+/* Botón de reanudación con células recuperadas durante el enfriamiento */
+.resumePartialRestBtn {
+    width: 100%;
+    max-width: 380px;
+    padding: 12px 18px;
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+    border: 1px solid #34d399;
+    border-radius: 12px;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4), 0 0 12px rgba(52, 211, 153, 0.3);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px 0 2px 0;
+}
+
+.resumePartialRestBtn:hover {
+    transform: scale(1.02);
+    filter: brightness(1.1);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+}
+
+.resumePartialRestBtn:active {
+    transform: scale(0.98);
+}
+
+.resumePartialRestSub {
+    font-size: 0.76rem;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+.robotRestTitle {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #f5e197;
+    letter-spacing: 1px;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.robotRestMessage {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #e2e8f0;
+    margin: 0;
+    padding: 0 8px;
+}
+
+.robotRestCountdownBox {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 12px 20px;
+    width: 100%;
+    max-width: 320px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.robotRestCountdownLabel {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.robotRestTimerText {
+    font-family: 'Courier New', Courier, monospace, system-ui;
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #10b981 !important;
+    letter-spacing: 2px;
+    text-shadow: 0 0 16px rgba(16, 185, 129, 0.65), 0 0 32px rgba(16, 185, 129, 0.35) !important;
+}
+
+.robotRestProgressContainer {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.robotRestProgressBar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #0284c7, #38bdf8);
+    transition: width 0.5s ease;
+}
+
+.robotRestTipsGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+}
+
+.restTipCard {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.tipIcon {
+    font-size: 1.3rem;
+}
+
+.tipText {
+    font-size: 0.68rem;
+    line-height: 1.25;
+    color: #cbd5e1;
+}
+
+.devUnlockContainer {
+    width: 100%;
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.devUnlockToggleBtn {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 0.72rem;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: color 0.15s;
+}
+
+.devUnlockToggleBtn:hover {
+    color: #94a3b8;
+}
+
+.devUnlockForm {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.devUnlockInput {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    width: 150px;
+    outline: none;
+}
+
+.devUnlockSubmitBtn {
+    background: #334155;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+}
+
+.devUnlockInstantBtn {
+    background: #065f46;
+    border: 1px solid #10b981;
+    color: #a7f3d0;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+/* --- ESTILOS DE LA PESTAÑA DE BATERÍA EN DEV PANEL --- */
+.devBatteryWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.devBatteryStatusCard {
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.devBatteryStatusRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.devBatteryStatusLabel {
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+.devBatteryStatusValue {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+
+.devLiveMonitorGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+}
+
+.devMonitorBox {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: center;
+}
+
+.devMonitorLabel {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.devMonitorVal {
+    font-family: monospace, system-ui;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #38bdf8;
+    margin-top: 2px;
+}
+
+.devBatteryCellsPreview {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.devCellBar {
+    flex: 1;
+    padding: 6px 4px;
+    text-align: center;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #64748b;
+    transition: all 0.3s ease;
+}
+
+.devCellBar.active.color-high {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #10b981;
+    color: #34d399;
+}
+
+.devCellBar.active.color-mid {
+    background: rgba(245, 158, 11, 0.25);
+    border-color: #f59e0b;
+    color: #fbbf24;
+}
+
+.devCellBar.active.color-low {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: #ef4444;
+    color: #f87171;
+}
+
+.devControlGroup {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.devGroupTitle {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #e2e8f0;
+}
+
+.devButtonsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+}
+
+/* ======================================================
+   CENTRAL FULLSCREEN RECOVERY PROMPT (MOBILE & SLEEP RESTORE)
+   ====================================================== */
+.centralFullscreenPrompt {
+    position: fixed;
+    inset: 0;
+    z-index: 2500000 !important;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(4, 7, 14, 0.75);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.centralFullscreenPrompt.visible {
+    opacity: 1;
+}
+
+.centralFullscreenCard {
+    background: linear-gradient(180deg, rgba(30, 20, 14, 0.96) 0%, rgba(14, 9, 6, 0.98) 100%);
+    border: 1.5px solid rgba(245, 190, 90, 0.5);
+    border-radius: 18px;
+    padding: 22px 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+    max-width: min(88vw, 360px);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 24px rgba(245, 190, 90, 0.2);
+    box-sizing: border-box;
+    transform: translateY(0);
+    animation: centralPromptFloat 3s infinite ease-in-out;
+}
+
+@keyframes centralPromptFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+}
+
+.centralFullscreenIcon {
+    font-size: 2.2rem;
+    color: #f5be5a;
+    text-shadow: 0 0 14px rgba(245, 190, 90, 0.6);
+    line-height: 1;
+}
+
+.centralFullscreenTitle {
+    font-family: Georgia, serif;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #fff6e0;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 0;
+}
+
+.centralFullscreenSubtitle {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.centralFullscreenBtn {
+    margin-top: 6px;
+    padding: 10px 22px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1a1005;
+    background: linear-gradient(180deg, #ffd685 0%, #e59d3b 100%);
+    border: 1px solid #ffe8b5;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(229, 157, 59, 0.45);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.centralFullscreenBtn:active {
+    transform: scale(0.95);
+    filter: brightness(1.1);
+}
+
+/* Adaptación móvil en modo vertical (Portrait) */
+@media (max-width: 650px) and (orientation: portrait) {
+    .robotRestOverlay {
+        padding: 8px;
+        align-items: flex-start;
+    }
+    .robotRestCard {
+        width: 100%;
+        max-width: 480px;
+        padding: 14px 12px;
+        gap: 8px;
+        margin: auto;
+    }
+    .robotRestColsWrapper {
+        flex-direction: column;
+        gap: 8px;
+    }
+    .robotRest3DArea {
+        width: 100px;
+        height: 100px;
+    }
+    .robotRestTitle {
+        font-size: 1rem;
+    }
+    .robotRestMessage {
+        font-size: 0.76rem;
+        line-height: 1.35;
+        padding: 0 4px;
+    }
+    .robotRestCountdownBox {
+        padding: 6px 12px;
+        max-width: 250px;
+    }
+    .robotRestTimerText {
+        font-size: 1.5rem !important;
+    }
+    .robotRestTipsGrid {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+    .restTipCard {
+        flex-direction: row;
+        padding: 4px 8px;
+        gap: 8px;
+        text-align: left;
+    }
+    .tipIcon {
+        font-size: 1.1rem;
+    }
+    .tipText {
+        font-size: 0.65rem;
+    }
+    .devUnlockContainer {
+        margin-top: 2px;
+        gap: 4px;
+    }
+    .devUnlockForm {
+        padding: 6px 8px;
+        gap: 4px;
+    }
+    .devUnlockInput {
+        width: 120px;
+        font-size: 0.72rem;
+        padding: 5px 8px;
+    }
+    .devUnlockSubmitBtn {
+        font-size: 0.72rem;
+        padding: 5px 10px;
+    }
+    .restFullscreenFloatBtn {
+        top: 8px;
+        right: 8px;
+        padding: 6px 10px;
+        font-size: 0.74rem;
+    }
+}
+
+/* Adaptación móvil y pantallas apaisadas (Landscape): Aprovecha el ancho y evita scroll */
+@media (orientation: landscape) and (max-height: 560px) {
+    .robotRestOverlay {
+        padding: 6px;
+        align-items: center;
+    }
+    .robotRestCard {
+        width: min(96vw, 760px);
+        max-height: 96dvh;
+        padding: 10px 16px;
+        gap: 8px;
+        margin: auto;
+    }
+    .robotRestColsWrapper {
+        flex-direction: row;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .robotRestColLeft {
+        width: 190px;
+        gap: 6px;
+    }
+    .robotRestColRight {
+        flex: 1;
+        gap: 6px;
+    }
+    .robotRest3DArea {
+        width: 140px;
+        height: 105px;
+        border: none;
+        border-radius: 16px;
+    }
+    .robotRestTitle {
+        font-size: 0.95rem;
+        margin: 0;
+    }
+    .robotRestMessage {
+        font-size: 0.72rem;
+        line-height: 1.25;
+        margin: 0;
+    }
+    .robotRestCountdownBox {
+        padding: 4px 10px;
+        max-width: 180px;
+        gap: 2px;
+    }
+    .robotRestTimerText {
+        font-size: 1.35rem !important;
+    }
+    .robotRestTipsGrid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+    }
+    .restTipCard {
+        padding: 3px 6px;
+        gap: 4px;
+    }
+    .tipIcon {
+        font-size: 0.95rem;
+    }
+    .tipText {
+        font-size: 0.62rem;
+        line-height: 1.2;
+    }
+    .devUnlockContainer {
+        margin-top: 1px;
+        gap: 3px;
+    }
+    .devUnlockForm {
+        padding: 4px 8px;
+        gap: 6px;
+    }
+    .devUnlockInput {
+        width: 130px;
+        font-size: 0.72rem;
+        padding: 4px 8px;
+    }
+    .devUnlockSubmitBtn {
+        font-size: 0.72rem;
+        padding: 4px 10px;
+    }
+    .restFullscreenFloatBtn {
+        top: 6px;
+        right: 6px;
+        padding: 4px 10px;
+        font-size: 0.72rem;
+    }
+
+    /* Ventana informativa en Landscape: 2 Columnas sin scroll */
+    .robotBatteryInfoCard {
+        width: min(96vw, 680px);
+        max-height: 96dvh;
+        padding: 12px 18px;
+        gap: 8px;
+    }
+    .batteryCardHeader {
+        padding-bottom: 6px;
+    }
+    .batteryCardBody {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 12px;
+        align-items: start;
+    }
+    .batteryStatusBox {
+        padding: 8px;
+        gap: 4px;
+    }
+    .batteryStatusBigVal {
+        font-size: 1.1rem;
+    }
+    .batteryRulesBox {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+    .ruleItem {
+        padding: 5px 8px;
+        font-size: 0.68rem;
+        line-height: 1.2;
+        gap: 6px;
+    }
+    .batteryCardFooter {
+        margin-top: 0;
+    }
+}
+
+/* ======================================================
+   MENÚ PRINCIPAL: REDISEÑO A 2 COLUMNAS + TOOLTIPS TÁCTILES
+   ====================================================== */
+
+.mainMenuContainer {
+    position: fixed;
+    inset: 0;
+    background-color: #090e18;
+    background-image: url(/assets/ui/mainmenu.jpg);
+    background-position: center center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 12px;
+    z-index: 9999;
+    box-sizing: border-box;
+}
+
+.mainMenuCard {
+    width: min(88vw, 560px);
+    max-height: 92dvh;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    backdrop-filter: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.mainMenu2ColGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    width: 100%;
+    align-items: stretch;
+}
+
+.mainMenuCol {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mainMenuItemRow {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+}
+
+.mainMenuActionBtn {
+    flex: 1;
+    min-height: 42px;
+    padding: 8px 12px;
+    font-size: clamp(0.78rem, 2vw, 0.88rem);
+    font-weight: 700;
+    border-radius: 10px;
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    cursor: pointer;
+    background: rgba(10, 24, 18, 0.82);
+    color: #ffffff;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(16, 185, 129, 0.08);
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    line-height: 1.25;
+}
+
+.mainMenuActionBtn:hover {
+    transform: translateY(-2px);
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #34d399;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(16, 185, 129, 0.45);
+}
+
+.mainMenuActionBtn:active {
+    transform: scale(0.98);
+}
+
+/* Variante especial para retomar misión segura */
+.mainMenuActionBtn.btnCheckpoint {
+    background: linear-gradient(135deg, rgba(8, 38, 24, 0.88) 0%, rgba(5, 26, 17, 0.94) 100%);
+    border: 1.5px solid rgba(16, 185, 129, 0.65);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(16, 185, 129, 0.3);
+}
+
+.mainMenuActionBtn.btnCheckpoint:hover {
+    border-color: #34d399;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.7), 0 0 20px rgba(16, 185, 129, 0.5);
+}
+
+.mainMenuBtnSubtext {
+    font-size: 0.70rem;
+    color: #6ee7b7;
+    font-weight: 500;
+    margin-top: 3px;
+}
+
+/* Botón táctil de información / tooltip con icono de mano interactiva */
+.mainMenuInfoBtn {
+    width: 44px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 26, 18, 0.80);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    border-radius: 10px;
+    cursor: pointer;
+    color: #34d399;
+    padding: 4px;
+    gap: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mainMenuInfoBtn:hover {
+    background: rgba(16, 185, 129, 0.28);
+    border-color: #34d399;
+    transform: scale(1.05);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.45);
+}
+
+.mainMenuInfoBtn:active {
+    transform: scale(0.95);
+}
+
+.mainMenuInfoHandIcon {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.mainMenuInfoLabel {
+    font-size: 0.56rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #a7f3d0;
+}
+
+/* MODAL TOOLTIP INFORMATIVO DE CADA OPCIÓN */
+.mainMenuTooltipOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    z-index: 10005;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.mainMenuTooltipCard {
+    background: linear-gradient(150deg, rgba(10, 24, 18, 0.98), rgba(6, 16, 12, 0.99));
+    border: 1.5px solid rgba(16, 185, 129, 0.55);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(16, 185, 129, 0.25);
+    border-radius: 18px;
+    padding: 20px 22px;
+    max-width: 440px;
+    width: 100%;
+    color: #f1f5f9;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+    box-sizing: border-box;
+}
+
+.mainMenuTooltipHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.mainMenuTooltipTitle {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mainMenuTooltipCloseBtn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #94a3b8;
+    font-size: 1.1rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.mainMenuTooltipCloseBtn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ffffff;
+    transform: scale(1.05);
+}
+
+.mainMenuTooltipBody {
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #cbd5e1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mainMenuTooltipStatusBox {
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    color: #a7f3d0;
+}
+
+.mainMenuTooltipFooter {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.mainMenuTooltipActionClose {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    border: 1px solid #10b981;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.mainMenuTooltipActionClose:hover {
+    filter: brightness(1.15);
+    transform: scale(1.02);
+}
+
+@media (max-width: 650px), (orientation: landscape) and (max-height: 560px) {
+    .mainMenuCard {
+        width: min(88vw, 480px);
+        gap: 6px;
+    }
+    .mainMenu2ColGrid {
+        gap: 8px;
+    }
+    .mainMenuCol {
+        gap: 6px;
+    }
+    .mainMenuItemRow {
+        gap: 6px;
+    }
+    .mainMenuActionBtn {
+        min-height: 38px;
+        padding: 5px 8px;
+        font-size: 0.74rem;
+        border-radius: 8px;
+    }
+    .mainMenuInfoBtn {
+        width: 36px;
+        min-height: 38px;
+        padding: 2px 4px;
+        border-radius: 8px;
+    }
+    .mainMenuInfoHandIcon {
+        font-size: 0.90rem;
+    }
+    .mainMenuInfoLabel {
+        font-size: 0.50rem;
+    }
+    .mainMenuBtnSubtext {
+        font-size: 0.62rem;
+    }
+}
+
+

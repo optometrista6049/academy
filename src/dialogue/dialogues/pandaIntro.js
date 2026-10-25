@@ -25,13 +25,13 @@ export const pandaIntroDialogue = {
 
         '¡Hola! Soy el Panda que te saluda.',
 
-        'Bienvenido a Monteserín Academy.',
+        'Te doy la bienvenida a Monteserín Academy.',
 
         'Me alegra mucho que hayas llegado.',
 
-        'Supongo que ya sabes que eres uno de los aspirantes a ser la nueva IA que ayude a resolver cualquier duda que tengan las personas que se acerquen a nuestra institución para informarse sobre sus opciones para solventar sus problemas de vista y/u oído.',
+        'Supongo que ya sabes que formas parte de los aspirantes a ser la nueva IA que ayude a resolver cualquier duda que tengan las personas que se acerquen a nuestra institución para informarse sobre sus opciones para solventar sus problemas de vista y/u oído.',
 
-        'Lo cierto es que eres el primer aspirante en llegar, incluso antes de lo que esperábamos. Aún estamos acondicionando todo y terminando los preparativos... disculpa el desorden.',
+        'Lo cierto es que has llegado en primer lugar entre los aspirantes, incluso antes de lo que esperábamos. Aún estamos acondicionando todo y terminando los preparativos... disculpa el desorden.',
 
         'Pero quizá puedas ayudarme a mí y al resto del equipo. Por cierto, me llamo Monty. Al resto del equipo ya les irás conociendo con total seguridad, si es que no has hablado ya con ellos.',
 
@@ -39,7 +39,7 @@ export const pandaIntroDialogue = {
 
         'Para tu primera misión como Aspirante vas a necesitar llegar a aquel mueble y abrirlo.',
 
-        'Toma, aquí tienes la llave. Como ya eres formalmente un Aspirante, tu interfaz ya tiene acceso al REGISTRO. Si miras en la parte inferior de la pantalla, verás que ya aparece su icono. Puedes abrirlo tocándolo o usando la tecla R.',
+        'Toma, aquí tienes la llave. Como ya eres formalmente Aspirante, tu interfaz ya tiene acceso al REGISTRO. Si miras en la parte inferior de la pantalla, verás que ya aparece su icono. Puedes abrirlo tocándolo o usando la tecla R.',
 
         'Verás que la llave ya se ha guardado en tu Inventario. Ahora úsala para abrir el mueble y recoger la caja que hay dentro. ¡Cuando la tengas, tráemela!'
 

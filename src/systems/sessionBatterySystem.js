@@ -67,6 +67,37 @@ export function initSessionBatterySystem() {
     console.log('🔋 Sistema de Batería de Exploración inicializado (Estado: ' + (sessionBattery.enabled ? 'ACTIVO' : 'INACTIVO / ESPERA MISIÓN 2') + ')');
 }
 
+export function resetSessionBatteryForNewGame() {
+    sessionBattery.enabled = false;
+    sessionBattery.devForced = false;
+    sessionBattery.consumedSeconds = 0;
+    sessionBattery.cooldownUntil = null;
+    sessionBattery.isAfk = false;
+    sessionBattery.timeSinceLastInput = 0;
+    sessionBattery.lastNotifiedCell = 3;
+    sessionBattery.notified5Min = false;
+    sessionBattery.notified1Min = false;
+
+    if (gameState.flags) {
+        gameState.flags.batterySystemUnlocked = false;
+    }
+    if (gameState.sessionControl) {
+        gameState.sessionControl.enabled = false;
+        gameState.sessionControl.consumedSeconds = 0;
+        gameState.sessionControl.cooldownUntil = null;
+    }
+
+    try {
+        localStorage.removeItem(BATTERY_CONFIG.STORAGE_KEY);
+    } catch {}
+
+    if (hudElement) {
+        hudElement.style.display = 'none';
+    }
+    hideRestOverlay();
+    console.log('🔋 Batería de exploración reseteada al estado inicial (Misión 1: Inactivo)');
+}
+
 export function loadBatteryState() {
     try {
         const raw = localStorage.getItem(BATTERY_CONFIG.STORAGE_KEY);
@@ -76,7 +107,7 @@ export function loadBatteryState() {
                 if (typeof data.consumedSeconds === 'number') sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, data.consumedSeconds));
                 if (data.cooldownUntil) sessionBattery.cooldownUntil = Number(data.cooldownUntil);
                 if (data.lastActiveTimestamp) sessionBattery.lastActiveTimestamp = Number(data.lastActiveTimestamp);
-                if (data.devForced === true) {
+                if (data.devForced === true && gameState.flags?.batterySystemUnlocked) {
                     sessionBattery.devForced = true;
                     sessionBattery.enabled = true;
                 }
@@ -89,7 +120,7 @@ export function loadBatteryState() {
     // Sincronizar con gameState: Solo se activa de juego regular si Misión 2 lo ha desbloqueado
     if (gameState.flags?.batterySystemUnlocked) {
         sessionBattery.enabled = true;
-    } else if (gameState.sessionControl?.enabled) {
+    } else if (gameState.sessionControl?.enabled && gameState.flags?.batterySystemUnlocked) {
         sessionBattery.enabled = true;
     } else if (!sessionBattery.devForced) {
         // Por defecto inactivo hasta el desarrollo de la Misión 2
@@ -103,6 +134,9 @@ export function loadBatteryState() {
         if (gameState.sessionControl) {
             gameState.sessionControl.consumedSeconds = 0;
             gameState.sessionControl.cooldownUntil = null;
+        }
+        if (hudElement) {
+            hudElement.style.display = 'none';
         }
     }
 }
