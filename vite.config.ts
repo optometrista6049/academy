@@ -140,6 +140,119 @@ export default defineConfig(() => {
             }
           });
 
+          server.middlewares.use('/api/custom-items', (req, res) => {
+            const dataDir = path.resolve(__dirname, 'assets/data');
+            const publicDataDir = path.resolve(__dirname, 'public/assets/data');
+            const dataFile = path.resolve(dataDir, 'custom_3d_items.json');
+            const publicDataFile = path.resolve(publicDataDir, 'custom_3d_items.json');
+
+            const readItemsFromDisk = () => {
+              try {
+                if (fs.existsSync(dataFile)) {
+                  const raw = fs.readFileSync(dataFile, 'utf8');
+                  const parsed = JSON.parse(raw);
+                  if (Array.isArray(parsed)) return parsed;
+                }
+              } catch (e) {
+                console.warn('[Server] Error leyendo custom_3d_items.json:', e);
+              }
+              return [];
+            };
+
+            const writeItemsToDisk = (items: unknown[]) => {
+              try {
+                fs.mkdirSync(dataDir, { recursive: true });
+                fs.mkdirSync(publicDataDir, { recursive: true });
+                const content = JSON.stringify(items, null, 2);
+                fs.writeFileSync(dataFile, content, 'utf8');
+                fs.writeFileSync(publicDataFile, content, 'utf8');
+                return true;
+              } catch (err) {
+                console.error('[Server] Error escribiendo custom_3d_items.json:', err);
+                return false;
+              }
+            };
+
+            if (req.method === 'GET') {
+              const items = readItemsFromDisk();
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: true, items }));
+            }
+
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const payload = JSON.parse(body || '{}');
+                  const currentItems = readItemsFromDisk();
+                  const { action } = payload;
+
+                  if (action === 'sync-all' && Array.isArray(payload.items)) {
+                    writeItemsToDisk(payload.items);
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, count: payload.items.length }));
+                  }
+
+                  if (action === 'save' && payload.item) {
+                    const idx = currentItems.findIndex((i: { id: string }) => i.id === payload.item.id);
+                    if (idx >= 0) {
+                      currentItems[idx] = payload.item;
+                    } else {
+                      currentItems.unshift(payload.item);
+                    }
+                    writeItemsToDisk(currentItems);
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, count: currentItems.length }));
+                  }
+
+                  if (action === 'delete' && payload.id) {
+                    const filtered = currentItems.filter((i: { id: string }) => i.id !== payload.id);
+                    writeItemsToDisk(filtered);
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, count: filtered.length }));
+                  }
+
+                  if (action === 'rename' && payload.id && payload.name) {
+                    const target = currentItems.find((i: { id: string }) => i.id === payload.id) as { name?: string; updatedAt?: number } | undefined;
+                    if (target) {
+                      target.name = String(payload.name).trim();
+                      target.updatedAt = Date.now();
+                      writeItemsToDisk(currentItems);
+                    }
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, count: currentItems.length }));
+                  }
+
+                  if (action === 'transform' && payload.id && payload.transform) {
+                    const target = currentItems.find((i: { id: string }) => i.id === payload.id) as { transform?: unknown; socket?: string; scale?: number; updatedAt?: number } | undefined;
+                    if (target) {
+                      target.transform = payload.transform;
+                      if (payload.transform.socket) target.socket = payload.transform.socket;
+                      if (typeof payload.transform.scale === 'number') target.scale = payload.transform.scale;
+                      target.updatedAt = Date.now();
+                      writeItemsToDisk(currentItems);
+                    }
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, count: currentItems.length }));
+                  }
+
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'Acción no reconocida' }));
+                } catch (err) {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: String(err) }));
+                }
+              });
+              return;
+            }
+
+            res.statusCode = 405;
+            res.end('Method Not Allowed');
+          });
+
           server.middlewares.use('/api/generate-3d', async (req, res) => {
             if (req.method === 'POST') {
               let body = '';

@@ -5551,18 +5551,25 @@ body.registry-open .devSuiteTriggerBtn,
     border-radius:8px;
     padding:8px 10px;
     gap:6px;
+    cursor:pointer;
+    user-select:none;
     transition:all 0.2s ease;
 }
 
 .devLibCard:hover{
     border-color:rgba(212, 175, 55, 0.6);
     background:rgba(26, 38, 30, 0.95);
+    transform:translateY(-1px);
+}
+
+.devLibCard:active{
+    transform:scale(0.99);
 }
 
 .devLibCard.activeCard{
-    border-color:#d4af37;
-    background:rgba(34, 52, 40, 0.95);
-    box-shadow:0 0 10px rgba(212, 175, 55, 0.2);
+    border-color:#10b981;
+    background:rgba(16, 185, 129, 0.18);
+    box-shadow:0 0 12px rgba(16, 185, 129, 0.35);
 }
 
 .devLibCardTop{
@@ -5580,6 +5587,15 @@ body.registry-open .devSuiteTriggerBtn,
     display:flex;
     flex-direction:column;
     overflow:hidden;
+    flex:1;
+}
+
+.devLibNameRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:4px;
+    overflow:hidden;
 }
 
 .devLibName{
@@ -5589,6 +5605,25 @@ body.registry-open .devSuiteTriggerBtn,
     white-space:nowrap;
     overflow:hidden;
     text-overflow:ellipsis;
+    flex:1;
+}
+
+.devRenameBtn{
+    background:none;
+    border:none;
+    font-size:0.72rem;
+    cursor:pointer;
+    padding:2px 4px;
+    border-radius:4px;
+    opacity:0.75;
+    line-height:1;
+    transition:opacity 0.15s, transform 0.15s, background 0.15s;
+}
+
+.devRenameBtn:hover{
+    opacity:1;
+    transform:scale(1.2);
+    background:rgba(255, 255, 255, 0.15);
 }
 
 .devLibSocket{

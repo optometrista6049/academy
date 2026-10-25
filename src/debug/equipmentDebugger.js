@@ -18,7 +18,7 @@ import {
     createProceduralItem,
     updateEquippedTransform as updateInGameTransform
 } from '../player/playerEquipment.js';
-import { getCustomItems, getCustomItemById, buildThreeMeshFromCode } from '../systems/customItemStorage.js';
+import { getCustomItems, getCustomItemById, buildThreeMeshFromCode, updateCustomItemTransform } from '../systems/customItemStorage.js';
 import { showDevToast } from './devPanel.js';
 
 let previewScene = null;
@@ -244,9 +244,17 @@ export function renderEquipmentDebuggerTab(container) {
                     </button>
                 </div>
 
-                <!-- EXPORTAR CÓDIGO -->
-                <div class="devCopyBox" style="margin-top:12px;">
-                    <button id="devCopyTransformBtn" class="devActionBtn" style="width:100%;">
+                <!-- GUARDAR CALIBRACIÓN DIRECTA (100% AUTOMÁTICO) -->
+                <div class="devSaveCalibrationBox" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;">
+                    <button id="devSaveCalibrationBtn" class="devActionBtn" style="width:100%;background:#10b981;color:#0e1410;font-weight:700;" title="Guarda la posición, rotación y escala automáticamente dentro de este objeto">
+                        💾 Guardar Calibración en este Objeto
+                    </button>
+                    <span id="devSaveCalibrationFeedback" class="devCopyMsg" style="color:#34d399;font-size:0.75rem;text-align:center;"></span>
+                </div>
+
+                <!-- EXPORTAR CÓDIGO (OPCIONAL) -->
+                <div class="devCopyBox" style="margin-top:8px;">
+                    <button id="devCopyTransformBtn" class="devSecondaryBtn" style="width:100%;font-size:0.78rem;" title="Copiar código JSON para desarrolladores">
                         📋 Copiar Configuración JS
                     </button>
                     <span id="devCopyFeedback" class="devCopyMsg"></span>
@@ -680,7 +688,50 @@ function equipCurrentSelectedItem() {
             if (built && built.success && built.object) {
                 previewMesh = built.object;
                 inGameMesh = buildThreeMeshFromCode(custom.code).object || createProceduralItem('flashlight');
-                if (typeof custom.scale === 'number' && custom.scale > 0 && custom.scale !== 1.0) {
+                if (custom.transform) {
+                    if (custom.transform.position) {
+                        currentTransform.position = { ...custom.transform.position };
+                        const px = document.getElementById('sliderPosX');
+                        const py = document.getElementById('sliderPosY');
+                        const pz = document.getElementById('sliderPosZ');
+                        if (px) px.value = currentTransform.position.x;
+                        if (py) py.value = currentTransform.position.y;
+                        if (pz) pz.value = currentTransform.position.z;
+                        const vx = document.getElementById('valPosX');
+                        const vy = document.getElementById('valPosY');
+                        const vz = document.getElementById('valPosZ');
+                        if (vx) vx.textContent = Number(currentTransform.position.x).toFixed(2);
+                        if (vy) vy.textContent = Number(currentTransform.position.y).toFixed(2);
+                        if (vz) vz.textContent = Number(currentTransform.position.z).toFixed(2);
+                    }
+                    if (custom.transform.rotation) {
+                        currentTransform.rotation = { ...custom.transform.rotation };
+                        const rx = document.getElementById('sliderRotX');
+                        const ry = document.getElementById('sliderRotY');
+                        const rz = document.getElementById('sliderRotZ');
+                        if (rx) rx.value = currentTransform.rotation.x;
+                        if (ry) ry.value = currentTransform.rotation.y;
+                        if (rz) rz.value = currentTransform.rotation.z;
+                        const vrx = document.getElementById('valRotX');
+                        const vry = document.getElementById('valRotY');
+                        const vrz = document.getElementById('valRotZ');
+                        if (vrx) vrx.textContent = currentTransform.rotation.x;
+                        if (vry) vry.textContent = currentTransform.rotation.y;
+                        if (vrz) vrz.textContent = currentTransform.rotation.z;
+                    }
+                    if (custom.transform.scale !== undefined) {
+                        const s = custom.transform.scale;
+                        if (typeof s === 'number') {
+                            currentTransform.scale = s;
+                            currentTransform.scaleAxes = { x: s, y: s, z: s };
+                            updateScaleUI(s);
+                        } else if (typeof s === 'object' && s !== null) {
+                            currentTransform.scale = s.x || 1.0;
+                            currentTransform.scaleAxes = { x: s.x || 1.0, y: s.y || 1.0, z: s.z || 1.0 };
+                            updateScaleUI(s.x || 1.0);
+                        }
+                    }
+                } else if (typeof custom.scale === 'number' && custom.scale > 0 && custom.scale !== 1.0) {
                     currentTransform.scale = custom.scale;
                     currentTransform.scaleAxes = { x: custom.scale, y: custom.scale, z: custom.scale };
                     updateScaleUI(custom.scale);
@@ -1217,7 +1268,37 @@ function setupEquipEvents() {
         };
     }
 
-    // 15. Copiar Código
+    // 15. Guardar Calibración Directa en el Objeto (Automático e Interno)
+    const saveCalibBtn = document.getElementById('devSaveCalibrationBtn');
+    const saveCalibFeedback = document.getElementById('devSaveCalibrationFeedback');
+    if (saveCalibBtn) {
+        saveCalibBtn.onclick = () => {
+            const custom = getCustomItemById(currentSelectedItemId);
+            if (!custom) {
+                if (saveCalibFeedback) {
+                    saveCalibFeedback.textContent = 'ℹ️ Objeto del sistema. Usa "Copiar Configuración JS".';
+                    setTimeout(() => { if (saveCalibFeedback) saveCalibFeedback.textContent = ''; }, 3000);
+                }
+                return;
+            }
+
+            const scalePayload = isUniformScale ? currentTransform.scale : { ...currentTransform.scaleAxes };
+            updateCustomItemTransform(currentSelectedItemId, {
+                socket: currentSocket,
+                position: { ...currentTransform.position },
+                rotation: { ...currentTransform.rotation },
+                scale: scalePayload
+            });
+
+            if (saveCalibFeedback) {
+                saveCalibFeedback.textContent = `✅ Calibración guardada en "${custom.name}". ¡100% automático!`;
+                setTimeout(() => { if (saveCalibFeedback) saveCalibFeedback.textContent = ''; }, 3500);
+            }
+            showDevToast(`✅ Calibración guardada en "${custom.name}"`);
+        };
+    }
+
+    // 16. Copiar Código
     const copyBtn = document.getElementById('devCopyTransformBtn');
     const copyFeedback = document.getElementById('devCopyFeedback');
     if (copyBtn) {

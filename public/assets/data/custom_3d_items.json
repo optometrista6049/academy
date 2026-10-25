@@ -1,0 +1,52 @@
+[
+  {
+    "id": "preset_energy_sword",
+    "name": "Espada de Energía",
+    "icon": "⚔️",
+    "socket": "rightHand",
+    "category": "Armas",
+    "scale": 1.0,
+    "prompt": "Espada de energía futurista con empuñadura táctica dorada y hoja de plasma cian resplandeciente",
+    "code": "// Espada de Energía Monteserín\nconst group = new THREE.Group();\ngroup.name = \"EspadaEnergia\";\n\n// Empuñadura ergonómica\nconst hiltGeo = new THREE.CylinderGeometry(0.024, 0.028, 0.22, 16);\nconst hiltMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.85, roughness: 0.3 });\nconst hilt = new THREE.Mesh(hiltGeo, hiltMat);\nhilt.position.y = -0.11;\ngroup.add(hilt);\n\n// Pomo dorado\nconst pommelGeo = new THREE.SphereGeometry(0.035, 16, 16);\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });\nconst pommel = new THREE.Mesh(pommelGeo, goldMat);\npommel.position.y = -0.22;\ngroup.add(pommel);\n\n// Guarda transversal con alas\nconst guardGeo = new THREE.BoxGeometry(0.18, 0.035, 0.05);\nconst guard = new THREE.Mesh(guardGeo, goldMat);\nguard.position.y = 0.0;\ngroup.add(guard);\n\n// Hoja de energía de plasma cian (resplandeciente)\nconst bladeGeo = new THREE.BoxGeometry(0.045, 0.72, 0.015);\nconst bladeMat = new THREE.MeshStandardMaterial({\n    color: 0x38bdf8,\n    emissive: 0x0284c7,\n    emissiveIntensity: 1.5,\n    roughness: 0.1,\n    metalness: 0.2,\n    transparent: true,\n    opacity: 0.92\n});\nconst blade = new THREE.Mesh(bladeGeo, bladeMat);\nblade.position.y = 0.36;\ngroup.add(blade);\n\n// Luz puntual emitida por la hoja\nconst light = new THREE.PointLight(0x38bdf8, 1.4, 4.0);\nlight.position.y = 0.45;\ngroup.add(light);\n\nreturn group;"
+  },
+  {
+    "id": "preset_runic_shield",
+    "name": "Escudo Rúnico",
+    "icon": "🛡️",
+    "socket": "leftHand",
+    "category": "Defensa",
+    "scale": 1.0,
+    "prompt": "Escudo defensivo circular con emblema rúnico esmeralda y borde dorado reforzado",
+    "code": "// Escudo Rúnico Monteserín\nconst group = new THREE.Group();\ngroup.name = \"EscudoRunico\";\n\n// Cuerpo principal del escudo\nconst shieldGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.025, 32);\nconst shieldMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.5, roughness: 0.4 });\nconst shield = new THREE.Mesh(shieldGeo, shieldMat);\nshield.rotation.x = Math.PI / 2;\ngroup.add(shield);\n\n// Borde exterior dorado reforzado\nconst rimGeo = new THREE.TorusGeometry(0.265, 0.02, 16, 32);\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.25 });\nconst rim = new THREE.Mesh(rimGeo, goldMat);\ngroup.add(rim);\n\n// Umbo central saliente\nconst bossGeo = new THREE.SphereGeometry(0.08, 18, 18);\nconst boss = new THREE.Mesh(bossGeo, goldMat);\nboss.position.z = 0.02;\ngroup.add(boss);\n\n// Gema rúnica central brillante\nconst gemGeo = new THREE.OctahedronGeometry(0.045);\nconst gemMat = new THREE.MeshStandardMaterial({\n    color: 0x34d399,\n    emissive: 0x10b981,\n    emissiveIntensity: 1.3,\n    roughness: 0.1\n});\nconst gem = new THREE.Mesh(gemGeo, gemMat);\ngem.position.z = 0.08;\ngroup.add(gem);\n\n// Manija de agarre posterior\nconst handleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.22, 12);\nconst handleMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.7 });\nconst handle = new THREE.Mesh(handleGeo, handleMat);\nhandle.position.z = -0.05;\ngroup.add(handle);\n\nreturn group;"
+  },
+  {
+    "id": "preset_crystal_staff",
+    "name": "Cetro de Cristal",
+    "icon": "🔮",
+    "socket": "rightHand",
+    "category": "Magia",
+    "scale": 1.0,
+    "prompt": "Báculo arcano estilizado con orbe de cristal violeta levitante y filigrana dorada",
+    "code": "// Cetro Arcano de Cristal\nconst group = new THREE.Group();\ngroup.name = \"CetroCristal\";\n\n// Vara o mástil de madera oscura noble\nconst staffGeo = new THREE.CylinderGeometry(0.022, 0.028, 1.10, 16);\nconst staffMat = new THREE.MeshStandardMaterial({ color: 0x271911, roughness: 0.65, metalness: 0.1 });\nconst staff = new THREE.Mesh(staffGeo, staffMat);\nstaff.position.y = 0.10;\ngroup.add(staff);\n\n// Anillos dorados de fijación\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.92, roughness: 0.2 });\n[-0.2, 0.1, 0.4, 0.6].forEach(y => {\n    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.007, 8, 20), goldMat);\n    ring.rotation.x = Math.PI / 2;\n    ring.position.y = y;\n    group.add(ring);\n});\n\n// Soporte o corona superior para el cristal\nconst crownGeo = new THREE.CylinderGeometry(0.075, 0.03, 0.12, 6);\nconst crown = new THREE.Mesh(crownGeo, goldMat);\ncrown.position.y = 0.66;\ngroup.add(crown);\n\n// Orbe de cristal violeta resplandeciente\nconst crystalGeo = new THREE.DodecahedronGeometry(0.085);\nconst crystalMat = new THREE.MeshStandardMaterial({\n    color: 0xc084fc,\n    emissive: 0x9333ea,\n    emissiveIntensity: 1.6,\n    roughness: 0.08,\n    metalness: 0.3,\n    transparent: true,\n    opacity: 0.90\n});\nconst crystal = new THREE.Mesh(crystalGeo, crystalMat);\ncrystal.position.y = 0.76;\ngroup.add(crystal);\n\n// Luz arcana envolvente\nconst staffLight = new THREE.PointLight(0xa855f7, 1.5, 4.5);\nstaffLight.position.y = 0.78;\ngroup.add(staffLight);\n\nreturn group;"
+  },
+  {
+    "id": "preset_tactical_radio",
+    "name": "Radio Comunicador",
+    "icon": "📻",
+    "socket": "back",
+    "category": "Tecnología",
+    "scale": 1.0,
+    "prompt": "Transmisor de comunicaciones militar con antena flexible y pantalla LCD",
+    "code": "// Radio Comunicador Táctico\nconst group = new THREE.Group();\ngroup.name = \"RadioTactico\";\n\n// Chasis principal de polímero negro\nconst bodyGeo = new THREE.BoxGeometry(0.14, 0.22, 0.07);\nconst bodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.4 });\nconst body = new THREE.Mesh(bodyGeo, bodyMat);\ngroup.add(body);\n\n// Pantalla LCD verdosa\nconst screenGeo = new THREE.PlaneGeometry(0.09, 0.055);\nconst screenMat = new THREE.MeshStandardMaterial({\n    color: 0x86efac,\n    emissive: 0x22c55e,\n    emissiveIntensity: 0.8,\n    roughness: 0.2\n});\nconst screen = new THREE.Mesh(screenGeo, screenMat);\nscreen.position.set(0, 0.045, 0.036);\ngroup.add(screen);\n\n// Rejilla de altavoz\nconst speakerGeo = new THREE.BoxGeometry(0.08, 0.04, 0.005);\nconst speakerMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });\nconst speaker = new THREE.Mesh(speakerGeo, speakerMat);\nspeaker.position.set(0, -0.045, 0.036);\ngroup.add(speaker);\n\n// Antena de alta frecuencia\nconst antennaGeo = new THREE.CylinderGeometry(0.006, 0.009, 0.38, 10);\nconst antennaMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.3 });\nconst antenna = new THREE.Mesh(antennaGeo, antennaMat);\nantenna.position.set(0.045, 0.28, 0);\ngroup.add(antenna);\n\n// Dial rotativo dorado de frecuencia\nconst dialGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.025, 16);\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });\nconst dial = new THREE.Mesh(dialGeo, goldMat);\ndial.position.set(-0.035, 0.12, 0);\ngroup.add(dial);\n\nreturn group;"
+  },
+  {
+    "id": "preset_explorer_pack",
+    "name": "Mochila de Explorador",
+    "icon": "🎒",
+    "socket": "back",
+    "category": "Accesorios",
+    "scale": 1.0,
+    "prompt": "Mochila de supervivencia de lona reforzada con correas doradas y esterilla enrollada",
+    "code": "// Mochila de Supervivencia Monteserín\nconst group = new THREE.Group();\ngroup.name = \"MochilaExplorador\";\n\n// Compartimento principal\nconst packGeo = new THREE.BoxGeometry(0.32, 0.40, 0.18);\nconst canvasMat = new THREE.MeshStandardMaterial({ color: 0x2d3a33, roughness: 0.85, metalness: 0.05 });\nconst pack = new THREE.Mesh(packGeo, canvasMat);\ngroup.add(pack);\n\n// Bolsillo frontal\nconst pocketGeo = new THREE.BoxGeometry(0.24, 0.20, 0.08);\nconst pocket = new THREE.Mesh(pocketGeo, canvasMat);\npocket.position.set(0, -0.06, 0.12);\ngroup.add(pocket);\n\n// Correas y hebillas doradas\nconst strapMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.3 });\n[-0.08, 0.08].forEach(x => {\n    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.41, 0.19), strapMat);\n    strap.position.x = x;\n    group.add(strap);\n});\n\n// Esterilla enrollada superior\nconst rollGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.36, 18);\nrollGeo.rotateZ(Math.PI / 2);\nconst rollMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.7 });\nconst roll = new THREE.Mesh(rollGeo, rollMat);\nroll.position.set(0, 0.24, 0.02);\ngroup.add(roll);\n\nreturn group;"
+  }
+]

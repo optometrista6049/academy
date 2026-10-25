@@ -14,7 +14,8 @@ import {
     buildThreeMeshFromCode,
     resetCustomLibrary,
     exportItemsJSON,
-    importItemsJSON
+    importItemsJSON,
+    updateCustomItemName
 } from '../systems/customItemStorage.js';
 import { generateThreeModelFromPrompt } from '../systems/threeGeneratorEngine.js';
 
@@ -70,7 +71,10 @@ export function renderModelGeneratorTab(container) {
                 </div>
 
                 <!-- SECCIÓN 2: METADATOS DEL OBJETO -->
-                <div class="devSectionTitle" style="margin-top:16px;">2. Propiedades del Objeto</div>
+                <div class="devSectionTitle" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center;">
+                    <span>2. Propiedades del Objeto</span>
+                    <span id="devCurrentModeBadge" class="devModeBadge" style="font-size:0.68rem;padding:2px 8px;"></span>
+                </div>
                 <div class="devPropGrid">
                     <div class="devPropField">
                         <label>Nombre:</label>
@@ -115,6 +119,9 @@ export function renderModelGeneratorTab(container) {
                     <button id="devSaveToLibraryBtn" class="devSaveBtn">
                         💾 Guardar en Biblioteca
                     </button>
+                    <button id="devSaveAsNewBtn" class="devSecondaryBtn" style="padding:8px 12px;font-size:0.78rem;" title="Crea un nuevo objeto independiente con los datos actuales">
+                        📋 Guardar como Nuevo
+                    </button>
                     <button id="devTestInEquipBtn" class="devActionBtn" style="background:#15803d;">
                         🎒 Probar en Acople Player
                     </button>
@@ -150,7 +157,12 @@ export function renderModelGeneratorTab(container) {
                 <!-- 2. BANDEJA DE BIBLIOTECA GUARDADA -->
                 <div class="devLibrarySection styledScrollbar">
                     <div class="devLibraryHeader">
-                        <div class="devSectionTitle" style="margin:0;">📚 Biblioteca de Modelos Guardados</div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div class="devSectionTitle" style="margin:0;">📚 Biblioteca de Modelos Guardados</div>
+                            <button id="devNewItemBtn" class="devActionBtn" style="padding:4px 10px;font-size:0.75rem;background:#10b981;color:#0e1410;font-weight:700;" title="Crear un nuevo objeto limpio desde cero">
+                                ➕ Nuevo Objeto
+                            </button>
+                        </div>
                         <div class="devLibraryTools">
                             <button id="devExportJsonBtn" class="devSmallBtn" title="Exportar objetos en formato JSON">💾 Exportar</button>
                             <label class="devSmallBtn" style="cursor:pointer;" title="Importar objetos JSON">
@@ -309,6 +321,76 @@ function loadItemIntoEditor(item) {
     if (codeEditor) codeEditor.value = item.code || '';
 
     compileAndPreviewCode(item.code);
+    updateEditorStatusBadge();
+}
+
+/**
+ * Actualiza el badge indicador de modo (Editando vs Nuevo) y el texto del botón de guardado.
+ */
+function updateEditorStatusBadge() {
+    const badge = document.getElementById('devCurrentModeBadge');
+    const saveBtn = document.getElementById('devSaveToLibraryBtn');
+    const saveAsNewBtn = document.getElementById('devSaveAsNewBtn');
+    const nameInput = document.getElementById('devItemNameInput');
+
+    if (genCurrentId) {
+        const customItems = getCustomItems();
+        const current = customItems.find(i => i.id === genCurrentId);
+        const name = current ? current.name : (nameInput?.value || 'Objeto');
+        if (badge) {
+            badge.textContent = `Editando: ${name}`;
+            badge.style.background = 'rgba(16, 185, 129, 0.2)';
+            badge.style.borderColor = 'rgba(16, 185, 129, 0.5)';
+            badge.style.color = '#34d399';
+        }
+        if (saveBtn) saveBtn.textContent = '💾 Actualizar Objeto';
+        if (saveAsNewBtn) saveAsNewBtn.style.display = 'inline-flex';
+    } else {
+        if (badge) {
+            badge.textContent = '✨ Nuevo Objeto (Sin guardar)';
+            badge.style.background = 'rgba(212, 175, 55, 0.2)';
+            badge.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+            badge.style.color = '#ffd54f';
+        }
+        if (saveBtn) saveBtn.textContent = '💾 Guardar en Biblioteca';
+        if (saveAsNewBtn) saveAsNewBtn.style.display = 'none';
+    }
+}
+
+/**
+ * Limpia el editor para crear un nuevo modelo desde cero sin sobreescribir el anterior.
+ */
+function startNewItemClean() {
+    genCurrentId = null;
+    genCurrentCode = `// Nuevo Objeto Three.js
+const group = new THREE.Group();
+group.name = "NuevoObjeto";
+
+// Geometría base inicial de trabajo
+const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.2, 0.2, 0.2),
+    new THREE.MeshStandardMaterial({ color: 0x10b981, metalness: 0.6, roughness: 0.3 })
+);
+group.add(mesh);
+
+return group;`;
+
+    const nameInput = document.getElementById('devItemNameInput');
+    const iconInput = document.getElementById('devItemIconInput');
+    const socketSelect = document.getElementById('devItemSocketSelect');
+    const codeEditor = document.getElementById('devCodeEditor');
+    const promptInput = document.getElementById('devGenPromptInput');
+
+    if (nameInput) nameInput.value = 'Nuevo Objeto';
+    if (iconInput) iconInput.value = '✨';
+    if (socketSelect) socketSelect.value = 'rightHand';
+    if (codeEditor) codeEditor.value = genCurrentCode;
+    if (promptInput) promptInput.value = '';
+
+    compileAndPreviewCode(genCurrentCode);
+    renderLibraryCards();
+    updateEditorStatusBadge();
+    showDevToast('✨ Editor listo para crear un nuevo objeto.');
 }
 
 /**
@@ -384,6 +466,7 @@ function applyWireframeMode(root, enabled) {
 
 /**
  * Renderiza la cuadrícula de tarjetas de la biblioteca guardada.
+ * Ahora TODA la tarjeta es clicable, y cuenta con botón de renombrado rápido ✏️.
  */
 function renderLibraryCards() {
     const grid = document.getElementById('devLibraryCardsGrid');
@@ -410,11 +493,14 @@ function renderLibraryCards() {
         const isCurrent = genCurrentId === item.id;
         const socketText = socketLabels[item.socket] || item.socket;
         return `
-            <div class="devLibCard ${isCurrent ? 'activeCard' : ''}" data-id="${item.id}">
+            <div class="devLibCard ${isCurrent ? 'activeCard' : ''}" data-id="${item.id}" title="Haz clic para cargar este objeto en el editor y visor 3D">
                 <div class="devLibCardTop">
                     <span class="devLibIcon">${escapeHtml(item.icon || '📦')}</span>
                     <div class="devLibMeta">
-                        <div class="devLibName">${escapeHtml(item.name)}</div>
+                        <div class="devLibNameRow">
+                            <span class="devLibName" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                            <button class="devRenameBtn renameCardBtn" data-id="${item.id}" title="Cambiar nombre de este objeto">✏️</button>
+                        </div>
                         <div class="devLibSocket">${socketText}</div>
                     </div>
                 </div>
@@ -433,21 +519,59 @@ function renderLibraryCards() {
         `;
     }).join('');
 
-    // Eventos de botones de cada tarjeta
+    // 1. Clic en CUALQUIER PARTE de la tarjeta para cargar el objeto
+    grid.querySelectorAll('.devLibCard').forEach(card => {
+        card.onclick = (e) => {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+            const id = card.getAttribute('data-id');
+            const target = items.find(i => i.id === id);
+            if (target) {
+                loadItemIntoEditor(target);
+                renderLibraryCards();
+                showDevToast(`Cargado: "${target.name}"`);
+            }
+        };
+    });
+
+    // 2. Renombrado rápido con icono de lápiz ✏️
+    grid.querySelectorAll('.renameCardBtn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute('data-id');
+            const target = items.find(i => i.id === id);
+            if (!target) return;
+            const newName = prompt(`Cambiar nombre de "${target.name}":`, target.name);
+            if (newName && newName.trim() && newName.trim() !== target.name) {
+                updateCustomItemName(id, newName.trim());
+                if (genCurrentId === id) {
+                    const nameInput = document.getElementById('devItemNameInput');
+                    if (nameInput) nameInput.value = newName.trim();
+                    updateEditorStatusBadge();
+                }
+                renderLibraryCards();
+                showDevToast(`Nombre actualizado a: "${newName.trim()}"`);
+            }
+        };
+    });
+
+    // 3. Botón explícito Editar
     grid.querySelectorAll('.loadCardBtn').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
             const id = btn.getAttribute('data-id');
             const target = items.find(i => i.id === id);
             if (target) {
                 loadItemIntoEditor(target);
                 renderLibraryCards();
-                showDevToast(`Cargado en editor: ${target.name}`);
+                showDevToast(`Cargado en editor: "${target.name}"`);
             }
         };
     });
 
+    // 4. Botón Acoplar al Player
     grid.querySelectorAll('.testCardBtn').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
             const id = btn.getAttribute('data-id');
             const target = items.find(i => i.id === id);
             if (target) {
@@ -456,14 +580,20 @@ function renderLibraryCards() {
         };
     });
 
+    // 5. Botón Eliminar
     grid.querySelectorAll('.delCardBtn').forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
             const id = btn.getAttribute('data-id');
             const target = items.find(i => i.id === id);
             const name = target ? target.name : 'este objeto';
             if (confirm(`¿Seguro que deseas eliminar "${name}" de tu biblioteca?`)) {
                 deleteCustomItem(id);
-                renderLibraryCards();
+                if (genCurrentId === id) {
+                    startNewItemClean();
+                } else {
+                    renderLibraryCards();
+                }
                 showDevToast(`Objeto eliminado de la biblioteca.`);
             }
         };
@@ -471,7 +601,7 @@ function renderLibraryCards() {
 }
 
 /**
- * Guarda el modelo actual en la biblioteca persistente.
+ * Guarda o actualiza el modelo actual en la biblioteca persistente.
  */
 function handleSaveCurrentItem() {
     const nameInput = document.getElementById('devItemNameInput');
@@ -502,7 +632,44 @@ function handleSaveCurrentItem() {
 
     genCurrentId = saved.id;
     renderLibraryCards();
+    updateEditorStatusBadge();
     showDevToast(`¡"${saved.name}" guardado con éxito en la biblioteca!`);
+    return saved;
+}
+
+/**
+ * Guarda como un nuevo objeto independiente (Copia / Duplicado).
+ */
+function handleSaveAsNewItem() {
+    const nameInput = document.getElementById('devItemNameInput');
+    const iconInput = document.getElementById('devItemIconInput');
+    const socketSelect = document.getElementById('devItemSocketSelect');
+    const codeEditor = document.getElementById('devCodeEditor');
+
+    let name = (nameInput?.value || '').trim() || 'Modelo Three.js (Copia)';
+    const icon = (iconInput?.value || '').trim() || '📦';
+    const socket = socketSelect?.value || 'rightHand';
+    const code = codeEditor?.value || genCurrentCode;
+
+    const compileResult = buildThreeMeshFromCode(code);
+    if (!compileResult.success) {
+        alert(`No se puede guardar: el código contiene errores de Three.js.\n\n${compileResult.error}`);
+        return null;
+    }
+
+    const saved = saveCustomItem({
+        id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name,
+        icon,
+        socket,
+        code,
+        scale: 1.0
+    });
+
+    genCurrentId = saved.id;
+    renderLibraryCards();
+    updateEditorStatusBadge();
+    showDevToast(`¡Copia guardada como nuevo objeto: "${saved.name}"!`);
     return saved;
 }
 
@@ -563,6 +730,8 @@ function setupGeneratorEvents() {
 
                 genCurrentId = null; // Es uno nuevo no guardado aún
                 compileAndPreviewCode(generated.code);
+                renderLibraryCards();
+                updateEditorStatusBadge();
                 showDevToast(`✨ ¡Modelo "${generated.name}" generado exitosamente!`);
             } catch (err) {
                 console.error('[ModelGenerator] Error generando modelo:', err);
@@ -613,7 +782,15 @@ function setupGeneratorEvents() {
         };
     }
 
-    // 5. Guardar en biblioteca
+    // 5. Botón Nuevo Objeto (Limpio)
+    const newItemBtn = document.getElementById('devNewItemBtn');
+    if (newItemBtn) {
+        newItemBtn.onclick = () => {
+            startNewItemClean();
+        };
+    }
+
+    // 6. Guardar en biblioteca (Actualizar o Crear según genCurrentId)
     const saveBtn = document.getElementById('devSaveToLibraryBtn');
     if (saveBtn) {
         saveBtn.onclick = () => {
@@ -621,13 +798,24 @@ function setupGeneratorEvents() {
         };
     }
 
-    // 6. Probar en acople
+    // 7. Guardar como Nuevo / Duplicar
+    const saveAsNewBtn = document.getElementById('devSaveAsNewBtn');
+    if (saveAsNewBtn) {
+        saveAsNewBtn.onclick = () => {
+            handleSaveAsNewItem();
+        };
+    }
+
+    // 8. Probar en acople
     const testBtn = document.getElementById('devTestInEquipBtn');
     if (testBtn) {
         testBtn.onclick = () => {
             switchToEquipmentTabWithItem();
         };
     }
+
+    // Actualizar badge inicial
+    updateEditorStatusBadge();
 
     // 7. Herramientas de visualización (Auto-rotate, Wireframe, Centrar, Zoom)
     const rotateBtn = document.getElementById('devToggleAutoRotateBtn');

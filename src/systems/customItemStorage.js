@@ -309,6 +309,7 @@ export function saveCustomItem(item) {
         socket: item.socket || 'rightHand',
         category: item.category || 'Personalizados',
         scale: typeof item.scale === 'number' ? item.scale : 1.0,
+        transform: item.transform || null,
         prompt: item.prompt || '',
         code: item.code || '',
         updatedAt: Date.now()
@@ -316,6 +317,10 @@ export function saveCustomItem(item) {
 
     const existingIndex = items.findIndex(i => i.id === normalizedItem.id);
     if (existingIndex >= 0) {
+        // Preservar transform previo si el nuevo guardado no lo incluye explícitamente
+        if (!normalizedItem.transform && items[existingIndex].transform) {
+            normalizedItem.transform = items[existingIndex].transform;
+        }
         items[existingIndex] = normalizedItem;
     } else {
         items.unshift(normalizedItem); // Los nuevos primero
@@ -328,7 +333,65 @@ export function saveCustomItem(item) {
     }
 
     notifyStorageUpdate();
+    sendServerSync({ action: 'save', item: normalizedItem });
     return normalizedItem;
+}
+
+/**
+ * Actualiza el nombre de un objeto en la biblioteca persistente.
+ */
+export function updateCustomItemName(id, newName) {
+    if (!id || !newName) return null;
+    const items = getCustomItems();
+    const item = items.find(i => i.id === id);
+    if (!item) return null;
+
+    item.name = newName.trim();
+    item.updatedAt = Date.now();
+
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (e) {
+        console.error('[CustomItemStorage] Error renombrando en localStorage:', e);
+    }
+
+    notifyStorageUpdate();
+    sendServerSync({ action: 'rename', id, name: newName.trim() });
+    return item;
+}
+
+/**
+ * Guarda o actualiza la calibración de acople (socket, posición, rotación, escala) de un objeto.
+ */
+export function updateCustomItemTransform(id, transform) {
+    if (!id || !transform) return null;
+    const items = getCustomItems();
+    const item = items.find(i => i.id === id);
+    if (!item) return null;
+
+    item.transform = {
+        position: { ...(transform.position || { x: 0, y: 0, z: 0 }) },
+        rotation: { ...(transform.rotation || { x: 0, y: 0, z: 0 }) },
+        scale: transform.scale ?? 1.0
+    };
+
+    if (transform.socket) {
+        item.socket = transform.socket;
+    }
+    if (typeof transform.scale === 'number') {
+        item.scale = transform.scale;
+    }
+    item.updatedAt = Date.now();
+
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    } catch (e) {
+        console.error('[CustomItemStorage] Error actualizando calibración en localStorage:', e);
+    }
+
+    notifyStorageUpdate();
+    sendServerSync({ action: 'transform', id, transform });
+    return item;
 }
 
 /**
@@ -345,6 +408,7 @@ export function deleteCustomItem(id) {
     }
 
     notifyStorageUpdate();
+    sendServerSync({ action: 'delete', id });
     return items;
 }
 
@@ -362,6 +426,7 @@ export function getCustomItemById(id) {
 export function resetCustomLibrary() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_3D_PRESETS));
     notifyStorageUpdate();
+    sendServerSync({ action: 'sync-all', items: [...DEFAULT_3D_PRESETS] });
     return [...DEFAULT_3D_PRESETS];
 }
 
@@ -471,3 +536,73 @@ export function buildThreeMeshFromCode(code) {
         };
     }
 }
+
+/**
+ * Envía las mutaciones de objetos al servidor para persistencia automática en disco.
+ */
+function sendServerSync(payload) {
+    if (typeof window === 'undefined') return;
+    try {
+        fetch('/api/custom-items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(err => {
+            console.warn('[CustomItemStorage] Sincronización en segundo plano con servidor:', err);
+        });
+    } catch (_) {}
+}
+
+let isServerSyncInitialized = false;
+
+/**
+ * Sincroniza al iniciar la aplicación los objetos del servidor y los del navegador.
+ * Si el servidor tiene objetos guardados, los fusiona con los locales.
+ * Si el navegador tiene objetos creados no presentes en el servidor, los sube automáticamente.
+ */
+export async function initServerSync() {
+    if (typeof window === 'undefined' || isServerSyncInitialized) return;
+    isServerSyncInitialized = true;
+
+    try {
+        const res = await fetch('/api/custom-items');
+        if (res.ok) {
+            const data = await res.json();
+            const serverItems = data?.items;
+            const localItems = getCustomItems();
+
+            if (Array.isArray(serverItems) && serverItems.length > 0) {
+                const mergedMap = new Map();
+                // 1. Añadir presets base
+                DEFAULT_3D_PRESETS.forEach(p => mergedMap.set(p.id, p));
+                // 2. Añadir server items
+                serverItems.forEach(item => mergedMap.set(item.id, item));
+                // 3. Fusionar local items (si son más recientes o personalizados como el Detector)
+                localItems.forEach(localItem => {
+                    const existing = mergedMap.get(localItem.id);
+                    if (!existing || (localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt))) {
+                        mergedMap.set(localItem.id, localItem);
+                    }
+                });
+
+                const mergedList = Array.from(mergedMap.values());
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedList));
+                notifyStorageUpdate();
+
+                // Asegurar que el servidor tenga la lista completa sincronizada
+                sendServerSync({ action: 'sync-all', items: mergedList });
+            } else if (localItems.length > 0) {
+                // Si el servidor apenas está arrancando, subir la lista local actual
+                sendServerSync({ action: 'sync-all', items: localItems });
+            }
+        }
+    } catch (e) {
+        console.warn('[CustomItemStorage] Servidor de persistencia no disponible:', e);
+    }
+}
+
+// Iniciar sincronización en segundo plano al cargar el módulo
+if (typeof window !== 'undefined') {
+    initServerSync();
+}
+
