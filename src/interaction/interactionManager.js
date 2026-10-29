@@ -91,7 +91,8 @@ import {
     startMissionFromData,
     isMissionActive,
     isObjectiveCompleted,
-    completeObjective
+    completeObjective,
+    completeActiveMission
 } from '../systems/missionManager.js';
 
 import {
@@ -411,6 +412,7 @@ export function tryInteraction(){
 
             gameState.flags.talkedToPanda = true;
             dismissPandaReminder();
+            setPandaIdle();
 
             if (!gameState.flags.metPanda) {
 
@@ -440,15 +442,16 @@ export function tryInteraction(){
                     archiveItem('aspirantCard');
                     completeObjective('deliverBadgeBox');
                     completeObjective('receiveBadge');
+                    completeActiveMission();
                     gameState.flags.deliveredBox = true;
                     gameState.flags.receivedAspirantCard = true;
                     gameState.quests.mission_001 = 'completed';
                     updateDiaryContent();
-                    saveGame();
                     saveMissionCheckpoint('mission_001_complete', {
                         name: 'Misión 1: Carnet de Aspirante',
                         safeLocation: { x: 0, y: 0, z: 4 }
                     });
+                    saveGame();
 
                     // Disparar efecto audiovisual (Opción A: Banner flotante + Chime armónico)
                     // coordinado con la aparición del texto de Monty presentando el Carnet

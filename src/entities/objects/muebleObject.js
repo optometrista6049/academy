@@ -6,6 +6,7 @@ import { addCollidable } from '../collisions.js';
 import { registerWorldObject } from '../../systems/visibilitySystem.js';
 import { gameState } from '../../state/gameState.js';
 import { MUEBLE_GLB_BASE64 } from './muebleModelData.js';
+import { getEntityTransform } from '../../systems/worldLayoutSystem.js';
 
 let muebleObject = null;
 let muebleDrawerData = null;
@@ -219,18 +220,20 @@ function applyMuebleModel(model, woodBodyMaterial, woodDrawerMaterial, metallicK
     const scaleX = baseScale * 1.50;
     const scaleY = baseScale;
     const scaleZ = baseScale * 1.60;
-    model.scale.set(scaleX, scaleY, scaleZ);
+    const transform = getEntityTransform('furniture', 'mueble', { x: 14.77, z: 23.26, rotationY: Math.PI, scale: 1.0 });
+    const scaleFactor = typeof transform.scale === 'number' ? transform.scale : 1.0;
+    model.scale.set(scaleX * scaleFactor, scaleY * scaleFactor, scaleZ * scaleFactor);
 
-    // Rotación exacta de 180 grados para que los pomos miren hacia el jugador
-    model.rotation.y = Math.PI;
+    // Rotación guardada o por defecto
+    model.rotation.y = typeof transform.rotationY === 'number' ? transform.rotationY : Math.PI;
 
     // Recalcular caja tras escalado y rotación para alineación vertical exacta
     box.setFromObject(model);
     const groundOffset = -box.min.y;
 
-    // Coordenadas solicitadas por el usuario
-    const x = 14.77;
-    const z = 23.26;
+    // Coordenadas persistentes del layout
+    const x = transform.x;
+    const z = transform.z;
     const groundY = getHeightAt(x, z);
 
     model.position.set(x, groundY + groundOffset, z);
@@ -270,6 +273,8 @@ function applyMuebleModel(model, woodBodyMaterial, woodDrawerMaterial, metallicK
     // Configuración de colisión física acorde a las nuevas dimensiones (más ancho y profundo)
     model.userData.radius = 0.95;
     model.userData.type = 'mueble';
+    model.userData.isFurniture = true;
+    model.userData.displayName = 'Mueble con Cajón Secreto';
     model.userData.solid = true;
 
     addCollidable(model);
@@ -312,6 +317,8 @@ function buildProceduralMuebleFallback(woodBodyMaterial, woodDrawerMaterial, met
     group.position.set(x, groundY + groundOffset, z);
     group.userData.radius = 0.95;
     group.userData.type = 'mueble';
+    group.userData.isFurniture = true;
+    group.userData.displayName = 'Mueble con Cajón Secreto';
     group.userData.solid = true;
 
     addCollidable(group);

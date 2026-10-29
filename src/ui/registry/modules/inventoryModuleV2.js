@@ -52,21 +52,25 @@ export function restoreInventoryFromGameState(){
     }
 
     // 2. Red de seguridad / Fallback de misiones completadas:
-    if (gameState.flags?.deliveredBox || gameState.flags?.receivedAspirantCard) {
+    const isDelivered = Boolean(gameState.flags?.deliveredBox || gameState.flags?.receivedAspirantCard);
+    const isOpened = Boolean(gameState.flags?.openedMueble || gameState.flags?.drawerOpened);
+    const hasKeyFlag = Boolean(gameState.flags?.hasFurnitureKey);
+
+    if (isDelivered) {
         const aspirantCardItem = registryCatalog['aspirantCard'];
         if (aspirantCardItem && !inventoryObjects.some(it => it.id === aspirantCardItem.id)) {
             inventoryObjects.push(aspirantCardItem);
         }
     }
 
-    if (gameState.flags?.hasFurnitureKey && !gameState.flags?.drawerOpened) {
-        const keyItem = registryCatalog['badgeKey'];
+    if (hasKeyFlag && !isOpened) {
+        const keyItem = registryCatalog['furnitureKey'] || registryCatalog['badgeKey'];
         if (keyItem && !inventoryObjects.some(it => it.id === keyItem.id)) {
             inventoryObjects.push(keyItem);
         }
     }
 
-    if (gameState.flags?.drawerOpened && !gameState.flags?.deliveredBox) {
+    if (isOpened && !isDelivered) {
         const boxItem = registryCatalog['badgeBox'];
         if (boxItem && !inventoryObjects.some(it => it.id === boxItem.id)) {
             inventoryObjects.push(boxItem);

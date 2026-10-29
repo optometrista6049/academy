@@ -26,6 +26,7 @@ import {
 } from '../systems/worldObjectsManager.js';
 import { runtimeState } from '../state/runtimeState.js';
 import { showDevToast, closeDevPanel } from './devPanel.js';
+import { showDevModalDialog } from './devModalDialog.js';
 
 export function renderWorldEditorTab(container) {
     const placedObjects = getSavedWorldObjects();
@@ -359,15 +360,22 @@ function setupWorldEditorEvents(container) {
         };
     });
 
-    // 6. Vaciar todo el escenario
+    // 6. Vaciar todo el escenario con confirmación visual integrada
     const clearAllBtn = container.querySelector('#devClearAllSceneBtn');
     if (clearAllBtn) {
         clearAllBtn.onclick = () => {
-            if (confirm('¿Estás seguro de que deseas eliminar TODOS los objetos colocados en el escenario?')) {
-                clearAllPlacedWorldObjects();
-                showDevToast('🧹 Todo el escenario ha sido vaciado');
-                renderWorldEditorTab(container);
-            }
+            showDevModalDialog({
+                title: '🧹 Vaciar Escenario Completo',
+                message: '¿Estás seguro de que deseas eliminar <strong>TODOS</strong> los objetos colocados en el escenario?<br><br><span style="font-size:0.8rem;color:#fca5a5;">Esta acción eliminará todos los objetos colocados tanto del navegador como del archivo del servidor.</span>',
+                confirmText: '🔴 Sí, Vaciar Todo',
+                cancelText: 'Cancelar',
+                isDanger: true,
+                onConfirm: () => {
+                    clearAllPlacedWorldObjects();
+                    showDevToast('🧹 Todo el escenario ha sido vaciado');
+                    renderWorldEditorTab(container);
+                }
+            });
         };
     }
 

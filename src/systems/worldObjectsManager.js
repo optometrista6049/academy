@@ -14,6 +14,10 @@ import { scene } from '../core/scene.js';
 import { getHeightAt } from '../terrain/terrainHeight.js';
 import { getCustomItems, getCustomItemById, buildThreeMeshFromCode } from './customItemStorage.js';
 import { createProceduralItem } from '../player/playerEquipment.js';
+import { addCollidable, collidables, cameraObstacles } from '../entities/collisions.js';
+import { registerCollidableInGrid, rebuildSpatialGrid, registerVisualInChunk, unregisterVisualFromChunk } from './chunkSystem.js';
+import { createIndividualTree } from '../environment/trees.js';
+import { createIndividualRock } from '../environment/rocks.js';
 
 const STORAGE_KEY = 'monteserin_world_placed_objects_v1';
 const UPLOADED_MODELS_KEY = 'monteserin_custom_uploaded_models_v1';
@@ -21,6 +25,64 @@ const VERSIONS_KEY = 'monteserin_world_versions_v1';
 
 // Mapa de instancias activas en la escena 3D viva: id -> { data, mesh }
 const activeWorldObjects = new Map();
+
+/**
+ * Calcula con precisión física el radio cilíndrico de colisión para el Spatial Hash Grid
+ * a partir de la geometría 3D real y la escala del objeto.
+ */
+export function calculateObjectCollisionRadius(mesh, scale = 1.0) {
+    if (!mesh) return 0.8 * scale;
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (box.isEmpty()) return 0.8 * scale;
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const horizontalSpan = Math.hypot(size.x, size.z);
+    return Math.max(0.4, Math.min(horizontalSpan * 0.42, 12.0));
+}
+
+/**
+ * Optimiza las submallas del objeto para garantizar que el Frustum Culling
+ * nativo de Three.js descarte instantáneamente geometrías fuera de visión.
+ */
+export function optimizeMeshForRendering(mesh) {
+    if (!mesh) return;
+    mesh.traverse((node) => {
+        if (node.isMesh && node.geometry) {
+            if (!node.geometry.boundingBox) node.geometry.computeBoundingBox();
+            if (!node.geometry.boundingSphere) node.geometry.computeBoundingSphere();
+            node.frustumCulled = true;
+        }
+    });
+}
+
+/**
+ * Libera de forma recursiva y profunda toda la memoria de VRAM y RAM:
+ * geometrías (BufferGeometry), materiales y todas sus texturas asociadas.
+ */
+export function deepDisposeObject(root) {
+    if (!root) return;
+    root.traverse((node) => {
+        if (node.isMesh) {
+            if (node.geometry) {
+                node.geometry.dispose();
+            }
+            if (node.material) {
+                const mats = Array.isArray(node.material) ? node.material : [node.material];
+                mats.forEach((mat) => {
+                    if (mat.map) mat.map.dispose();
+                    if (mat.normalMap) mat.normalMap.dispose();
+                    if (mat.roughnessMap) mat.roughnessMap.dispose();
+                    if (mat.metalnessMap) mat.metalnessMap.dispose();
+                    if (mat.bumpMap) mat.bumpMap.dispose();
+                    if (mat.displacementMap) mat.displacementMap.dispose();
+                    if (mat.emissiveMap) mat.emissiveMap.dispose();
+                    mat.dispose();
+                });
+            }
+        }
+    });
+}
 
 /**
  * Obtiene la lista de objetos guardados en el escenario.
@@ -38,7 +100,7 @@ export function getSavedWorldObjects() {
 }
 
 /**
- * Guarda la lista completa en LocalStorage.
+ * Guarda la lista completa en LocalStorage y la sincroniza con el servidor.
  */
 export function saveWorldObjects(objectsList) {
     try {
@@ -46,6 +108,7 @@ export function saveWorldObjects(objectsList) {
     } catch (err) {
         console.error('[WorldObjectsManager] Error guardando objetos del mundo:', err);
     }
+    sendWorldServerSync({ action: 'save-objects', objects: objectsList });
 }
 
 /**
@@ -184,6 +247,22 @@ export async function instantiateWorldObject(itemDesc) {
         }
     }
 
+    // 4. Árbol individual persistente
+    if (itemDesc.source === 'tree') {
+        const archIdx = typeof itemDesc.archetypeIndex === 'number' ? itemDesc.archetypeIndex : 0;
+        const tree = createIndividualTree(archIdx, itemDesc.trunkColor, itemDesc.leafColor);
+        tree.name = `worldObj_${itemDesc.id || 'tree'}`;
+        return tree;
+    }
+
+    // 5. Roca individual persistente
+    if (itemDesc.source === 'rock') {
+        const geoType = typeof itemDesc.geoType !== 'undefined' ? itemDesc.geoType : 0;
+        const rock = createIndividualRock(geoType, itemDesc.rockColor);
+        rock.name = `worldObj_${itemDesc.id || 'rock'}`;
+        return rock;
+    }
+
     // Fallback geométrico visible
     return createFallbackObject(itemDesc.name || 'Objeto');
 }
@@ -209,7 +288,7 @@ function createFallbackObject(name = 'Objeto') {
 /**
  * Añade un objeto al mundo tanto en la escena 3D como en la persistencia.
  */
-export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scale = 1.0) {
+export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scale = 1.0, isSolid = true) {
     const id = itemDesc.id || `world_obj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 
     const mesh = await instantiateWorldObject(itemDesc);
@@ -225,6 +304,30 @@ export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scal
     // Calcular y colocar exactamente sobre el terreno con el offset correspondiente
     snapObjectToTerrain(mesh, position.x, position.z);
 
+    // Configurar estado sólido/traspasable
+    const solid = itemDesc.isSolid !== undefined ? Boolean(itemDesc.isSolid) : Boolean(isSolid);
+    const radius = calculateObjectCollisionRadius(mesh, s);
+    mesh.userData.radius = radius;
+    mesh.userData.isSolid = solid;
+    mesh.userData.isWorldObject = true;
+    mesh.userData.worldId = id;
+    mesh.userData.logicType = itemDesc.logicType || 'default';
+    mesh.userData.logicConfig = itemDesc.logicConfig ? { ...itemDesc.logicConfig } : {};
+
+    // Si es sólido, registrar en el Spatial Hash Grid de colisiones físicas y obstáculos de cámara
+    if (solid) {
+        addCollidable(mesh);
+        if (!cameraObstacles.includes(mesh)) {
+            cameraObstacles.push(mesh);
+        }
+    }
+
+    // Registrar en el sistema de Chunks espaciales (LOD / Culling a más de 180m)
+    registerVisualInChunk(mesh, mesh.position.x, mesh.position.z);
+
+    // Optimizar para Frustum Culling
+    optimizeMeshForRendering(mesh);
+
     // Añadir a la escena viva del juego
     scene.add(mesh);
 
@@ -236,6 +339,14 @@ export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scal
         sourceId: itemDesc.sourceId || null,
         url: itemDesc.url || null,
         code: itemDesc.code || null,
+        archetypeIndex: itemDesc.archetypeIndex,
+        trunkColor: itemDesc.trunkColor,
+        leafColor: itemDesc.leafColor,
+        geoType: itemDesc.geoType,
+        rockColor: itemDesc.rockColor,
+        isSolid: solid,
+        logicType: itemDesc.logicType || 'default',
+        logicConfig: itemDesc.logicConfig ? { ...itemDesc.logicConfig } : {},
         position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
         rotationY: mesh.rotation.y,
         scale: s,
@@ -253,29 +364,70 @@ export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scal
 }
 
 /**
- * Actualiza la posición, rotación o escala de un objeto ya colocado.
+ * Actualiza la posición, rotación, escala o solidez de un objeto ya colocado.
  */
-export function updatePlacedObjectTransform(id, { x, z, rotationY, scale }) {
+export function updatePlacedObjectTransform(id, { x, z, position, rotationY, scale, isSolid }) {
     const entry = activeWorldObjects.get(id);
     if (!entry) return null;
 
     const { data, mesh } = entry;
+    let transformChanged = false;
 
     if (typeof scale === 'number' && scale > 0) {
         mesh.scale.set(scale, scale, scale);
         data.scale = scale;
+        mesh.userData.radius = calculateObjectCollisionRadius(mesh, scale);
+        transformChanged = true;
     }
 
     if (typeof rotationY === 'number') {
         mesh.rotation.y = rotationY;
         data.rotationY = rotationY;
+        transformChanged = true;
     }
 
-    const newX = x !== undefined ? x : mesh.position.x;
-    const newZ = z !== undefined ? z : mesh.position.z;
+    const posX = x !== undefined ? x : (position?.x !== undefined ? position.x : undefined);
+    const posZ = z !== undefined ? z : (position?.z !== undefined ? position.z : undefined);
 
-    snapObjectToTerrain(mesh, newX, newZ);
-    data.position = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+    if (posX !== undefined || posZ !== undefined) {
+        const newX = posX !== undefined ? posX : mesh.position.x;
+        const newZ = posZ !== undefined ? posZ : mesh.position.z;
+
+        // Migrar de chunk visual al moverse
+        unregisterVisualFromChunk(mesh);
+        snapObjectToTerrain(mesh, newX, newZ);
+        registerVisualInChunk(mesh, mesh.position.x, mesh.position.z);
+
+        data.position = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+        transformChanged = true;
+    }
+
+    // Cambiar estado Sólido / Traspasable si se solicita
+    if (isSolid !== undefined) {
+        const newSolid = Boolean(isSolid);
+        data.isSolid = newSolid;
+        mesh.userData.isSolid = newSolid;
+
+        if (newSolid) {
+            if (!collidables.includes(mesh)) {
+                collidables.push(mesh);
+            }
+            if (!cameraObstacles.includes(mesh)) {
+                cameraObstacles.push(mesh);
+            }
+        } else {
+            const cIdx = collidables.indexOf(mesh);
+            if (cIdx >= 0) collidables.splice(cIdx, 1);
+            const camIdx = cameraObstacles.indexOf(mesh);
+            if (camIdx >= 0) cameraObstacles.splice(camIdx, 1);
+        }
+        transformChanged = true;
+    }
+
+    // Si cambió posición, escala o solidez, reconstruir el Spatial Hash Grid
+    if (transformChanged) {
+        rebuildSpatialGrid(collidables);
+    }
 
     // Sincronizar persistencia
     const all = getSavedWorldObjects();
@@ -289,23 +441,156 @@ export function updatePlacedObjectTransform(id, { x, z, rotationY, scale }) {
 }
 
 /**
- * Elimina un objeto colocado del mundo y de la persistencia.
+ * Conmuta entre estado Sólido (con colisión) y Traspasable (sin colisión)
+ */
+export function toggleObjectSolidState(id) {
+    const entry = activeWorldObjects.get(id);
+    if (!entry) return null;
+    const currentSolid = entry.data.isSolid !== false;
+    const newSolid = !currentSolid;
+    updatePlacedObjectTransform(id, { isSolid: newSolid });
+    return { id, isSolid: newSolid, name: entry.data.name };
+}
+
+/**
+ * Duplica un objeto del mundo existente manteniendo su modelo, rotación,
+ * escala, estado de colisión y configuración lógica, asignándole un nuevo
+ * ID único y colocándolo desplazado en el terreno.
+ *
+ * @param {string} id ID del objeto original a duplicar
+ * @param {{x?: number, z?: number}} [customOffset] Desplazamiento opcional
+ * @returns {Promise<{ record: object, mesh: THREE.Object3D, id: string, type: string, data: object }|null>}
+ */
+export async function duplicateWorldObject(id, customOffset = null) {
+    const entry = activeWorldObjects.get(id);
+    let originalData = entry ? entry.data : null;
+
+    if (!originalData) {
+        const saved = getSavedWorldObjects();
+        originalData = saved.find(o => o.id === id);
+    }
+    if (!originalData) {
+        console.warn('[WorldObjectsManager] No se encontró el objeto original a duplicar:', id);
+        return null;
+    }
+
+    const currentScale = typeof originalData.scale === 'number' ? originalData.scale : 1.0;
+    const currentRotY = typeof originalData.rotationY === 'number' ? originalData.rotationY : 0;
+    const radius = entry?.mesh?.userData?.radius || (1.5 * currentScale);
+
+    // Calcular desplazamiento inteligente para que la copia no quede tapando exactamente al original
+    const offsetDistance = Math.max(2.2, radius * 2.2);
+    const offsetX = customOffset && typeof customOffset.x === 'number' ? customOffset.x : offsetDistance;
+    const offsetZ = customOffset && typeof customOffset.z === 'number' ? customOffset.z : offsetDistance;
+
+    const origPos = originalData.position || { x: 0, y: 0, z: 0 };
+    const newPos = {
+        x: origPos.x + offsetX,
+        y: origPos.y,
+        z: origPos.z + offsetZ
+    };
+
+    const duplicateDesc = {
+        name: originalData.name ? `${originalData.name} (Copia)` : 'Elemento Duplicado',
+        icon: originalData.icon || '📦',
+        source: originalData.source || 'custom',
+        sourceId: originalData.sourceId || null,
+        url: originalData.url || null,
+        code: originalData.code || null,
+        archetypeIndex: originalData.archetypeIndex,
+        trunkColor: originalData.trunkColor,
+        leafColor: originalData.leafColor,
+        geoType: originalData.geoType,
+        rockColor: originalData.rockColor,
+        isSolid: originalData.isSolid !== false,
+        logicType: originalData.logicType || 'default',
+        logicConfig: originalData.logicConfig ? JSON.parse(JSON.stringify(originalData.logicConfig)) : {}
+    };
+
+    const placed = await placeObjectInWorld(
+        duplicateDesc,
+        newPos,
+        currentRotY,
+        currentScale,
+        duplicateDesc.isSolid
+    );
+
+    if (placed) {
+        return {
+            id: placed.record.id,
+            record: placed.record,
+            data: placed.record,
+            mesh: placed.mesh,
+            type: 'custom'
+        };
+    }
+    return null;
+}
+
+/**
+ * Actualiza la información lógica, nombre o comportamiento de un objeto colocado.
+ *
+ * @param {string} id ID del objeto
+ * @param {{ name?: string, icon?: string, logicType?: string, logicConfig?: object, isSolid?: boolean }} logicData
+ * @returns {object|null}
+ */
+export function updateWorldObjectLogic(id, { name, icon, logicType, logicConfig, isSolid }) {
+    const entry = activeWorldObjects.get(id);
+    if (!entry) return null;
+
+    const { data, mesh } = entry;
+
+    if (name && typeof name === 'string') {
+        data.name = name.trim();
+        if (mesh) mesh.name = `worldObj_${data.name}_${id}`;
+    }
+    if (icon && typeof icon === 'string') {
+        data.icon = icon;
+    }
+    if (logicType !== undefined) {
+        data.logicType = logicType;
+        if (mesh) mesh.userData.logicType = logicType;
+    }
+    if (logicConfig !== undefined) {
+        data.logicConfig = { ...(data.logicConfig || {}), ...logicConfig };
+        if (mesh) mesh.userData.logicConfig = data.logicConfig;
+    }
+    if (isSolid !== undefined) {
+        updatePlacedObjectTransform(id, { isSolid });
+    }
+
+    // Guardar en persistencia
+    const all = getSavedWorldObjects();
+    const idx = all.findIndex(o => o.id === id);
+    if (idx >= 0) {
+        all[idx] = { ...data };
+        saveWorldObjects(all);
+    }
+
+    return entry;
+}
+
+/**
+ * Elimina un objeto colocado del mundo y de la persistencia con liberación de VRAM.
  */
 export function removePlacedObjectFromWorld(id) {
     const entry = activeWorldObjects.get(id);
     if (entry && entry.mesh) {
+        // 1. Quitar de colisiones y obstáculos de cámara
+        const cIdx = collidables.indexOf(entry.mesh);
+        if (cIdx >= 0) collidables.splice(cIdx, 1);
+        const camIdx = cameraObstacles.indexOf(entry.mesh);
+        if (camIdx >= 0) cameraObstacles.splice(camIdx, 1);
+        rebuildSpatialGrid(collidables);
+
+        // 2. Quitar de chunks visuales
+        unregisterVisualFromChunk(entry.mesh);
+
+        // 3. Remover de la escena
         scene.remove(entry.mesh);
-        // Limpieza de geometrías y materiales
-        entry.mesh.traverse((node) => {
-            if (node.isMesh) {
-                node.geometry?.dispose();
-                if (Array.isArray(node.material)) {
-                    node.material.forEach(m => m.dispose());
-                } else {
-                    node.material?.dispose();
-                }
-            }
-        });
+
+        // 4. Liberación profunda de geometrías, materiales y texturas (VRAM / RAM)
+        deepDisposeObject(entry.mesh);
     }
     activeWorldObjects.delete(id);
 
@@ -315,14 +600,21 @@ export function removePlacedObjectFromWorld(id) {
 }
 
 /**
- * Elimina todos los objetos colocados del mundo.
+ * Elimina todos los objetos colocados del mundo con liberación profunda de memoria.
  */
 export function clearAllPlacedWorldObjects() {
     activeWorldObjects.forEach((entry) => {
         if (entry.mesh) {
+            const cIdx = collidables.indexOf(entry.mesh);
+            if (cIdx >= 0) collidables.splice(cIdx, 1);
+            const camIdx = cameraObstacles.indexOf(entry.mesh);
+            if (camIdx >= 0) cameraObstacles.splice(camIdx, 1);
+            unregisterVisualFromChunk(entry.mesh);
             scene.remove(entry.mesh);
+            deepDisposeObject(entry.mesh);
         }
     });
+    rebuildSpatialGrid(collidables);
     activeWorldObjects.clear();
     saveWorldObjects([]);
 }
@@ -344,8 +636,29 @@ export async function loadAndSpawnWorldObjects() {
                 mesh.scale.set(s, s, s);
                 mesh.rotation.y = typeof item.rotationY === 'number' ? item.rotationY : 0;
 
-                // Si tiene coordenadas fijadas, colocarlas directamente con snap al terreno
+                // Snap exacto al terreno
                 snapObjectToTerrain(mesh, item.position.x, item.position.z);
+
+                // Configurar colisión física
+                const solid = item.isSolid !== false;
+                const radius = calculateObjectCollisionRadius(mesh, s);
+                mesh.userData.radius = radius;
+                mesh.userData.isSolid = solid;
+                mesh.userData.isWorldObject = true;
+                mesh.userData.worldId = item.id;
+                mesh.userData.logicType = item.logicType || 'default';
+                mesh.userData.logicConfig = item.logicConfig ? { ...item.logicConfig } : {};
+
+                if (solid) {
+                    addCollidable(mesh);
+                    if (!cameraObstacles.includes(mesh)) {
+                        cameraObstacles.push(mesh);
+                    }
+                }
+
+                // Chunks espaciales de 180m y Frustum Culling
+                registerVisualInChunk(mesh, item.position.x, item.position.z);
+                optimizeMeshForRendering(mesh);
 
                 scene.add(mesh);
                 activeWorldObjects.set(item.id, { data: item, mesh });
@@ -362,7 +675,7 @@ export async function loadAndSpawnWorldObjects() {
 export function getActiveWorldMeshes() {
     const list = [];
     activeWorldObjects.forEach((entry, id) => {
-        list.push({ id, data: entry.data, mesh: entry.mesh });
+        list.push({ id, data: entry.data, mesh: entry.mesh, type: 'custom' });
     });
     return list;
 }
@@ -498,6 +811,7 @@ export function saveSceneVersion(customName = '') {
     } catch (err) {
         console.warn('[WorldObjectsManager] Error guardando snapshot de versión:', err);
     }
+    sendWorldServerSync({ action: 'save-versions', versions });
     return versionRecord;
 }
 
@@ -523,7 +837,94 @@ export function deleteSceneVersion(versionId) {
     try {
         localStorage.setItem(VERSIONS_KEY, JSON.stringify(versions));
     } catch (_) {}
+    sendWorldServerSync({ action: 'save-versions', versions });
     return versions;
 }
+
+/**
+ * Envía datos de objetos del mundo y versiones al servidor en segundo plano.
+ * Garantiza persistencia física en disco sin consumir tokens de IA.
+ */
+function sendWorldServerSync(payload) {
+    if (typeof window === 'undefined') return;
+    try {
+        fetch('/api/world-objects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).catch(err => {
+            console.warn('[WorldObjectsManager] Sincronización en segundo plano con servidor:', err);
+        });
+    } catch (_) {}
+}
+
+let isWorldServerSyncInitialized = false;
+
+/**
+ * Sincroniza al iniciar la aplicación los objetos del mundo y versiones del servidor y del navegador.
+ * Si el servidor tiene datos en disco y el navegador está vacío (nueva sesión o tras borrar caché),
+ * descarga e instancia los objetos del mundo automáticamente.
+ */
+export async function initWorldServerSync() {
+    if (typeof window === 'undefined' || isWorldServerSyncInitialized) return;
+    isWorldServerSyncInitialized = true;
+
+    try {
+        const res = await fetch('/api/world-objects');
+        if (res.ok) {
+            const data = await res.json();
+            const serverObjects = data?.objects;
+            const serverVersions = data?.versions;
+            const localObjects = getSavedWorldObjects();
+            const localVersions = getSceneVersions();
+
+            // 1. Sincronización de Objetos del Mundo Colocados
+            if (Array.isArray(serverObjects) && serverObjects.length > 0) {
+                if (localObjects.length === 0) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(serverObjects));
+                    // Si el mundo ya inició y no tenía objetos, cargarlos ahora
+                    if (activeWorldObjects.size === 0) {
+                        await loadAndSpawnWorldObjects();
+                    }
+                } else {
+                    // Combinar respetando ambos lados
+                    const map = new Map();
+                    serverObjects.forEach(o => map.set(o.id, o));
+                    localObjects.forEach(o => map.set(o.id, o));
+                    const mergedObjects = Array.from(map.values());
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedObjects));
+                    sendWorldServerSync({ action: 'save-objects', objects: mergedObjects });
+                }
+            } else if (localObjects.length > 0) {
+                // Subir lo que el usuario ya tenga en su navegador al archivo del servidor
+                sendWorldServerSync({ action: 'save-objects', objects: localObjects });
+            }
+
+            // 2. Sincronización de Versiones / Snapshots
+            if (Array.isArray(serverVersions) && serverVersions.length > 0) {
+                if (localVersions.length === 0) {
+                    localStorage.setItem(VERSIONS_KEY, JSON.stringify(serverVersions));
+                } else {
+                    const verMap = new Map();
+                    serverVersions.forEach(v => verMap.set(v.id, v));
+                    localVersions.forEach(v => verMap.set(v.id, v));
+                    const mergedVersions = Array.from(verMap.values());
+                    localStorage.setItem(VERSIONS_KEY, JSON.stringify(mergedVersions));
+                    sendWorldServerSync({ action: 'save-versions', versions: mergedVersions });
+                }
+            } else if (localVersions.length > 0) {
+                sendWorldServerSync({ action: 'save-versions', versions: localVersions });
+            }
+        }
+    } catch (e) {
+        console.warn('[WorldObjectsManager] Error en sincronización inicial con servidor:', e);
+    }
+}
+
+// Iniciar sincronización en segundo plano al cargar el módulo
+if (typeof window !== 'undefined') {
+    initWorldServerSync();
+}
+
 
 

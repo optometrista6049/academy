@@ -253,6 +253,216 @@ export default defineConfig(() => {
             res.end('Method Not Allowed');
           });
 
+          server.middlewares.use('/api/world-objects', (req, res) => {
+            const dataDir = path.resolve(__dirname, 'assets/data');
+            const publicDataDir = path.resolve(__dirname, 'public/assets/data');
+            const dataFile = path.resolve(dataDir, 'world_placed_objects.json');
+            const publicDataFile = path.resolve(publicDataDir, 'world_placed_objects.json');
+
+            const readWorldData = (): { objects: unknown[]; versions: unknown[]; updatedAt?: number } => {
+              try {
+                if (fs.existsSync(dataFile)) {
+                  const raw = fs.readFileSync(dataFile, 'utf8');
+                  const parsed = JSON.parse(raw);
+                  if (parsed && typeof parsed === 'object') {
+                    return {
+                      objects: Array.isArray(parsed.objects) ? parsed.objects : (Array.isArray(parsed) ? parsed : []),
+                      versions: Array.isArray(parsed.versions) ? parsed.versions : [],
+                      updatedAt: parsed.updatedAt || Date.now()
+                    };
+                  }
+                }
+              } catch (e) {
+                console.warn('[Server] Error leyendo world_placed_objects.json:', e);
+              }
+              return { objects: [], versions: [], updatedAt: Date.now() };
+            };
+
+            const writeWorldData = (data: { objects: unknown[]; versions: unknown[]; updatedAt?: number }) => {
+              try {
+                fs.mkdirSync(dataDir, { recursive: true });
+                fs.mkdirSync(publicDataDir, { recursive: true });
+                const content = JSON.stringify(data, null, 2);
+                fs.writeFileSync(dataFile, content, 'utf8');
+                fs.writeFileSync(publicDataFile, content, 'utf8');
+                return true;
+              } catch (err) {
+                console.error('[Server] Error escribiendo world_placed_objects.json:', err);
+                return false;
+              }
+            };
+
+            if (req.method === 'GET') {
+              const current = readWorldData();
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: true, objects: current.objects, versions: current.versions }));
+            }
+
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const payload = JSON.parse(body || '{}');
+                  const current = readWorldData();
+                  const { action } = payload;
+
+                  if (action === 'sync-all') {
+                    const objects = Array.isArray(payload.objects) ? payload.objects : current.objects;
+                    const versions = Array.isArray(payload.versions) ? payload.versions : current.versions;
+                    writeWorldData({ objects, versions, updatedAt: Date.now() });
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, objectCount: objects.length, versionCount: versions.length }));
+                  }
+
+                  if (action === 'save-objects') {
+                    const objects = Array.isArray(payload.objects) ? payload.objects : [];
+                    writeWorldData({ objects, versions: current.versions, updatedAt: Date.now() });
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, objectCount: objects.length }));
+                  }
+
+                  if (action === 'save-versions') {
+                    const versions = Array.isArray(payload.versions) ? payload.versions : current.versions;
+                    writeWorldData({ objects: current.objects, versions, updatedAt: Date.now() });
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, versionCount: versions.length }));
+                  }
+
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'Acción no reconocida' }));
+                } catch (err) {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: String(err) }));
+                }
+              });
+              return;
+            }
+
+            res.statusCode = 405;
+            res.end('Method Not Allowed');
+          });
+
+          server.middlewares.use('/api/world-layout', (req, res) => {
+            const dataDir = path.resolve(__dirname, 'assets/data');
+            const publicDataDir = path.resolve(__dirname, 'public/assets/data');
+            const layoutFile = path.resolve(dataDir, 'world_layout.json');
+            const publicLayoutFile = path.resolve(publicDataDir, 'world_layout.json');
+            const versionsFile = path.resolve(dataDir, 'world_layout_versions.json');
+            const publicVersionsFile = path.resolve(publicDataDir, 'world_layout_versions.json');
+
+            const readLayoutData = (): { layout: Record<string, unknown>; versions: unknown[] } => {
+              let layout: Record<string, unknown> = {};
+              let versions: unknown[] = [];
+              try {
+                if (fs.existsSync(layoutFile)) {
+                  const raw = fs.readFileSync(layoutFile, 'utf8');
+                  layout = JSON.parse(raw);
+                }
+              } catch (e) {
+                console.warn('[Server] Error leyendo world_layout.json:', e);
+              }
+              try {
+                if (fs.existsSync(versionsFile)) {
+                  const raw = fs.readFileSync(versionsFile, 'utf8');
+                  versions = JSON.parse(raw);
+                }
+              } catch (_) {}
+              return { layout, versions: Array.isArray(versions) ? versions : [] };
+            };
+
+            const writeLayoutData = (layout: Record<string, unknown>) => {
+              try {
+                fs.mkdirSync(dataDir, { recursive: true });
+                fs.mkdirSync(publicDataDir, { recursive: true });
+                const content = JSON.stringify(layout, null, 2);
+                fs.writeFileSync(layoutFile, content, 'utf8');
+                fs.writeFileSync(publicLayoutFile, content, 'utf8');
+                return true;
+              } catch (err) {
+                console.error('[Server] Error escribiendo world_layout.json:', err);
+                return false;
+              }
+            };
+
+            const writeVersionsData = (versions: unknown[]) => {
+              try {
+                fs.mkdirSync(dataDir, { recursive: true });
+                fs.mkdirSync(publicDataDir, { recursive: true });
+                const content = JSON.stringify(versions, null, 2);
+                fs.writeFileSync(versionsFile, content, 'utf8');
+                fs.writeFileSync(publicVersionsFile, content, 'utf8');
+                return true;
+              } catch (err) {
+                console.error('[Server] Error escribiendo world_layout_versions.json:', err);
+                return false;
+              }
+            };
+
+            if (req.method === 'GET') {
+              const current = readLayoutData();
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ success: true, layout: current.layout, versions: current.versions }));
+            }
+
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const payload = JSON.parse(body || '{}');
+                  const current = readLayoutData();
+                  const { action } = payload;
+
+                  if (action === 'save-layout' && payload.layout) {
+                    const merged = { ...current.layout, ...payload.layout, updatedAt: Date.now() };
+                    writeLayoutData(merged);
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, layout: merged }));
+                  }
+
+                  if (action === 'update-entity' && payload.category && payload.transform) {
+                    const { category, entityId, transform } = payload;
+                    const layout = { ...current.layout };
+                    if (category === 'playerSpawn') {
+                      layout.playerSpawn = transform;
+                    } else {
+                      if (!layout[category] || typeof layout[category] !== 'object') {
+                        layout[category] = {};
+                      }
+                      const catObj = layout[category] as Record<string, unknown>;
+                      catObj[entityId] = { ...(catObj[entityId] as Record<string, unknown> || {}), ...transform };
+                    }
+                    layout.updatedAt = Date.now();
+                    writeLayoutData(layout);
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, layout }));
+                  }
+
+                  if (action === 'save-versions' && Array.isArray(payload.versions)) {
+                    writeVersionsData(payload.versions);
+                    res.setHeader('Content-Type', 'application/json');
+                    return res.end(JSON.stringify({ success: true, versionCount: payload.versions.length }));
+                  }
+
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'Acción no reconocida en /api/world-layout' }));
+                } catch (err) {
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: String(err) }));
+                }
+              });
+              return;
+            }
+
+            res.statusCode = 405;
+            res.end('Method Not Allowed');
+          });
+
           server.middlewares.use('/api/generate-3d', async (req, res) => {
             if (req.method === 'POST') {
               let body = '';

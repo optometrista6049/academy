@@ -23,24 +23,28 @@ let currentAction;
 
 const actions = {};
 
+import { getEntityTransform } from '../../systems/worldLayoutSystem.js';
+
 export function loadTeleronNPC(){
 
     console.log('LOAD TELERON NPC');
+    const transform = getEntityTransform('npcs', 'Telerón', { x: 0, z: 5, rotationY: 0, scale: 1.8 });
 
     loadModel(
 
         'assets/models/npc/TeleronNPC.glb',
 
-        0,
-        5,
+        transform.x,
+        transform.z,
 
-        1.8,
+        transform.scale || 1.8,
 
         (model,gltf)=>{
 
             console.log('TELERON MODEL LOADED');
 
             TeleronNPC = model;
+            TeleronNPC.userData = { isNPC: true, npcName: 'Telerón', type: 'npc' };
 
             // Personalizar color de pelo: Pelirrojo (#d05e26)
             TeleronNPC.traverse((child)=>{
@@ -64,15 +68,19 @@ export function loadTeleronNPC(){
 
             );
 
-            TeleronNPC.lookAt(
+            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+                TeleronNPC.rotation.y = transform.rotationY;
+            } else {
+                TeleronNPC.lookAt(
 
-                0,
+                    0,
 
-                TeleronNPC.position.y,
+                    TeleronNPC.position.y,
 
-                0
+                    0
 
-            );
+                );
+            }
 
             TeleronNPC.userData.radius = 0.9;
 

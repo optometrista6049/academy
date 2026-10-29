@@ -182,11 +182,85 @@ export function createMainMenu(onStart) {
         };
     }
 
+    // Modal de confirmación para iniciar nueva experiencia (Opción A)
+    function showNewGameConfirmModal(onConfirm) {
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            inset: '0',
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: '100000',
+            padding: '16px'
+        });
+
+        const hasCp = hasMissionCheckpoint();
+        const cpInfo = getMissionCheckpointInfo();
+        const cpDetail = (hasCp && cpInfo?.missionTitle)
+            ? `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;font-size:0.78rem;color:#fca5a5;line-height:1.4;">
+                ⚠️ <strong>Aviso de progreso guardado:</strong> Ya tienes un punto seguro en <strong>"${cpInfo.missionTitle}"</strong>. Iniciar una nueva experiencia eliminará este punto de restauración para comenzar una partida 100% limpia.
+               </div>`
+            : `<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;font-size:0.78rem;color:#94a3b8;line-height:1.4;">
+                ℹ️ Esta acción restablecerá tu posición, inventario y registros para comenzar la aventura desde el principio.
+               </div>`;
+
+        const card = document.createElement('div');
+        Object.assign(card.style, {
+            background: 'linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(9, 14, 26, 0.98))',
+            border: '1.5px solid rgba(245, 158, 11, 0.55)',
+            boxShadow: '0 12px 36px rgba(0,0,0,0.85), 0 0 24px rgba(245, 158, 11, 0.25)',
+            borderRadius: '16px',
+            padding: '24px',
+            maxWidth: '420px',
+            width: '90%',
+            textAlign: 'center',
+            color: '#f1f5f9',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+        });
+
+        card.innerHTML = `
+            <div style="font-size:2rem;line-height:1;">✨</div>
+            <h3 style="margin:0;font-size:1.15rem;font-weight:800;color:#fbbf24;text-transform:uppercase;letter-spacing:1px;">
+                ¿Iniciar Nueva Experiencia?
+            </h3>
+            <p style="margin:0;font-size:0.88rem;line-height:1.5;color:#cbd5e1;">
+                ¿Deseas comenzar la aventura desde el principio en Monteserín Academy?
+            </p>
+            ${cpDetail}
+            <div style="display:flex;gap:10px;justify-content:center;margin-top:6px;">
+                <button id="cancelNewGameBtn" style="flex:1;padding:12px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;">
+                    Cancelar
+                </button>
+                <button id="confirmNewGameBtn" style="flex:1;padding:12px;background:linear-gradient(180deg,#d97706,#b45309);border:1px solid #f59e0b;color:#fff;border-radius:8px;cursor:pointer;font-weight:700;box-shadow:0 4px 14px rgba(217,119,6,0.4);">
+                    Comenzar de Cero
+                </button>
+            </div>
+        `;
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        card.querySelector('#cancelNewGameBtn').onclick = () => overlay.remove();
+        card.querySelector('#confirmNewGameBtn').onclick = () => {
+            overlay.remove();
+            onConfirm();
+        };
+        overlay.onclick = (e) => {
+            if (e.target === overlay) overlay.remove();
+        };
+    }
+
     // Helper para crear una fila de botón con su icono táctil de información
     function createMenuRow({
         text,
         subtext = '',
         isCheckpoint = false,
+        isLocked = false,
         onClick,
         infoData
     }) {
@@ -194,7 +268,7 @@ export function createMainMenu(onStart) {
         row.className = 'mainMenuItemRow';
 
         const actionBtn = document.createElement('button');
-        actionBtn.className = `mainMenuActionBtn ${isCheckpoint ? 'btnCheckpoint' : ''}`;
+        actionBtn.className = `mainMenuActionBtn ${isCheckpoint ? 'btnCheckpoint' : ''} ${isLocked ? 'btnCheckpointLocked' : ''}`;
         actionBtn.innerHTML = `
             <span>${text}</span>
             ${subtext ? `<span class="mainMenuBtnSubtext">${subtext}</span>` : ''}
@@ -257,42 +331,46 @@ export function createMainMenu(onStart) {
 
     // ======================================================
     // 2. RETOMAR ÚLTIMA MISIÓN (PUNTO SEGURO 100% COMPLETADA)
+    // Solo visible cuando ya se ha completado al menos una misión con éxito
     // ======================================================
+    const isCheckpointReady = hasMissionCheckpoint();
     const cpInfo = getMissionCheckpointInfo();
-    const cpSubtext = cpInfo?.missionTitle ? `Punto seguro: ${cpInfo.missionTitle}` : '';
 
-    const resumeMissionItem = createMenuRow({
-        text: 'RETOMAR ÚLTIMA MISIÓN',
-        subtext: cpSubtext,
-        isCheckpoint: true,
-        onClick: () => {
-            if (sessionBattery.enabled && isCooldownActive()) {
-                showRestOverlay();
-                return;
+    if (isCheckpointReady) {
+        const cpSubtext = cpInfo?.missionTitle
+            ? `Punto seguro: ${cpInfo.missionTitle}`
+            : 'Punto seguro: Misión completada';
+
+        const resumeMissionItem = createMenuRow({
+            text: 'RETOMAR ÚLTIMA MISIÓN',
+            subtext: cpSubtext,
+            isCheckpoint: true,
+            isLocked: false,
+            onClick: () => {
+                if (sessionBattery.enabled && isCooldownActive()) {
+                    showRestOverlay();
+                    return;
+                }
+
+                showCheckpointConfirmModal(() => {
+                    showLoadingScreen();
+                    loadMissionCheckpoint();
+                    cleanupMenu();
+                    setTimeout(() => {
+                        onStart();
+                    }, 50);
+                });
+            },
+            infoData: {
+                title: 'Retomar Última Misión',
+                icon: '🛡️',
+                description: 'Restaura el estado seguro registrado al completar formalmente tu última misión.',
+                statusHtml: `<strong>Misión guardada:</strong> ${cpInfo?.missionTitle || 'Última misión completada'}<br><strong>Fecha de guardado:</strong> ${cpInfo?.dateFormatted || 'Reciente'}<br><br>💡 Diseñado como red de seguridad automática ante errores de sincronización o bloqueos sin perder todo tu progreso general.`
             }
-            showCheckpointConfirmModal(() => {
-                showLoadingScreen();
-                loadMissionCheckpoint();
-                cleanupMenu();
-                setTimeout(() => {
-                    onStart();
-                }, 50);
-            });
-        },
-        infoData: {
-            title: 'Retomar Última Misión',
-            icon: '🛡️',
-            description: 'Restaura el estado seguro registrado al completar al 100% tu última misión.',
-            statusHtml: cpInfo
-                ? `<strong>Misión guardada:</strong> ${cpInfo.missionTitle}<br><strong>Fecha de guardado:</strong> ${cpInfo.dateFormatted || 'Reciente'}<br><br>💡 Diseñado como red de seguridad ante errores de sincronización o bloqueos sin perder todo tu progreso general.`
-                : 'No se detecta ningún punto de control de misión completada todavía.'
-        }
-    });
+        });
 
-    if (!hasMissionCheckpoint()) {
-        resumeMissionItem.row.style.display = 'none';
+        colLeft.appendChild(resumeMissionItem.row);
     }
-    colLeft.appendChild(resumeMissionItem.row);
 
     // ======================================================
     // 3. NUEVA EXPERIENCIA (COLUMNA IZQUIERDA)
@@ -300,19 +378,28 @@ export function createMainMenu(onStart) {
     const newItem = createMenuRow({
         text: 'NUEVA EXPERIENCIA',
         onClick: () => {
-            resetSessionBatteryForNewGame();
-            showLoadingScreen();
-            deleteSave();
-            cleanupMenu();
-            setTimeout(() => {
-                onStart();
-            }, 50);
+            const hasExisting = hasSave() || hasMissionCheckpoint();
+            const startNewExperience = () => {
+                resetSessionBatteryForNewGame();
+                showLoadingScreen();
+                deleteSave();
+                cleanupMenu();
+                setTimeout(() => {
+                    onStart();
+                }, 50);
+            };
+
+            if (hasExisting) {
+                showNewGameConfirmModal(startNewExperience);
+            } else {
+                startNewExperience();
+            }
         },
         infoData: {
             title: 'Nueva Experiencia',
             icon: '✨',
             description: 'Comienza una aventura totalmente nueva desde el inicio en Monteserín Academy.',
-            statusHtml: '⚠️ <strong>Atención:</strong> Iniciar una nueva experiencia reiniciará tu inventario, tus carnets archivados y las misiones desde el principio.'
+            statusHtml: '⚠️ <strong>Atención:</strong> Iniciar una nueva experiencia reiniciará tu inventario, tus carnets archivados y los puntos de control de misión para comenzar de cero.'
         }
     });
     colLeft.appendChild(newItem.row);

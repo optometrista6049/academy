@@ -23,24 +23,28 @@ let currentAction;
 
 const actions = {};
 
+import { getEntityTransform } from '../../systems/worldLayoutSystem.js';
+
 export function loadAltoNPC(){
 
     console.log('LOAD ALTO NPC');
+    const transform = getEntityTransform('npcs', 'Alto', { x: 4, z: 2, rotationY: 0, scale: 2.7 });
 
     loadModel(
 
         'assets/models/npc/AltoNPC.glb',
 
-        4,
-        2,
+        transform.x,
+        transform.z,
 
-        2.7,
+        transform.scale || 2.7,
 
         (model,gltf)=>{
 
             console.log('ALTO MODEL LOADED');
 
             AltoNPC = model;
+            AltoNPC.userData = { isNPC: true, npcName: 'Alto', type: 'npc' };
 			
 			registerWorldObject(
 
@@ -50,15 +54,19 @@ export function loadAltoNPC(){
 
             );
 
-            AltoNPC.lookAt(
+            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+                AltoNPC.rotation.y = transform.rotationY;
+            } else {
+                AltoNPC.lookAt(
 
-                0,
+                    0,
 
-                AltoNPC.position.y,
+                    AltoNPC.position.y,
 
-                0
+                    0
 
-            );
+                );
+            }
 
             AltoNPC.userData.radius = 0.9;
 

@@ -14,6 +14,7 @@ import {
 import {
     isPointNearBridge
 } from './bridgeSystem.js';
+import { isProceduralInstanceHidden } from '../systems/worldLayoutSystem.js';
 
 // =====================================
 // GEOMETRY HELPERS (100% Procedural Three.js)
@@ -453,11 +454,68 @@ function buildTreeArchetypes() {
     return archetypes;
 }
 
+let cachedTreeArchetypes = null;
+
+export function getTreeArchetypes() {
+    if (!cachedTreeArchetypes) {
+        cachedTreeArchetypes = buildTreeArchetypes();
+    }
+    return cachedTreeArchetypes;
+}
+
+/**
+ * Crea un árbol 3D individual e independiente reutilizando la geometría de arquetipo
+ * con sus sombras y materiales facetados de Three.js.
+ */
+export function createIndividualTree(archetypeIndex = 0, trunkColorHex = 0x5a3e28, leafColorHex = 0x2e6f40) {
+    const archetypes = getTreeArchetypes();
+    const safeIdx = Math.max(0, Math.min(archetypes.length - 1, archetypeIndex));
+    const arch = archetypes[safeIdx];
+
+    const group = new THREE.Group();
+    group.name = `individual_tree_${safeIdx}`;
+    group.userData = { isTree: true, type: 'tree', archetypeIndex: safeIdx };
+
+    const tColor = typeof trunkColorHex === 'string' ? new THREE.Color(trunkColorHex) :
+                   (typeof trunkColorHex === 'number' ? new THREE.Color(trunkColorHex) : 
+                   (trunkColorHex instanceof THREE.Color ? trunkColorHex : new THREE.Color(0x5a3e28)));
+
+    const lColor = typeof leafColorHex === 'string' ? new THREE.Color(leafColorHex) :
+                   (typeof leafColorHex === 'number' ? new THREE.Color(leafColorHex) : 
+                   (leafColorHex instanceof THREE.Color ? leafColorHex : new THREE.Color(0x2e6f40)));
+
+    const trunkMat = new THREE.MeshStandardMaterial({
+        color: tColor,
+        roughness: 0.92,
+        metalness: 0.04,
+        flatShading: true
+    });
+
+    const leavesMat = new THREE.MeshStandardMaterial({
+        color: lColor,
+        roughness: 0.84,
+        metalness: 0.05,
+        flatShading: true
+    });
+
+    const trunkMesh = new THREE.Mesh(arch.trunk, trunkMat);
+    trunkMesh.castShadow = true;
+    trunkMesh.receiveShadow = false;
+
+    const foliageMesh = new THREE.Mesh(arch.foliage, leavesMat);
+    foliageMesh.castShadow = true;
+    foliageMesh.receiveShadow = false;
+
+    group.add(trunkMesh);
+    group.add(foliageMesh);
+    return group;
+}
+
 // =====================================
 // FOREST GENERATION WITH INSTANCED MESH
 // =====================================
 export function createForest() {
-    const archetypes = buildTreeArchetypes();
+    const archetypes = getTreeArchetypes();
     const archetypeCount = archetypes.length;
 
     // Cubos para agrupar instancias por arquetipo
@@ -544,16 +602,8 @@ export function createForest() {
             rotY,
             scale,
             trunkColor,
-            leafColor
-        });
-
-        // Registro de colisión física en el Spatial Hash Grid calibrado al tronco de madera
-        const radius = arch.radius * scale;
-        addCollidable({
-            position: new THREE.Vector3(x, y, z),
-            userData: {
-                radius
-            }
+            leafColor,
+            archIdx: variant
         });
     }
 
@@ -588,8 +638,29 @@ export function createForest() {
         foliageMesh.castShadow = true;
         foliageMesh.receiveShadow = false;
 
+        trunkMesh.userData = { isTree: true, type: 'tree', pairMesh: foliageMesh, archetypeIndex: archIdx, name: `Árbol (Arquetipo ${archIdx + 1})`, instances: bucket };
+        foliageMesh.userData = { isTree: true, type: 'tree', pairMesh: trunkMesh, archetypeIndex: archIdx, name: `Árbol (Arquetipo ${archIdx + 1})`, instances: bucket };
+
         for (let i = 0; i < bucket.length; i++) {
             const inst = bucket[i];
+
+            // Comprobar si esta instancia fue ocultada/desacoplada permanentemente por el usuario
+            const isHidden = isProceduralInstanceHidden('trees', {
+                archIdx,
+                instanceIdx: i,
+                x: inst.x,
+                z: inst.z
+            });
+
+            if (isHidden) {
+                dummy.position.set(0, -999, 0);
+                dummy.scale.set(0, 0, 0);
+                dummy.updateMatrix();
+                trunkMesh.setMatrixAt(i, dummy.matrix);
+                foliageMesh.setMatrixAt(i, dummy.matrix);
+                inst.isHidden = true;
+                continue;
+            }
 
             dummy.position.set(inst.x, inst.y, inst.z);
             dummy.rotation.set(0, inst.rotY, 0);
@@ -601,6 +672,18 @@ export function createForest() {
 
             trunkMesh.setColorAt(i, inst.trunkColor);
             foliageMesh.setColorAt(i, inst.leafColor);
+
+            // Registro de colisión física para instancias activas
+            const archData = archetypes[archIdx];
+            const radius = (archData?.radius || 0.5) * inst.scale;
+            const colRef = addCollidable({
+                position: new THREE.Vector3(inst.x, inst.y, inst.z),
+                userData: {
+                    radius,
+                    isTree: true
+                }
+            });
+            inst.colRef = colRef;
         }
 
         trunkMesh.instanceMatrix.needsUpdate = true;

@@ -15,6 +15,7 @@ import {
 import {
     isPointNearBridge
 } from './bridgeSystem.js';
+import { isProceduralInstanceHidden } from '../systems/worldLayoutSystem.js';
 
 // =====================================
 // ROCK INSTANCES DATA
@@ -45,14 +46,6 @@ function recordRock(x, z, scale = 1) {
         rotZ,
         geoType,
         radius: scale
-    });
-
-    // Colisión física indexada en Spatial Hash Grid
-    addCollidable({
-        position: new THREE.Vector3(x, y, z),
-        userData: {
-            radius: scale
-        }
     });
 }
 
@@ -135,8 +128,25 @@ function buildRockInstancedMeshes() {
         const dodecMesh = new THREE.InstancedMesh(dodecGeo, rockMaterial, dodecList.length);
         dodecMesh.castShadow = true;
         dodecMesh.receiveShadow = true;
+        dodecMesh.userData = { isRock: true, type: 'rock', geoType: 'dodecaedro', name: 'Roca Dodecaédrica', instances: dodecList };
 
         dodecList.forEach((r, idx) => {
+            const isHidden = isProceduralInstanceHidden('rocks', {
+                geoType: 'dodecaedro',
+                instanceIdx: idx,
+                x: r.x,
+                z: r.z
+            });
+
+            if (isHidden) {
+                dummy.position.set(0, -999, 0);
+                dummy.scale.set(0, 0, 0);
+                dummy.updateMatrix();
+                dodecMesh.setMatrixAt(idx, dummy.matrix);
+                r.isHidden = true;
+                return;
+            }
+
             dummy.position.set(r.x, r.y, r.z);
             dummy.rotation.set(r.rotX, r.rotY, r.rotZ);
             dummy.scale.set(r.scaleX, r.scaleY, r.scaleZ);
@@ -145,6 +155,15 @@ function buildRockInstancedMeshes() {
             dodecMesh.setMatrixAt(idx, dummy.matrix);
             tempColor.setHex(rockShades[idx % rockShades.length]);
             dodecMesh.setColorAt(idx, tempColor);
+
+            // Registro de colisión física para instancias visibles
+            r.colRef = addCollidable({
+                position: new THREE.Vector3(r.x, r.y, r.z),
+                userData: {
+                    radius: r.radius,
+                    isRock: true
+                }
+            });
         });
 
         dodecMesh.instanceMatrix.needsUpdate = true;
@@ -158,8 +177,25 @@ function buildRockInstancedMeshes() {
         const icosaMesh = new THREE.InstancedMesh(icosaGeo, rockMaterial, icosaList.length);
         icosaMesh.castShadow = true;
         icosaMesh.receiveShadow = true;
+        icosaMesh.userData = { isRock: true, type: 'rock', geoType: 'icosaedro', name: 'Roca Icosaédrica', instances: icosaList };
 
         icosaList.forEach((r, idx) => {
+            const isHidden = isProceduralInstanceHidden('rocks', {
+                geoType: 'icosaedro',
+                instanceIdx: idx,
+                x: r.x,
+                z: r.z
+            });
+
+            if (isHidden) {
+                dummy.position.set(0, -999, 0);
+                dummy.scale.set(0, 0, 0);
+                dummy.updateMatrix();
+                icosaMesh.setMatrixAt(idx, dummy.matrix);
+                r.isHidden = true;
+                return;
+            }
+
             dummy.position.set(r.x, r.y, r.z);
             dummy.rotation.set(r.rotX, r.rotY, r.rotZ);
             dummy.scale.set(r.scaleX, r.scaleY, r.scaleZ);
@@ -168,6 +204,15 @@ function buildRockInstancedMeshes() {
             icosaMesh.setMatrixAt(idx, dummy.matrix);
             tempColor.setHex(rockShades[(idx + 2) % rockShades.length]);
             icosaMesh.setColorAt(idx, tempColor);
+
+            // Registro de colisión física para instancias visibles
+            r.colRef = addCollidable({
+                position: new THREE.Vector3(r.x, r.y, r.z),
+                userData: {
+                    radius: r.radius,
+                    isRock: true
+                }
+            });
         });
 
         icosaMesh.instanceMatrix.needsUpdate = true;
@@ -175,6 +220,34 @@ function buildRockInstancedMeshes() {
         scene.add(icosaMesh);
         cameraObstacles.push(icosaMesh);
     }
+}
+
+/**
+ * Crea una roca 3D individual e independiente con su geometría y material facetado Three.js.
+ */
+export function createIndividualRock(geoType = 0, rockColorHex = 0x666666) {
+    const isIcosa = (geoType === 1 || geoType === 'icosaedro');
+    const geo = isIcosa
+        ? new THREE.IcosahedronGeometry(1, 0)
+        : new THREE.DodecahedronGeometry(1, 0);
+
+    const color = typeof rockColorHex === 'string' ? new THREE.Color(rockColorHex) :
+                  (typeof rockColorHex === 'number' ? new THREE.Color(rockColorHex) :
+                  (rockColorHex instanceof THREE.Color ? rockColorHex : new THREE.Color(0x666666)));
+
+    const mat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.85,
+        metalness: 0.1,
+        flatShading: true
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = `individual_rock_${isIcosa ? 'icosa' : 'dodec'}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData = { isRock: true, type: 'rock', geoType: isIcosa ? 'icosaedro' : 'dodecaedro' };
+    return mesh;
 }
 
 // =====================================

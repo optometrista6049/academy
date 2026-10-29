@@ -93,6 +93,20 @@ export function deleteSave(){
     try {
         resetSessionBatteryForNewGame();
     } catch {}
+    try {
+        gameState.player = { x: 0, y: 0, z: 0 };
+        gameState.quests = {};
+        gameState.flags = { metPanda: false, registryUnlocked: false };
+        gameState.inventory = [];
+        gameState.archived = [];
+        gameState.dialogueIndices = { panda: 0, alto: 0, telerin: 0, teleron: 0 };
+        gameState.npcRelations = {};
+        gameState.discoveredLocations = [];
+        gameState.playTime = 0;
+        if (gameState.missionCheckpoint) {
+            delete gameState.missionCheckpoint;
+        }
+    } catch {}
 }
 
 export function hasSave(){
@@ -124,6 +138,61 @@ export function hasSave(){
 
 const CHECKPOINT_KEY = 'monteserinAcademy_missionCheckpoint';
 
+// Catálogo y resolvedor dinámico de títulos de misiones
+const MISSION_TITLES = {
+    mission_001: 'Misión 1: Carnet de Aspirante',
+    mission001: 'Misión 1: Carnet de Aspirante',
+    mission_001_complete: 'Misión 1: Carnet de Aspirante',
+    mission_002: 'Misión 2: Los Guardianes de la Academia',
+    mission002: 'Misión 2: Los Guardianes de la Academia',
+    mission_002_complete: 'Misión 2: Los Guardianes de la Academia',
+    mission_003: 'Misión 3: El Enigma del Santuario',
+    mission003: 'Misión 3: El Enigma del Santuario',
+    mission_003_complete: 'Misión 3: El Enigma del Santuario'
+};
+
+export function resolveMissionTitle(missionId) {
+    if (!missionId) return 'Misión Completada';
+    if (MISSION_TITLES[missionId]) return MISSION_TITLES[missionId];
+    const numMatch = missionId.match(/\d+/);
+    if (numMatch) {
+        const num = parseInt(numMatch[0], 10);
+        return `Misión ${num}`;
+    }
+    return `Misión: ${missionId}`;
+}
+
+export function getLatestCompletedMission(sourceQuests = {}, sourceFlags = {}) {
+    const completedList = [];
+
+    if (sourceQuests && typeof sourceQuests === 'object') {
+        for (const [mId, status] of Object.entries(sourceQuests)) {
+            if (status === 'completed') {
+                const numMatch = mId.match(/\d+/);
+                const order = numMatch ? parseInt(numMatch[0], 10) : 1;
+                completedList.push({ id: mId, order });
+            }
+        }
+    }
+
+    // Compatibilidad retroactiva con Misión 1 (Carnet de aspirante) si flags marcan completado
+    if (sourceFlags && (sourceFlags.receivedAspirantCard || sourceFlags.deliveredBox)) {
+        if (!completedList.some(m => m.id === 'mission_001' || m.id === 'mission001')) {
+            completedList.push({ id: 'mission_001', order: 1 });
+        }
+    }
+
+    if (completedList.length === 0) return null;
+
+    completedList.sort((a, b) => b.order - a.order);
+    const latest = completedList[0];
+    return {
+        id: latest.id,
+        order: latest.order,
+        title: resolveMissionTitle(latest.id)
+    };
+}
+
 export function saveMissionCheckpoint(missionId, metadata = {}){
     try {
         if(runtimeState.player){
@@ -132,10 +201,13 @@ export function saveMissionCheckpoint(missionId, metadata = {}){
             gameState.player.z = runtimeState.player.position.z;
         }
 
+        const cleanMissionId = missionId || 'checkpoint';
+        const resolvedTitle = metadata.name || metadata.title || resolveMissionTitle(cleanMissionId);
+
         const payload = {
             version: 1,
-            missionId: missionId || 'checkpoint',
-            missionTitle: metadata.name || 'Misión Guardada',
+            missionId: cleanMissionId,
+            missionTitle: resolvedTitle,
             safeLocation: metadata.safeLocation || {
                 x: gameState.player.x || 0,
                 y: gameState.player.y || 0,
@@ -151,8 +223,11 @@ export function saveMissionCheckpoint(missionId, metadata = {}){
             gameState: JSON.parse(JSON.stringify(gameState))
         };
 
+        // Guardado atómico dual: en su clave propia y dentro de gameState para persistir siempre
+        gameState.missionCheckpoint = payload;
         localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
-        console.log(`💾 Punto de control seguro guardado [${payload.missionTitle}] (${payload.dateFormatted})`);
+        saveGame();
+        console.log(`💾 Punto de control seguro guardado atómicamente [${payload.missionTitle}] (${payload.dateFormatted})`);
     } catch(err){
         console.warn('No se pudo guardar el punto de control de misión:', err);
     }
@@ -160,10 +235,16 @@ export function saveMissionCheckpoint(missionId, metadata = {}){
 
 export function loadMissionCheckpoint(){
     try {
+        let data = null;
         const raw = localStorage.getItem(CHECKPOINT_KEY);
-        if(!raw || typeof raw !== 'string' || !raw.trim()) return false;
+        if(raw && typeof raw === 'string' && raw.trim()) {
+            try { data = JSON.parse(raw); } catch {}
+        }
 
-        const data = JSON.parse(raw);
+        if(!data && gameState.missionCheckpoint) {
+            data = gameState.missionCheckpoint;
+        }
+
         if(!data || !data.gameState || typeof data.gameState !== 'object') return false;
 
         // Sobrescribir el estado actual con el snapshot verificado del checkpoint
@@ -209,49 +290,45 @@ export function ensureMissionCheckpointFromSave() {
         const save = JSON.parse(rawSave);
         if (!save || typeof save !== 'object') return false;
 
-        // Regla estricta: Los puntos de control SEGUROS solo se registran cuando una misión
-        // está 100% COMPLETADA, no durante su evolución o inicios para evitar desincronías.
-        const isMission1Completed = save.quests?.mission_001 === 'completed' || save.flags?.receivedAspirantCard;
-
-        if (isMission1Completed) {
-            const rawCheckpoint = localStorage.getItem(CHECKPOINT_KEY);
-            let shouldWrite = true;
-
-            if (rawCheckpoint && rawCheckpoint.trim() && rawCheckpoint !== 'undefined') {
-                try {
-                    const existing = JSON.parse(rawCheckpoint);
-                    // Si ya existe y es de misión completada válida y reciente, no sobreescribir
-                    if (existing && existing.missionId === 'mission_001_complete' && existing.gameState?.quests?.mission_001 === 'completed') {
-                        shouldWrite = false;
-                    }
-                } catch {
-                    shouldWrite = true;
-                }
-            }
-
-            if (shouldWrite) {
-                const payload = {
-                    version: 1,
-                    missionId: 'mission_001_complete',
-                    missionTitle: 'Misión 1: Carnet de Aspirante (Completada)',
-                    safeLocation: { x: save.player?.x || 0, y: save.player?.y || 0, z: save.player?.z || 4 },
-                    timestamp: Date.now(),
-                    dateFormatted: new Date().toLocaleString('es-ES', {
-                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-                    }),
-                    gameState: JSON.parse(JSON.stringify(save))
-                };
-                localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
-                console.log('🛡️ Punto de control seguro de misión completada sincronizado:', payload.missionTitle);
-            }
-            return true;
+        const latest = getLatestCompletedMission(save.quests, save.flags);
+        if (!latest) {
+            return false;
         }
 
-        // Si la Misión 1 no está completada al 100%, purgar cualquier checkpoint residual huérfano
-        try {
-            localStorage.removeItem(CHECKPOINT_KEY);
-        } catch {}
-        return false;
+        const rawCheckpoint = localStorage.getItem(CHECKPOINT_KEY);
+        let shouldWrite = true;
+
+        if (rawCheckpoint && rawCheckpoint.trim() && rawCheckpoint !== 'undefined' && rawCheckpoint !== 'null') {
+            try {
+                const existing = JSON.parse(rawCheckpoint);
+                if (existing && existing.missionId && existing.gameState) {
+                    const existingNumMatch = existing.missionId.match(/\d+/);
+                    const existingOrder = existingNumMatch ? parseInt(existingNumMatch[0], 10) : 0;
+                    if (existingOrder >= latest.order) {
+                        shouldWrite = false;
+                    }
+                }
+            } catch {
+                shouldWrite = true;
+            }
+        }
+
+        if (shouldWrite) {
+            const payload = {
+                version: 1,
+                missionId: `${latest.id}_complete`,
+                missionTitle: `${latest.title} (Completada)`,
+                safeLocation: { x: save.player?.x || 0, y: save.player?.y || 0, z: save.player?.z || 4 },
+                timestamp: Date.now(),
+                dateFormatted: new Date().toLocaleString('es-ES', {
+                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                }),
+                gameState: JSON.parse(JSON.stringify(save))
+            };
+            localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(payload));
+            console.log('🛡️ Punto de control seguro sincronizado con última misión completada:', payload.missionTitle);
+        }
+        return true;
     } catch {
         return false;
     }
@@ -261,28 +338,39 @@ export function hasMissionCheckpoint(){
     try {
         ensureMissionCheckpointFromSave();
         const raw = localStorage.getItem(CHECKPOINT_KEY);
-        if(!raw || typeof raw !== 'string' || !raw.trim()) return false;
-        
-        const parsed = JSON.parse(raw);
-        if(!parsed || !parsed.gameState || typeof parsed.gameState !== 'object') {
-            try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
-            return false;
+        if(raw && typeof raw === 'string' && raw.trim() && raw !== 'undefined' && raw !== 'null') {
+            const parsed = JSON.parse(raw);
+            if(parsed && parsed.gameState && typeof parsed.gameState === 'object') {
+                const latestInCp = getLatestCompletedMission(parsed.gameState?.quests, parsed.gameState?.flags) ||
+                                   (parsed.missionId && parsed.missionId.includes('complete'));
+                if (latestInCp) {
+                    return true;
+                }
+            }
         }
 
-        // Validación estricta: Solo es válido si la misión está formalmente 100% completada
-        const isCompleted = parsed.missionId?.includes('complete') ||
-                            parsed.gameState?.quests?.mission_001 === 'completed' ||
-                            parsed.gameState?.flags?.receivedAspirantCard === true;
-
-        if (!isCompleted) {
-            // Auto-purgar checkpoint huérfano o incompleto (ej: del 23/10)
-            try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
-            return false;
+        // Verificación en gameState activo
+        if (gameState.missionCheckpoint && gameState.missionCheckpoint.gameState) {
+            const latestInActive = getLatestCompletedMission(
+                gameState.missionCheckpoint.gameState.quests,
+                gameState.missionCheckpoint.gameState.flags
+            );
+            if (latestInActive) {
+                return true;
+            }
         }
 
-        return true;
+        // Verificación en guardado principal
+        const rawSave = localStorage.getItem(SAVE_KEY);
+        if (rawSave) {
+            const save = JSON.parse(rawSave);
+            if (save && getLatestCompletedMission(save.quests, save.flags)) {
+                return true;
+            }
+        }
+
+        return false;
     } catch {
-        try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
         return false;
     }
 }
@@ -290,13 +378,38 @@ export function hasMissionCheckpoint(){
 export function getMissionCheckpointInfo(){
     try {
         if (!hasMissionCheckpoint()) return null;
+        let parsed = null;
         const raw = localStorage.getItem(CHECKPOINT_KEY);
-        if(!raw) return null;
-        const parsed = JSON.parse(raw);
-        if(!parsed || !parsed.gameState) return null;
+        if(raw && typeof raw === 'string' && raw.trim() && raw !== 'undefined' && raw !== 'null') {
+            try { parsed = JSON.parse(raw); } catch {}
+        }
+        if(!parsed && gameState.missionCheckpoint) {
+            parsed = gameState.missionCheckpoint;
+        }
+        if(!parsed) {
+            const rawSave = localStorage.getItem(SAVE_KEY);
+            if (rawSave) {
+                const save = JSON.parse(rawSave);
+                const latest = getLatestCompletedMission(save?.quests, save?.flags);
+                if (latest) {
+                    parsed = {
+                        missionId: `${latest.id}_complete`,
+                        missionTitle: `${latest.title} (Completada)`,
+                        timestamp: Date.now(),
+                        dateFormatted: new Date().toLocaleString('es-ES', {
+                            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                        })
+                    };
+                }
+            }
+        }
+        if(!parsed) return null;
+
+        const resolvedTitle = parsed.missionTitle || (parsed.missionId ? resolveMissionTitle(parsed.missionId) : 'Última Misión Completada');
+
         return {
-            missionId: parsed.missionId || 'checkpoint',
-            missionTitle: parsed.missionTitle || 'Última Misión Guardada',
+            missionId: parsed.missionId || 'mission_complete',
+            missionTitle: resolvedTitle,
             timestamp: parsed.timestamp || 0,
             dateFormatted: parsed.dateFormatted || ''
         };
@@ -308,5 +421,8 @@ export function getMissionCheckpointInfo(){
 export function deleteMissionCheckpoint(){
     try {
         localStorage.removeItem(CHECKPOINT_KEY);
+        if (gameState.missionCheckpoint) {
+            delete gameState.missionCheckpoint;
+        }
     } catch {}
 }

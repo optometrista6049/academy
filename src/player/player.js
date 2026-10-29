@@ -28,23 +28,29 @@ import {
 from '../systems/saveSystem.js';
 
 import { initPlayerEquipment } from './playerEquipment.js';
+import { getEntityTransform } from '../systems/worldLayoutSystem.js';
 
 export function loadPlayer(){
+    const spawn = getEntityTransform('playerSpawn', null, { x: 0, z: 0, rotationY: 0 });
 
     loadModel(
 
         'assets/models/RobotAnimado.glb',
 
-        0,
-        0,
+        spawn.x,
+        spawn.z,
 
         1.4,
 
         function(model,gltf,offset){
 
             runtimeState.player = model;
+            runtimeState.player.userData = { isPlayer: true, name: 'Robot Player', type: 'player' };
 
             runtimeState.playerHeightOffset = offset;
+            if (typeof spawn.rotationY === 'number') {
+                model.rotation.y = spawn.rotationY;
+            }
 
             initPlayerEquipment(model);
 

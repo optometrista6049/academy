@@ -285,7 +285,7 @@ export function getCustomItems() {
             return [...DEFAULT_3D_PRESETS];
         }
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
             return parsed;
         }
         return [...DEFAULT_3D_PRESETS];
@@ -573,14 +573,14 @@ export async function initServerSync() {
 
             if (Array.isArray(serverItems) && serverItems.length > 0) {
                 const mergedMap = new Map();
-                // 1. Añadir presets base
-                DEFAULT_3D_PRESETS.forEach(p => mergedMap.set(p.id, p));
-                // 2. Añadir server items
+                // 1. Añadir server items como base
                 serverItems.forEach(item => mergedMap.set(item.id, item));
-                // 3. Fusionar local items (si son más recientes o personalizados como el Detector)
+                // 2. Fusionar local items creados por el usuario que no estén aún en el servidor
                 localItems.forEach(localItem => {
                     const existing = mergedMap.get(localItem.id);
-                    if (!existing || (localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt))) {
+                    if (!existing && !localItem.id.startsWith('preset_')) {
+                        mergedMap.set(localItem.id, localItem);
+                    } else if (existing && localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt)) {
                         mergedMap.set(localItem.id, localItem);
                     }
                 });

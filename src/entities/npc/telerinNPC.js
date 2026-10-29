@@ -23,24 +23,28 @@ let currentAction;
 
 const actions = {};
 
+import { getEntityTransform } from '../../systems/worldLayoutSystem.js';
+
 export function loadTelerinNPC(){
 
     console.log('LOAD TELERIN NPC');
+    const transform = getEntityTransform('npcs', 'Telerín', { x: -4, z: 2, rotationY: 0, scale: 1.8 });
 
     loadModel(
 
         'assets/models/npc/TelerinNPC.glb',
 
-        -4,
-        2,
+        transform.x,
+        transform.z,
 
-        1.8,
+        transform.scale || 1.8,
 
         (model,gltf)=>{
 
             console.log('TELERIN MODEL LOADED');
 
             TelerinNPC = model;
+            TelerinNPC.userData = { isNPC: true, npcName: 'Telerín', type: 'npc' };
 
             // Personalizar color de pelo: Castaño (#5a3825)
             TelerinNPC.traverse((child)=>{
@@ -64,15 +68,19 @@ export function loadTelerinNPC(){
 
              );
 
-            TelerinNPC.lookAt(
+            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+                TelerinNPC.rotation.y = transform.rotationY;
+            } else {
+                TelerinNPC.lookAt(
 
-                0,
+                    0,
 
-                TelerinNPC.position.y,
+                    TelerinNPC.position.y,
 
-                0
+                    0
 
-            );
+                );
+            }
 
             TelerinNPC.userData.radius = 0.9;
 

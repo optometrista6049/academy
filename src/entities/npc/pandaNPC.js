@@ -27,27 +27,32 @@ const actions = {};
 
 
 // =====================================================
+import { getEntityTransform } from '../../systems/worldLayoutSystem.js';
+
+// =====================================================
 // LOAD PANDA NPC
 // =====================================================
 
 export function loadPandaNPC(){
 	
 	console.log('LOAD PANDA NPC');
+    const transform = getEntityTransform('npcs', 'Panda', { x: 16, z: 14, rotationY: 0, scale: 1.8 });
 
     loadModel(
 
         'assets/models/npc/PandaNPC.glb',
 
-        16,   // X
+        transform.x,
 
-        14,   // Z
+        transform.z,
 
-        1.8,   // desired height
+        transform.scale || 1.8,
 
         (model,gltf)=>{
 			console.log('PANDA MODEL LOADED');
 
             PandaNPC = model;
+            PandaNPC.userData = { isNPC: true, npcName: 'Panda', type: 'npc' };
 			
 			registerWorldObject(
 
@@ -57,15 +62,19 @@ export function loadPandaNPC(){
 
              );
 			
-			PandaNPC.lookAt(
+            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+                PandaNPC.rotation.y = transform.rotationY;
+            } else {
+                PandaNPC.lookAt(
 
-    0,
+                    0,
 
-             PandaNPC.position.y,
+                    PandaNPC.position.y,
 
-    0
+                    0
 
-             );
+                );
+            }
 			 
 			 
 			 
@@ -103,7 +112,15 @@ export function loadPandaNPC(){
             // START ANIMATION
             // =========================================
 
-            playAnimationByKeyword('wave');
+            import('../../state/gameState.js').then(({ gameState }) => {
+                if (gameState.flags?.talkedToPanda || gameState.flags?.metPanda) {
+                    setPandaIdle();
+                } else {
+                    playAnimationByKeyword('wave');
+                }
+            }).catch(() => {
+                playAnimationByKeyword('wave');
+            });
 
         }
 

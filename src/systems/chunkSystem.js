@@ -106,6 +106,19 @@ export function registerVisualInChunk(object3D, x, z) {
     chunk.objects.push(object3D);
 }
 
+/**
+ * Desregistra un objeto de su chunk visual si se mueve o se elimina
+ */
+export function unregisterVisualFromChunk(object3D) {
+    if (!object3D) return;
+    visualChunks.forEach(chunk => {
+        const idx = chunk.objects.indexOf(object3D);
+        if (idx >= 0) {
+            chunk.objects.splice(idx, 1);
+        }
+    });
+}
+
 let lastChunkUpdate = 0;
 
 /**

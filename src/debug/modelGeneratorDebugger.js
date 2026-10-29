@@ -18,6 +18,7 @@ import {
     updateCustomItemName
 } from '../systems/customItemStorage.js';
 import { generateThreeModelFromPrompt } from '../systems/threeGeneratorEngine.js';
+import { showDevModalDialog, escapeHtml } from './devModalDialog.js';
 
 // Estado del visor 3D del generador
 let genScene = null;
@@ -540,17 +541,27 @@ function renderLibraryCards() {
             const id = btn.getAttribute('data-id');
             const target = items.find(i => i.id === id);
             if (!target) return;
-            const newName = prompt(`Cambiar nombre de "${target.name}":`, target.name);
-            if (newName && newName.trim() && newName.trim() !== target.name) {
-                updateCustomItemName(id, newName.trim());
-                if (genCurrentId === id) {
-                    const nameInput = document.getElementById('devItemNameInput');
-                    if (nameInput) nameInput.value = newName.trim();
-                    updateEditorStatusBadge();
+
+            showDevModalDialog({
+                title: '✏️ Cambiar Nombre del Objeto 3D',
+                message: `Introduce el nuevo nombre para este modelo:`,
+                input: { value: target.name, placeholder: 'Nombre del objeto 3D...' },
+                confirmText: '💾 Guardar Nombre',
+                cancelText: 'Cancelar',
+                onConfirm: (newName) => {
+                    if (newName && newName.trim() && newName.trim() !== target.name) {
+                        const cleanName = newName.trim();
+                        updateCustomItemName(id, cleanName);
+                        if (genCurrentId === id) {
+                            const nameInput = document.getElementById('devItemNameInput');
+                            if (nameInput) nameInput.value = cleanName;
+                            updateEditorStatusBadge();
+                        }
+                        renderLibraryCards();
+                        showDevToast(`Nombre actualizado a: "${cleanName}"`);
+                    }
                 }
-                renderLibraryCards();
-                showDevToast(`Nombre actualizado a: "${newName.trim()}"`);
-            }
+            });
         };
     });
 
@@ -580,22 +591,30 @@ function renderLibraryCards() {
         };
     });
 
-    // 5. Botón Eliminar
+    // 5. Botón Eliminar con confirmación visual garantizada
     grid.querySelectorAll('.delCardBtn').forEach(btn => {
         btn.onclick = (e) => {
             e.stopPropagation();
             const id = btn.getAttribute('data-id');
             const target = items.find(i => i.id === id);
             const name = target ? target.name : 'este objeto';
-            if (confirm(`¿Seguro que deseas eliminar "${name}" de tu biblioteca?`)) {
-                deleteCustomItem(id);
-                if (genCurrentId === id) {
-                    startNewItemClean();
-                } else {
-                    renderLibraryCards();
+
+            showDevModalDialog({
+                title: '🗑️ Eliminar Objeto 3D',
+                message: `¿Estás seguro de que deseas eliminar permanentemente <strong>"${escapeHtml(name)}"</strong> de tu biblioteca?<br><br><span style="font-size:0.8rem;color:#fca5a5;">Esta acción eliminará el modelo de la biblioteca y de los archivos del servidor.</span>`,
+                confirmText: '🔴 Sí, Eliminar',
+                cancelText: 'Cancelar',
+                isDanger: true,
+                onConfirm: () => {
+                    deleteCustomItem(id);
+                    if (genCurrentId === id) {
+                        startNewItemClean();
+                    } else {
+                        renderLibraryCards();
+                    }
+                    showDevToast(`Objeto "${name}" eliminado de la biblioteca.`);
                 }
-                showDevToast(`Objeto eliminado de la biblioteca.`);
-            }
+            });
         };
     });
 }
@@ -900,7 +919,7 @@ function setupGeneratorEvents() {
                     renderLibraryCards();
                     showDevToast(`¡${res.count} objetos importados exitosamente!`);
                 } else {
-                    alert(`Error importando biblioteca: ${res.error}`);
+                    showDevToast(`⚠️ Error importando: ${res.error || 'Archivo inválido'}`);
                 }
             };
             reader.readAsText(file);
@@ -910,11 +929,18 @@ function setupGeneratorEvents() {
     const resetLibBtn = document.getElementById('devResetLibBtn');
     if (resetLibBtn) {
         resetLibBtn.onclick = () => {
-            if (confirm('¿Restablecer la biblioteca a las plantillas predeterminadas de fábrica?')) {
-                resetCustomLibrary();
-                renderLibraryCards();
-                showDevToast('Biblioteca restablecida.');
-            }
+            showDevModalDialog({
+                title: '🔄 Restablecer Biblioteca de Fábrica',
+                message: '¿Estás seguro de que deseas restaurar las plantillas predeterminadas de fábrica?<br><br><span style="font-size:0.8rem;color:#fca5a5;">Los modelos se restablecerán a la configuración original de fábrica.</span>',
+                confirmText: '🔄 Sí, Restablecer',
+                cancelText: 'Cancelar',
+                isDanger: true,
+                onConfirm: () => {
+                    resetCustomLibrary();
+                    renderLibraryCards();
+                    showDevToast('Biblioteca restablecida a fábrica.');
+                }
+            });
         };
     }
 }
@@ -953,13 +979,4 @@ function showDevToast(msg) {
     toast._timer = setTimeout(() => {
         toast.className = 'devToast';
     }, 2800);
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
 }
