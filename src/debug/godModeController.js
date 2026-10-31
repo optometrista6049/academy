@@ -50,6 +50,7 @@ import {
     getLayoutVersions,
     hideProceduralInstance
 } from '../systems/worldLayoutSystem.js';
+import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
 import { collidables } from '../entities/collisions.js';
 
 let isGodModeActive = false;
@@ -519,8 +520,11 @@ function renderHUDContent() {
                 <button id="godTeleportPlayerBtn" class="godActionBtn" style="background:#0284c7;" title="Traer al Player a la posición actual de la cámara">
                     📍 Traer Player
                 </button>
+                <button id="godBakeToCodeBtn" class="godActionBtn" style="background:#059669;border:1px solid #34d399;color:#ffffff;font-weight:800;box-shadow:0 0 10px rgba(16,185,129,0.4);" title="Fijar permanentemente el mapa actual en los archivos de código fuente (.js) para GitHub">
+                    💾 Fijar en Código (Git)
+                </button>
                 <button id="godSaveSceneBtn" class="godActionBtn" style="background:#15803d;" title="Guardar escenario y registrar nueva versión en historial">
-                    💾 Guardar Versión
+                    📦 Guardar Versión
                 </button>
                 <button id="godRevertBtn" class="godActionBtn" style="background:#b45309;" title="Descartar cambios y restaurar a la versión anterior">
                     ↩️ Descartar
@@ -900,6 +904,31 @@ function setupHUDEvents() {
     if (openDevBtn) {
         openDevBtn.onclick = () => {
             openDevPanel();
+        };
+    }
+
+    // Fijar en Código Fuente (Git)
+    const bakeBtn = hudContainer.querySelector('#godBakeToCodeBtn');
+    if (bakeBtn) {
+        bakeBtn.onclick = async () => {
+            bakeBtn.disabled = true;
+            bakeBtn.textContent = '⏳ Fijando...';
+            showDevToast('⏳ Fijando escenario actual en los archivos de código fuente (.js)...', 2500);
+
+            try {
+                const res = await bakeCurrentWorldToCode();
+                if (res.success) {
+                    showDevToast(`✅ ¡Escenario fijado en el código fuente! (${res.npcsCount || 4} NPCs, ${res.objectsCount || 0} objetos). Ya puedes sincronizar con GitHub.`, 5000);
+                } else {
+                    showDevToast(`⚠️ Error al fijar en código: ${res.error || res.message}`, 4000);
+                }
+            } catch (err) {
+                showDevToast(`⚠️ Error: ${err.message}`, 4000);
+            } finally {
+                bakeBtn.disabled = false;
+                bakeBtn.textContent = '💾 Fijar en Código (Git)';
+                renderHUDContent();
+            }
         };
     }
 

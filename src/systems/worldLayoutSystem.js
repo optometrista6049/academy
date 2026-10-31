@@ -8,21 +8,50 @@
    ====================================================== */
 
 export const DEFAULT_WORLD_LAYOUT = {
-    playerSpawn: { x: 0, z: 0, rotationY: 0 },
-    npcs: {
-        Panda: { x: 16, z: 14, rotationY: 0, scale: 1.8 },
-        Alto: { x: 4, z: 2, rotationY: 0, scale: 2.7 },
-        'Telerín': { x: -4, z: 2, rotationY: 0, scale: 1.8 },
-        'Telerón': { x: 0, z: 5, rotationY: 0, scale: 1.8 }
+    "playerSpawn": {
+        "x": 0,
+        "z": 0,
+        "rotationY": 0
     },
-    furniture: {
-        mueble: { x: 14.77, z: 23.26, rotationY: Math.PI, scale: 1.0 }
+    "npcs": {
+        "Panda": {
+            "x": 16,
+            "z": 14,
+            "rotationY": 0,
+            "scale": 1.8
+        },
+        "Alto": {
+            "x": -7.12,
+            "z": 1.08,
+            "rotationY": 1.25,
+            "scale": 2.7
+        },
+        "Telerín": {
+            "x": -4,
+            "z": 2,
+            "rotationY": 0,
+            "scale": 1.8
+        },
+        "Telerón": {
+            "x": 0,
+            "z": 5,
+            "rotationY": 0,
+            "scale": 1.8
+        }
     },
-    hiddenProcedural: {
-        trees: [],
-        rocks: []
+    "furniture": {
+        "mueble": {
+            "x": 14.77,
+            "z": 23.26,
+            "rotationY": 3.14159,
+            "scale": 1
+        }
     },
-    updatedAt: 1729837000000
+    "hiddenProcedural": {
+        "trees": [],
+        "rocks": []
+    },
+    "updatedAt": 1793393077663
 };
 
 const LAYOUT_STORAGE_KEY = 'monteserin_world_layout';

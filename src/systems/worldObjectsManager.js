@@ -18,6 +18,7 @@ import { addCollidable, collidables, cameraObstacles } from '../entities/collisi
 import { registerCollidableInGrid, rebuildSpatialGrid, registerVisualInChunk, unregisterVisualFromChunk } from './chunkSystem.js';
 import { createIndividualTree } from '../environment/trees.js';
 import { createIndividualRock } from '../environment/rocks.js';
+import { DEFAULT_PLACED_WORLD_OBJECTS } from './worldObjectsDefaults.js';
 
 const STORAGE_KEY = 'monteserin_world_placed_objects_v1';
 const UPLOADED_MODELS_KEY = 'monteserin_custom_uploaded_models_v1';
@@ -90,13 +91,14 @@ export function deepDisposeObject(root) {
 export function getSavedWorldObjects() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        }
     } catch (err) {
         console.warn('[WorldObjectsManager] Error leyendo objetos del mundo:', err);
-        return [];
     }
+    return Array.isArray(DEFAULT_PLACED_WORLD_OBJECTS) ? JSON.parse(JSON.stringify(DEFAULT_PLACED_WORLD_OBJECTS)) : [];
 }
 
 /**

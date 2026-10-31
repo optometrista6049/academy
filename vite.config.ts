@@ -463,6 +463,86 @@ export default defineConfig(() => {
             res.end('Method Not Allowed');
           });
 
+          server.middlewares.use('/api/bake-world-to-code', (req, res) => {
+            if (req.method === 'POST') {
+              let body = '';
+              req.on('data', chunk => { body += chunk; });
+              req.on('end', () => {
+                try {
+                  const { layout, placedObjects, customItems } = JSON.parse(body || '{}');
+
+                  // 1. Hornear DEFAULT_WORLD_LAYOUT directamente en src/systems/worldLayoutSystem.js
+                  const layoutPath = path.resolve(__dirname, 'src/systems/worldLayoutSystem.js');
+                  if (layout && fs.existsSync(layoutPath)) {
+                    let content = fs.readFileSync(layoutPath, 'utf8');
+                    const formattedLayout = JSON.stringify(layout, null, 4);
+                    const regex = /export const DEFAULT_WORLD_LAYOUT = \{[\s\S]*?\n\};/;
+                    if (regex.test(content)) {
+                      content = content.replace(regex, `export const DEFAULT_WORLD_LAYOUT = ${formattedLayout};`);
+                      fs.writeFileSync(layoutPath, content, 'utf8');
+                    }
+                  }
+
+                  // 2. Hornear DEFAULT_PLACED_WORLD_OBJECTS en src/systems/worldObjectsDefaults.js
+                  const defaultsPath = path.resolve(__dirname, 'src/systems/worldObjectsDefaults.js');
+                  const objectsList = Array.isArray(placedObjects) ? placedObjects : [];
+                  const formattedObjects = JSON.stringify(objectsList, null, 4);
+                  const defaultsCode = `/* ======================================================
+   MONTESERIN ACADEMY - DEFAULT WORLD OBJECTS MANIFEST
+   Objetos y modelos 3D colocados por defecto en el escenario
+   (incluye modelos .GLB, geometrías Three.js y elementos procedurales).
+   Este archivo es fijado desde Modo Dios para viajar en el código a GitHub.
+   ====================================================== */
+
+export const DEFAULT_PLACED_WORLD_OBJECTS = ${formattedObjects};
+`;
+                  fs.writeFileSync(defaultsPath, defaultsCode, 'utf8');
+
+                  // 3. Escribir copias espejo en assets/data y public/assets/data para compatibilidad estática
+                  const dataDir = path.resolve(__dirname, 'assets/data');
+                  const publicDataDir = path.resolve(__dirname, 'public/assets/data');
+                  fs.mkdirSync(dataDir, { recursive: true });
+                  fs.mkdirSync(publicDataDir, { recursive: true });
+
+                  if (layout) {
+                    const lStr = JSON.stringify(layout, null, 2);
+                    fs.writeFileSync(path.resolve(dataDir, 'world_layout.json'), lStr, 'utf8');
+                    fs.writeFileSync(path.resolve(publicDataDir, 'world_layout.json'), lStr, 'utf8');
+                  }
+
+                  if (objectsList) {
+                    const oStr = JSON.stringify({ objects: objectsList, updatedAt: Date.now() }, null, 2);
+                    fs.writeFileSync(path.resolve(dataDir, 'world_placed_objects.json'), oStr, 'utf8');
+                    fs.writeFileSync(path.resolve(publicDataDir, 'world_placed_objects.json'), oStr, 'utf8');
+                  }
+
+                  if (Array.isArray(customItems)) {
+                    const cStr = JSON.stringify(customItems, null, 2);
+                    fs.writeFileSync(path.resolve(dataDir, 'custom_3d_items.json'), cStr, 'utf8');
+                    fs.writeFileSync(path.resolve(publicDataDir, 'custom_3d_items.json'), cStr, 'utf8');
+                  }
+
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({
+                    success: true,
+                    message: 'Escenario horneado con éxito en el código fuente para Git',
+                    npcsCount: Object.keys(layout?.npcs || {}).length,
+                    objectsCount: objectsList.length
+                  }));
+                } catch (err) {
+                  console.error('[Server] Error en /api/bake-world-to-code:', err);
+                  res.statusCode = 500;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: String(err) }));
+                }
+              });
+              return;
+            }
+
+            res.statusCode = 405;
+            res.end('Method Not Allowed');
+          });
+
           server.middlewares.use('/api/generate-3d', async (req, res) => {
             if (req.method === 'POST') {
               let body = '';

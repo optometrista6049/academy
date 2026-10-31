@@ -27,6 +27,7 @@ import {
 import { runtimeState } from '../state/runtimeState.js';
 import { showDevToast, closeDevPanel } from './devPanel.js';
 import { showDevModalDialog } from './devModalDialog.js';
+import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
 
 export function renderWorldEditorTab(container) {
     const placedObjects = getSavedWorldObjects();
@@ -47,9 +48,14 @@ export function renderWorldEditorTab(container) {
                         </div>
                     </div>
                 </div>
-                <button id="devEnterGodModeBtn" class="devEnterGodBtn">
-                    🚀 Entrar en Modo Dios (En Vivo)
-                </button>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <button id="devBakeToCodeBtn" class="devWorldActionBtn primary" style="background:#059669;border:1px solid #34d399;color:#ffffff;font-weight:700;padding:10px 16px;box-shadow:0 0 10px rgba(16,185,129,0.35);" title="Fijar permanentemente el estado actual del mapa en los archivos de código fuente (.js) para Git y GitHub">
+                        💾 Fijar Todo en Código (Git)
+                    </button>
+                    <button id="devEnterGodModeBtn" class="devEnterGodBtn">
+                        🚀 Entrar en Modo Dios (En Vivo)
+                    </button>
+                </div>
             </div>
 
             <!-- METRICAS EN VIVO -->
@@ -268,6 +274,31 @@ function renderPlacedObjectsTableHTML(objects) {
 }
 
 function setupWorldEditorEvents(container) {
+    // 0. Fijar todo el escenario en código fuente (Git)
+    const bakeBtn = container.querySelector('#devBakeToCodeBtn');
+    if (bakeBtn) {
+        bakeBtn.onclick = async () => {
+            bakeBtn.disabled = true;
+            bakeBtn.textContent = '⏳ Fijando en Código...';
+            showDevToast('⏳ Fijando escenario actual en los archivos de código fuente (.js)...', 2500);
+
+            try {
+                const res = await bakeCurrentWorldToCode();
+                if (res.success) {
+                    showDevToast(`✅ ¡Escenario fijado en el código fuente! (${res.npcsCount || 4} NPCs, ${res.objectsCount || 0} objetos). Ya puedes sincronizar con GitHub.`, 5000);
+                } else {
+                    showDevToast(`⚠️ Error al fijar en código: ${res.error || res.message}`, 4000);
+                }
+            } catch (err) {
+                showDevToast(`⚠️ Error: ${err.message}`, 4000);
+            } finally {
+                bakeBtn.disabled = false;
+                bakeBtn.textContent = '💾 Fijar Todo en Código (Git)';
+                renderWorldEditorTab(container);
+            }
+        };
+    }
+
     // 1. Entrar en Modo Dios
     const enterGodBtn = container.querySelector('#devEnterGodModeBtn');
     if (enterGodBtn) {
