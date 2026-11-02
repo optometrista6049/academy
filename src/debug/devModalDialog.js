@@ -5,6 +5,8 @@
    que los navegadores modernos bloquean dentro de iframes.
    ====================================================== */
 
+import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
+
 export function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -53,6 +55,12 @@ export function showDevModalDialog({
         justify-content: center;
         padding: 16px;
     `;
+
+    lockInput('devCustomDialog');
+
+    ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(evt => {
+        overlay.addEventListener(evt, (e) => e.stopPropagation());
+    });
 
     overlay.innerHTML = `
         <div style="
@@ -154,6 +162,7 @@ export function showDevModalDialog({
     const confirmBtn = overlay.querySelector('#devDialogConfirmBtn');
 
     const closeModal = () => {
+        unlockInput('devCustomDialog');
         window.removeEventListener('keydown', handleKey);
         overlay.remove();
     };

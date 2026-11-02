@@ -12,6 +12,7 @@ import { renderModelGeneratorTab, cleanupModelGeneratorDebugger } from './modelG
 import { renderAssetManagerTab } from './assetManagerDebug.js';
 import { renderWorldEditorTab } from './worldEditorTab.js';
 import { renderSessionBatteryTab, cleanupSessionBatteryTab } from './sessionBatteryTab.js';
+import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
 
 export const DEV_CONFIG = {
     enabled: true // Cambiar a false para distribución final a alumnos
@@ -40,6 +41,7 @@ export function openDevPanel() {
     if (!devModalRoot) {
         buildDevModal();
     }
+    lockInput('devSuite');
     devModalRoot.style.display = 'flex';
     switchTab(currentTab);
 }
@@ -49,6 +51,7 @@ export function closeDevPanel() {
     cleanupEquipmentDebugger();
     cleanupModelGeneratorDebugger();
     cleanupSessionBatteryTab();
+    unlockInput('devSuite');
     devModalRoot.style.display = 'none';
 }
 
@@ -85,6 +88,16 @@ function buildDevModal() {
     // Aislar eventos para no interferir con el juego
     ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(evt => {
         devModalRoot.addEventListener(evt, (e) => {
+            e.stopPropagation();
+        });
+    });
+
+    // Aislar eventos de teclado dentro del panel para evitar que escribir en campos afecte al juego
+    ['keydown', 'keyup', 'keypress'].forEach(evt => {
+        devModalRoot.addEventListener(evt, (e) => {
+            if (e.key === 'F9' || (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd'))) {
+                return; // Permitir que el atajo de cierre/apertura funcione
+            }
             e.stopPropagation();
         });
     });

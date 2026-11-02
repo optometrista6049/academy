@@ -1,17 +1,19 @@
-import { runtimeState }
-from '../state/runtimeState.js';
+import { runtimeState } from '../state/runtimeState.js';
+import { tryInteraction } from '../interaction/interactionManager.js';
+import { isInputLocked } from './inputLockSystem.js';
 
-
-import {
-
-    tryInteraction
-
+function isTypingInField(target) {
+    if (!target) return false;
+    const tag = target.tagName ? target.tagName.toUpperCase() : '';
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || Boolean(target.isContentEditable);
 }
-from '../interaction/interactionManager.js';
 
 export function setupInput(){
 
     addEventListener('keydown',(e)=>{
+
+        if (isTypingInField(e.target)) return;
+        if (runtimeState.isGodMode || isInputLocked()) return;
 
         switch(e.code){
 
@@ -42,6 +44,15 @@ export function setupInput(){
     });
 
     addEventListener('keyup',(e)=>{
+
+        if (isTypingInField(e.target)) return;
+        if (runtimeState.isGodMode || isInputLocked()) {
+            runtimeState.keys.w = false;
+            runtimeState.keys.a = false;
+            runtimeState.keys.s = false;
+            runtimeState.keys.d = false;
+            return;
+        }
 
         switch(e.code){
 

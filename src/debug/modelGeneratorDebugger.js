@@ -50,15 +50,19 @@ export function renderModelGeneratorTab(container) {
                     
                     <!-- CHIPS DE INSPIRACIÓN RÁPIDA -->
                     <div class="devPromptChips">
+                        <button class="devChipBtn" data-prompt="Detector de metales ergonómico con plato sensor y mochila táctica" data-socket="rightHand">📡 Detector con Mochila</button>
+                        <button class="devChipBtn" data-prompt="Cazamariposas con mango largo de madera y red de malla" data-socket="rightHand">🦋 Cazamariposas</button>
+                        <button class="devChipBtn" data-prompt="Tijeras de precisión de acero inoxidable con mango ergonómico" data-socket="rightHand">✂️ Tijeras</button>
+                        <button class="devChipBtn" data-prompt="Mesa de madera con portátil gaming y lámpara de flexo" data-socket="rightHand">💻 Mesa con Portátil</button>
+                        <button class="devChipBtn" data-prompt="Dron cuadricóptero táctico con hélices y cámara frontal" data-socket="rightHand">🛸 Dron Táctico</button>
                         <button class="devChipBtn" data-prompt="Espada de plasma cian resplandeciente con guarda dorada" data-socket="rightHand">⚔️ Espada Plasma</button>
                         <button class="devChipBtn" data-prompt="Escudo rúnico defensivo esmeralda con borde de oro" data-socket="leftHand">🛡️ Escudo Rúnico</button>
                         <button class="devChipBtn" data-prompt="Antorcha mágica con brasero dorado y llama luminiscente" data-socket="rightHand">🏮 Antorcha Mística</button>
                         <button class="devChipBtn" data-prompt="Cetro arcano con orbe de cristal violeta brillante" data-socket="rightHand">🔮 Cetro Arcano</button>
-                        <button class="devChipBtn" data-prompt="Radio comunicador táctico con diales y antena" data-socket="back">📻 Radio Táctico</button>
                         <button class="devChipBtn" data-prompt="Mochila de supervivencia de lona con correas doradas" data-socket="back">🎒 Mochila</button>
                         <button class="devChipBtn" data-prompt="Frasco de alquimia con poción brillante y corcho" data-socket="rightHand">🧪 Poción Alquímica</button>
                         <button class="devChipBtn" data-prompt="Corona real dorada con gemas resplandecientes" data-socket="head">👑 Corona Real</button>
-                        <button class="devChipBtn" data-prompt="Hacha de combate pesada con doble filo metálico" data-socket="rightHand">🪓 Hacha Combate</button>
+                        <button class="devChipBtn" data-prompt="Farola urbana clásica de hierro forjado con luz cálida" data-socket="rightHand">🏮 Farola Urbana</button>
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:8px;">

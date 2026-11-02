@@ -15,6 +15,133 @@ const STORAGE_KEY = 'monteserin_custom_3d_items_v1';
  */
 export const DEFAULT_3D_PRESETS = [
     {
+        id: 'item_1793605622735',
+        name: 'Mesa con Portátil',
+        icon: '💻',
+        socket: 'rightHand',
+        category: 'Personalizados',
+        scale: 1.0,
+        updatedAt: 1793609999000,
+        prompt: 'Mesa de oficina de madera noble con portátil abierto y patas de plata cromada brillante',
+        code: `const desk = new THREE.Group();
+
+// Materiales
+const woodMaterial = new THREE.MeshStandardMaterial({
+  color: 0x5a341a,
+  roughness: 0.6,
+  metalness: 0.05
+});
+
+// Patas de Cromo / Plata Brillante Pulida
+const silverMaterial = new THREE.MeshStandardMaterial({
+  color: 0xf8fafc,
+  metalness: 0.78,
+  roughness: 0.06,
+  emissive: 0x334455,
+  emissiveIntensity: 0.20
+});
+
+const laptopBodyMaterial = new THREE.MeshStandardMaterial({
+  color: 0x2b2d31,
+  metalness: 0.7,
+  roughness: 0.3
+});
+
+const keyboardMaterial = new THREE.MeshStandardMaterial({
+  color: 0x161719,
+  metalness: 0.2,
+  roughness: 0.8
+});
+
+const greenScreenMaterial = new THREE.MeshStandardMaterial({
+  color: 0x052e16,
+  emissive: 0x22c55e,
+  emissiveIntensity: 0.85,
+  roughness: 0.2,
+  metalness: 0.1
+});
+
+// Tablero de madera (0.50m de ancho x 0.32m de fondo x 0.025m grosor)
+const topGeo = new THREE.BoxGeometry(0.50, 0.025, 0.32);
+const tableTop = new THREE.Mesh(topGeo, woodMaterial);
+tableTop.position.y = 0.30;
+desk.add(tableTop);
+
+// Bastidor de refuerzo inferior
+const frameGeo = new THREE.BoxGeometry(0.42, 0.015, 0.24);
+const tableFrame = new THREE.Mesh(frameGeo, woodMaterial);
+tableFrame.position.y = 0.28;
+desk.add(tableFrame);
+
+// 4 Patas anchas de cromo/plata brillante (0.045m x 0.045m x 0.30m)
+const legGeo = new THREE.BoxGeometry(0.045, 0.30, 0.045);
+const legPositions = [
+  [-0.21, 0.15, -0.12],
+  [0.21, 0.15, -0.12],
+  [-0.21, 0.15, 0.12],
+  [0.21, 0.15, 0.12]
+];
+
+legPositions.forEach(pos => {
+  const leg = new THREE.Mesh(legGeo, silverMaterial);
+  leg.position.set(pos[0], pos[1], pos[2]);
+  desk.add(leg);
+  
+  // Base/tapa de cada pata
+  const footGeo = new THREE.BoxGeometry(0.048, 0.008, 0.048);
+  const foot = new THREE.Mesh(footGeo, silverMaterial);
+  foot.position.set(pos[0], 0.004, pos[2]);
+  desk.add(foot);
+});
+
+// --- Portátil ---
+const laptopGroup = new THREE.Group();
+laptopGroup.position.set(0, 0.3125, 0.02);
+
+// Base del portátil
+const lapBaseGeo = new THREE.BoxGeometry(0.14, 0.006, 0.10);
+const laptopBase = new THREE.Mesh(lapBaseGeo, laptopBodyMaterial);
+laptopBase.position.y = 0.003;
+laptopGroup.add(laptopBase);
+
+// Teclado incrustado
+const kbGeo = new THREE.BoxGeometry(0.12, 0.001, 0.045);
+const keyboard = new THREE.Mesh(kbGeo, keyboardMaterial);
+keyboard.position.set(0, 0.0065, -0.015);
+laptopGroup.add(keyboard);
+
+// Touchpad
+const padGeo = new THREE.BoxGeometry(0.04, 0.001, 0.025);
+const touchpad = new THREE.Mesh(padGeo, laptopBodyMaterial);
+touchpad.position.set(0, 0.0065, 0.025);
+laptopGroup.add(touchpad);
+
+// Pantalla / Tapa inclinada abierta
+const screenGroup = new THREE.Group();
+screenGroup.position.set(0, 0.006, -0.05);
+screenGroup.rotation.x = -Math.PI * 0.18;
+
+// Marco de la tapa
+const lidGeo = new THREE.BoxGeometry(0.14, 0.09, 0.005);
+const lid = new THREE.Mesh(lidGeo, laptopBodyMaterial);
+lid.position.set(0, 0.045, 0);
+screenGroup.add(lid);
+
+// Pantalla brillante verdosa
+const displayGeo = new THREE.BoxGeometry(0.128, 0.078, 0.002);
+const display = new THREE.Mesh(displayGeo, greenScreenMaterial);
+display.position.set(0, 0.045, 0.0026);
+screenGroup.add(display);
+
+laptopGroup.add(screenGroup);
+desk.add(laptopGroup);
+
+// Ajuste de pivote al centro de agarre del socket
+desk.position.set(0, -0.20, 0);
+
+return desk;`
+    },
+    {
         id: 'preset_energy_sword',
         name: 'Espada de Energía',
         icon: '⚔️',
@@ -284,8 +411,22 @@ export function getCustomItems() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_3D_PRESETS));
             return [...DEFAULT_3D_PRESETS];
         }
-        const parsed = JSON.parse(raw);
+        let parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
+            let updated = false;
+            DEFAULT_3D_PRESETS.forEach(defItem => {
+                const existingIdx = parsed.findIndex(i => i.id === defItem.id);
+                if (existingIdx === -1) {
+                    parsed.push(defItem);
+                    updated = true;
+                } else if (defItem.updatedAt && (!parsed[existingIdx].updatedAt || parsed[existingIdx].updatedAt < defItem.updatedAt)) {
+                    parsed[existingIdx] = defItem;
+                    updated = true;
+                }
+            });
+            if (updated) {
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch (_) {}
+            }
             return parsed;
         }
         return [...DEFAULT_3D_PRESETS];

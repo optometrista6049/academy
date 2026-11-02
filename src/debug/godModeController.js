@@ -52,6 +52,7 @@ import {
 } from '../systems/worldLayoutSystem.js';
 import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
 import { collidables } from '../entities/collisions.js';
+import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
 
 let isGodModeActive = false;
 let godAnimationId = null;
@@ -1303,8 +1304,9 @@ function unbindGodModeEvents() {
 function onKeyDown(e) {
     if (!isGodModeActive) return;
 
-    // Ignorar si el usuario está escribiendo en un input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    // Ignorar si el usuario está escribiendo en cualquier campo de texto o elemento editable
+    const targetTag = e.target?.tagName ? e.target.tagName.toUpperCase() : '';
+    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT' || Boolean(e.target?.isContentEditable)) return;
 
     // Atajo universal Ctrl+D / Cmd+D: Duplicar elemento seleccionado
     if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyD' || e.key === 'd' || e.key === 'D')) {
@@ -1432,6 +1434,10 @@ function onKeyDown(e) {
 
 function onKeyUp(e) {
     if (!isGodModeActive) return;
+
+    // Ignorar si el usuario está escribiendo en cualquier campo de texto
+    const targetTag = e.target?.tagName ? e.target.tagName.toUpperCase() : '';
+    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT' || Boolean(e.target?.isContentEditable)) return;
 
     switch (e.code) {
         case 'ArrowUp':
@@ -2361,6 +2367,22 @@ function openObjectLogicModal(targetEntry) {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     `;
 
+    lockInput('objectLogicModal');
+
+    // Aislar eventos para que escribir en los campos de la ventana no afecte al juego
+    ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(evt => {
+        overlay.addEventListener(evt, (e) => e.stopPropagation());
+    });
+    ['keydown', 'keyup', 'keypress'].forEach(evt => {
+        overlay.addEventListener(evt, (e) => {
+            if (e.key === 'Escape') {
+                close();
+                return;
+            }
+            e.stopPropagation();
+        });
+    });
+
     overlay.innerHTML = `
         <div style="
             background: linear-gradient(145deg, #131f18 0%, #0a110d 100%);
@@ -2513,7 +2535,10 @@ function openObjectLogicModal(targetEntry) {
     renderDynamicFields(currentLogicType);
     typeSelect.onchange = () => renderDynamicFields(typeSelect.value);
 
-    const close = () => { overlay.remove(); };
+    const close = () => {
+        unlockInput('objectLogicModal');
+        overlay.remove();
+    };
     overlay.querySelector('#godLogicCloseBtn').onclick = close;
     overlay.querySelector('#godLogicCancelBtn').onclick = close;
 

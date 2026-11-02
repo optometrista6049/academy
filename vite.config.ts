@@ -543,22 +543,32 @@ export const DEFAULT_PLACED_WORLD_OBJECTS = ${formattedObjects};
             res.end('Method Not Allowed');
           });
 
-          server.middlewares.use('/api/generate-3d', async (req, res) => {
-            if (req.method === 'POST') {
-              let body = '';
-              req.on('data', chunk => {
-                body += chunk;
-              });
-              req.on('end', async () => {
-                try {
-                  const { prompt, socket = 'rightHand' } = JSON.parse(body || '{}');
-                  if (!prompt) {
-                    res.statusCode = 400;
-                    res.setHeader('Content-Type', 'application/json');
-                    return res.end(JSON.stringify({ error: 'Prompt es requerido' }));
-                  }
+          server.middlewares.use('/api/generate-3d', (req, res) => {
+            if (req.method !== 'POST') {
+              res.statusCode = 405;
+              return res.end('Method Not Allowed');
+            }
 
-                  if (process.env.GEMINI_API_KEY) {
+            if (!process.env.GEMINI_API_KEY) {
+              res.statusCode = 422;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ fallback: true }));
+            }
+
+            let body = '';
+            req.on('data', chunk => {
+              body += chunk;
+            });
+            req.on('end', async () => {
+              try {
+                const { prompt, socket = 'rightHand' } = JSON.parse(body || '{}');
+                if (!prompt) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'Prompt es requerido' }));
+                }
+
+                if (process.env.GEMINI_API_KEY) {
                     try {
                       const { GoogleGenAI } = await import('@google/genai');
                       const ai = new GoogleGenAI({});
@@ -608,10 +618,6 @@ REGLAS DE CÓDIGO THREE.JS:
                   res.end(JSON.stringify({ error: String(err) }));
                 }
               });
-            } else {
-              res.statusCode = 405;
-              res.end('Method Not Allowed');
-            }
           });
         }
       }
