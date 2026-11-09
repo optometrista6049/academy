@@ -27,6 +27,18 @@ export function updateVisibilitySystem(){
     }
     lastVisibilityUpdate = now;
 
+    // En Modo Dios, mantener siempre visibles todos los objetos para libre inspección
+    if (runtimeState.isGodMode) {
+        worldObjects.forEach((entry) => {
+            const object = entry.object;
+            if (object) {
+                object.visible = true;
+                if (entry.originalScale && object.scale) object.scale.copy(entry.originalScale);
+            }
+        });
+        return;
+    }
+
     if(!runtimeState.player || worldObjects.length === 0) return;
 
     const playerPos = runtimeState.player.position;

@@ -1,4 +1,343 @@
 {
-  "objects": [],
-  "updatedAt": 1793622962542
+  "objects": [
+    {
+      "id": "world_obj_1794142207979_c4043",
+      "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+      "icon": "\ud83c\udfa8",
+      "source": "glb",
+      "sourceId": "uploaded_1794142167447",
+      "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 220.08360280244636,
+        "y": 2.9010405461163664,
+        "z": -209.35019497190575
+      },
+      "rotationY": 1.249045772398254,
+      "scale": 0.6490665475579718,
+      "placedAt": 1794142208064
+    },
+    {
+      "id": "world_obj_1794142214064_1jw6a",
+      "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+      "icon": "\ud83c\udfa8",
+      "source": "glb",
+      "sourceId": "uploaded_1794142167447",
+      "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 218.83107728135,
+        "y": 2.8851614898198457,
+        "z": -212.32353707609374
+      },
+      "rotationY": 5.961434752782944,
+      "scale": 5,
+      "placedAt": 1794142214155
+    },
+    {
+      "id": "world_obj_1794142734377_793x8",
+      "name": "Roca (Dodeca\u00e9drica)",
+      "icon": "\ud83e\udea8",
+      "source": "rock",
+      "sourceId": null,
+      "url": null,
+      "code": null,
+      "archetypeIndex": 0,
+      "trunkColor": 8026746,
+      "leafColor": 3043136,
+      "geoType": "dodecaedro",
+      "rockColor": 6710886,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": -87.8157103690462,
+        "y": 1.25,
+        "z": -11.291604753808258
+      },
+      "rotationY": 1.4555140939313302,
+      "scale": 3.163430966045028,
+      "placedAt": 1794142734385,
+      "relativeGroundOffset": 0.0
+    }
+  ],
+  "versions": [
+    {
+      "id": "ver_1794142765583",
+      "name": "Fijado en C\u00f3digo (Git)",
+      "timestamp": 1794142765583,
+      "dateStr": "8/11/2026 13:59:25",
+      "count": 3,
+      "objects": [
+        {
+          "id": "world_obj_1794142207979_c4043",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 220.08360280244636,
+            "y": 2.9010405461163664,
+            "z": -209.35019497190575
+          },
+          "rotationY": 1.249045772398254,
+          "scale": 0.6490665475579718,
+          "placedAt": 1794142208064
+        },
+        {
+          "id": "world_obj_1794142214064_1jw6a",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 218.83107728135,
+            "y": 2.8851614898198457,
+            "z": -212.32353707609374
+          },
+          "rotationY": 5.961434752782944,
+          "scale": 5,
+          "placedAt": 1794142214155
+        },
+        {
+          "id": "world_obj_1794142734377_793x8",
+          "name": "Roca (Dodeca\u00e9drica)",
+          "icon": "\ud83e\udea8",
+          "source": "rock",
+          "sourceId": null,
+          "url": null,
+          "code": null,
+          "archetypeIndex": 0,
+          "trunkColor": 8026746,
+          "leafColor": 3043136,
+          "geoType": "dodecaedro",
+          "rockColor": 6710886,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": -87.8157103690462,
+            "y": 3.0956722688935994,
+            "z": -11.291604753808258
+          },
+          "rotationY": 1.4555140939313302,
+          "scale": 3.163430966045028,
+          "placedAt": 1794142734385
+        }
+      ]
+    },
+    {
+      "id": "ver_1794142765580",
+      "name": "Guardado desde Modo Dios",
+      "timestamp": 1794142765580,
+      "dateStr": "8/11/2026 13:59:25",
+      "count": 3,
+      "objects": [
+        {
+          "id": "world_obj_1794142207979_c4043",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 220.08360280244636,
+            "y": 2.9010405461163664,
+            "z": -209.35019497190575
+          },
+          "rotationY": 1.249045772398254,
+          "scale": 0.6490665475579718,
+          "placedAt": 1794142208064
+        },
+        {
+          "id": "world_obj_1794142214064_1jw6a",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 218.83107728135,
+            "y": 2.8851614898198457,
+            "z": -212.32353707609374
+          },
+          "rotationY": 5.961434752782944,
+          "scale": 5,
+          "placedAt": 1794142214155
+        },
+        {
+          "id": "world_obj_1794142734377_793x8",
+          "name": "Roca (Dodeca\u00e9drica)",
+          "icon": "\ud83e\udea8",
+          "source": "rock",
+          "sourceId": null,
+          "url": null,
+          "code": null,
+          "archetypeIndex": 0,
+          "trunkColor": 8026746,
+          "leafColor": 3043136,
+          "geoType": "dodecaedro",
+          "rockColor": 6710886,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": -87.8157103690462,
+            "y": 3.0956722688935994,
+            "z": -11.291604753808258
+          },
+          "rotationY": 1.4555140939313302,
+          "scale": 3.163430966045028,
+          "placedAt": 1794142734385
+        }
+      ]
+    },
+    {
+      "id": "ver_1794142604856",
+      "name": "Fijado en C\u00f3digo (Git)",
+      "timestamp": 1794142604856,
+      "dateStr": "8/11/2026 13:56:44",
+      "count": 2,
+      "objects": [
+        {
+          "id": "world_obj_1794142207979_c4043",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 220.08360280244636,
+            "y": 2.9010405461163664,
+            "z": -209.35019497190575
+          },
+          "rotationY": 1.249045772398254,
+          "scale": 0.6490665475579718,
+          "placedAt": 1794142208064
+        },
+        {
+          "id": "world_obj_1794142214064_1jw6a",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 218.83107728135,
+            "y": 2.8851614898198457,
+            "z": -212.32353707609374
+          },
+          "rotationY": 5.961434752782944,
+          "scale": 5,
+          "placedAt": 1794142214155
+        }
+      ]
+    },
+    {
+      "id": "ver_1794142604825",
+      "name": "Guardado desde Modo Dios",
+      "timestamp": 1794142604825,
+      "dateStr": "8/11/2026 13:56:44",
+      "count": 2,
+      "objects": [
+        {
+          "id": "world_obj_1794142207979_c4043",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 220.08360280244636,
+            "y": 2.9010405461163664,
+            "z": -209.35019497190575
+          },
+          "rotationY": 1.249045772398254,
+          "scale": 0.6490665475579718,
+          "placedAt": 1794142208064
+        },
+        {
+          "id": "world_obj_1794142214064_1jw6a",
+          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
+          "icon": "\ud83c\udfa8",
+          "source": "glb",
+          "sourceId": "uploaded_1794142167447",
+          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
+          "code": null,
+          "isSolid": true,
+          "logicType": "default",
+          "logicConfig": {},
+          "position": {
+            "x": 218.83107728135,
+            "y": 2.8851614898198457,
+            "z": -212.32353707609374
+          },
+          "rotationY": 5.961434752782944,
+          "scale": 5,
+          "placedAt": 1794142214155
+        }
+      ]
+    },
+    {
+      "id": "ver_1794125411349",
+      "name": "Guardado desde Modo Dios",
+      "timestamp": 1794125411349,
+      "dateStr": "8/11/2026 9:10:11",
+      "count": 0,
+      "objects": []
+    },
+    {
+      "id": "ver_1793429991686",
+      "name": "Fijado en C\u00f3digo (Git)",
+      "timestamp": 1793429991686,
+      "dateStr": "31/10/2026 7:59:51",
+      "count": 0,
+      "objects": []
+    },
+    {
+      "id": "ver_1794125411413",
+      "name": "Fijado en C\u00f3digo (Git)",
+      "timestamp": 1794125411413,
+      "dateStr": "8/11/2026 9:10:11",
+      "count": 0,
+      "objects": []
+    }
+  ],
+  "updatedAt": 1794143764076
 }

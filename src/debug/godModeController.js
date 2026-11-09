@@ -32,7 +32,8 @@ import {
     revertToLastSavedState,
     getSavedWorldObjects,
     duplicateWorldObject,
-    updateWorldObjectLogic
+    updateWorldObjectLogic,
+    commitStagedWorldObjects
 } from '../systems/worldObjectsManager.js';
 import { dismissPandaReminder } from '../ui/pandaReminder.js';
 import { showDevToast, closeDevPanel, openDevPanel } from './devPanel.js';
@@ -43,12 +44,15 @@ import { getTelerinNPC } from '../entities/npc/telerinNPC.js';
 import { getTeleronNPC } from '../entities/npc/teleronNPC.js';
 import { getMuebleObject } from '../entities/objects/muebleObject.js';
 import {
+    getWorldLayout,
     getEntityTransform,
     updateEntityTransform,
     saveLayoutVersion,
     restoreLayoutVersion,
     getLayoutVersions,
-    hideProceduralInstance
+    hideProceduralInstance,
+    commitStagedWorldLayout,
+    reloadWorldLayoutFromStorage
 } from '../systems/worldLayoutSystem.js';
 import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
 import { collidables } from '../entities/collisions.js';
@@ -90,6 +94,10 @@ let currentScale = 1.0;
 // Objeto del mundo actualmente seleccionado para editar/mover
 let selectedWorldObject = null;
 
+// Control de cambios no guardados en memoria (Opción A: Guardado explícito)
+let hasUnsavedChanges = false;
+let pendingChangesCount = 0;
+
 // Elementos 3D auxiliares del modo dios
 let placementCursor = null;
 let ghostMesh = null;
@@ -118,6 +126,373 @@ let hasMovedSignificantly = false;
 // Panel flotante permanente de guía de controles y atajos
 let controlsGuidePanel = null;
 let isGuideCollapsed = false;
+
+// Estado del panel Localizador de Modelos / Entidades
+let isLocatorOpen = false;
+
+/**
+ * Retorna la lista unificada de entidades del mundo para el Localizador de Modelos.
+ */
+// Animación de cámara suave (Fly-To Lerp)
+let activeFlyAnimation = null;
+let locatorBeaconMesh = null;
+
+/**
+ * Busca de forma profunda la malla de una entidad en la escena si el getter directo no la devuelve
+ */
+function findEntityMeshInScene(key) {
+    if (!scene) return null;
+    let found = null;
+    const searchTerms = [
+        key.toLowerCase(),
+        key.toLowerCase() + 'npc',
+        'npc_' + key.toLowerCase()
+    ];
+    scene.traverse(obj => {
+        if (found) return;
+        const name = (obj.name || '').toLowerCase();
+        const npcName = (obj.userData?.npcName || '').toLowerCase();
+        if (searchTerms.some(term => name.includes(term) || npcName.includes(term))) {
+            // Preferir el ancestro de primer nivel hijo directo de scene o con userData.isNPC
+            let curr = obj;
+            while (curr.parent && curr.parent !== scene && !curr.userData?.isNPC) {
+                curr = curr.parent;
+            }
+            found = curr;
+        }
+    });
+    return found;
+}
+
+/**
+ * Muestra un marcador o halo visual temporal de 3.5 segundos sobre la entidad localizada
+ */
+function spawnLocatorBeacon(pos) {
+    if (!scene || !pos) return;
+    if (locatorBeaconMesh) {
+        scene.remove(locatorBeaconMesh);
+        if (locatorBeaconMesh.geometry) locatorBeaconMesh.geometry.dispose();
+        if (locatorBeaconMesh.material) locatorBeaconMesh.material.dispose();
+        locatorBeaconMesh = null;
+    }
+
+    const ringGeom = new THREE.RingGeometry(0.7, 1.2, 32);
+    ringGeom.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85
+    });
+    locatorBeaconMesh = new THREE.Mesh(ringGeom, ringMat);
+    const groundY = (pos.y !== undefined ? pos.y : getHeightAt(pos.x, pos.z)) + 0.15;
+    locatorBeaconMesh.position.set(pos.x, groundY, pos.z);
+    scene.add(locatorBeaconMesh);
+
+    const startTime = performance.now();
+    function animateBeacon() {
+        if (!locatorBeaconMesh) return;
+        const elapsed = (performance.now() - startTime) / 1000;
+        if (elapsed > 3.5) {
+            if (locatorBeaconMesh) {
+                scene.remove(locatorBeaconMesh);
+                locatorBeaconMesh = null;
+            }
+            return;
+        }
+        const pulse = 1.0 + Math.sin(elapsed * 8) * 0.25;
+        locatorBeaconMesh.scale.set(pulse, 1, pulse);
+        ringMat.opacity = Math.max(0, 0.85 * (1 - elapsed / 3.5));
+        requestAnimationFrame(animateBeacon);
+    }
+    requestAnimationFrame(animateBeacon);
+}
+
+/**
+ * Retorna la lista unificada de entidades del mundo para el Localizador de Modelos.
+ */
+function getAllLocatableEntities() {
+    const list = [];
+    const layout = getWorldLayout() || {};
+
+    // 1. Robot Player
+    if (runtimeState.player) {
+        list.push({
+            id: 'player_main',
+            type: 'player',
+            category: 'player',
+            name: 'Robot Player',
+            icon: '🤖',
+            mesh: runtimeState.player,
+            pos: runtimeState.player.position,
+            savedPos: layout.playerSpawn || { x: 0, z: 0, rotationY: 0 }
+        });
+    }
+
+    // 2. NPCs
+    const npcDefs = [
+        { key: 'Alto', name: 'Alto', icon: '🚶', getter: getAltoNPC },
+        { key: 'Panda', name: 'Panda', icon: '🐼', getter: getPandaNPC },
+        { key: 'Telerín', name: 'Telerín', icon: '👦', getter: getTelerinNPC },
+        { key: 'Telerón', name: 'Telerón', icon: '🧑', getter: getTeleronNPC }
+    ];
+
+    npcDefs.forEach(def => {
+        let mesh = null;
+        try { mesh = def.getter(); } catch (_) {}
+        if (!mesh) {
+            mesh = findEntityMeshInScene(def.key);
+        }
+        const saved = (layout.npcs && layout.npcs[def.key]) ? layout.npcs[def.key] : null;
+        let pos = null;
+        if (mesh && mesh.position) {
+            pos = mesh.position;
+        } else if (saved) {
+            pos = { x: saved.x, y: getHeightAt(saved.x, saved.z), z: saved.z };
+        } else {
+            pos = { x: 0, y: getHeightAt(0, 0), z: 0 };
+        }
+
+        list.push({
+            id: `npc_${def.key.toLowerCase()}`,
+            key: def.key,
+            type: 'npc',
+            category: 'npc',
+            name: def.name,
+            icon: def.icon,
+            mesh: mesh,
+            pos: pos,
+            savedPos: saved || { x: 0, z: 0, rotationY: 0, scale: 1.8 }
+        });
+    });
+
+    // 3. Mueble
+    let muebleMesh = null;
+    try { muebleMesh = getMuebleObject(); } catch (_) {}
+    if (!muebleMesh) muebleMesh = findEntityMeshInScene('mueble');
+    const savedMueble = (layout.furniture && layout.furniture.mueble) ? layout.furniture.mueble : null;
+    let mueblePos = null;
+    if (muebleMesh && muebleMesh.position) {
+        mueblePos = muebleMesh.position;
+    } else if (savedMueble) {
+        mueblePos = { x: savedMueble.x, y: getHeightAt(savedMueble.x, savedMueble.z) + 0.45, z: savedMueble.z };
+    } else {
+        mueblePos = { x: 14.77, y: getHeightAt(14.77, 23.26) + 0.45, z: 23.26 };
+    }
+    list.push({
+        id: 'furniture_mueble',
+        key: 'mueble',
+        type: 'furniture',
+        category: 'furniture',
+        name: 'Mueble con Cajón',
+        icon: '🪑',
+        mesh: muebleMesh,
+        pos: mueblePos,
+        savedPos: savedMueble || { x: 14.77, z: 23.26, rotationY: Math.PI, scale: 1 }
+    });
+
+    // 4. Objetos custom colocados
+    const customPlaced = getActiveWorldMeshes();
+    customPlaced.forEach(c => {
+        list.push({
+            id: c.id,
+            type: 'custom',
+            category: 'custom',
+            name: c.data?.name || 'Objeto Colocado',
+            icon: c.data?.icon || '📦',
+            mesh: c.mesh,
+            pos: c.mesh ? c.mesh.position : (c.data?.position || { x: 0, y: 0, z: 0 }),
+            savedPos: c.data?.position ? { x: c.data.position.x, z: c.data.position.z, rotationY: c.data.rotationY || 0, scale: c.data.scale || 1.0 } : null,
+            entry: c
+        });
+    });
+
+    return list;
+}
+
+/**
+ * Vuela la cámara del Modo Dios suavemente (interpolación animada) hacia la entidad objetivo,
+ * orienta su ángulo de visión hacia ella, genera un haz/halo luminoso de referencia y la selecciona.
+ */
+function focusCameraOnTarget(target) {
+    if (!target) return;
+    const pos = target.pos || (target.mesh ? target.mesh.position : null);
+    // Si la entidad tiene malla y es un NPC o mueble, asegurar que esté en la superficie del terreno y visible
+    if (target.mesh) {
+        if (target.type === 'npc' || target.type === 'furniture' || target.type === 'custom') {
+            snapObjectToTerrain(target.mesh, pos.x, pos.z);
+            target.mesh.visible = true;
+            target.mesh.traverse(child => {
+                if (child.isMesh) {
+                    child.visible = true;
+                    child.frustumCulled = false;
+                }
+            });
+            target.mesh.updateMatrixWorld(true);
+        }
+    }
+
+    // 1. Destino de la cámara: 4 metros en diagonal elevada mirando a la entidad
+    const actualY = target.mesh ? target.mesh.position.y : (pos.y !== undefined ? pos.y : getHeightAt(pos.x, pos.z));
+    const camTargetY = actualY + 1.1;
+    const targetCamX = pos.x + 3.0;
+    const targetCamZ = pos.z + 3.2;
+    const groundAtCam = getHeightAt(targetCamX, targetCamZ);
+    const targetCamY = Math.max(camTargetY + 1.2, groundAtCam + 1.4);
+
+    // Calcular ángulos yaw y pitch exactos mirando al objeto desde la posición final
+    const dx = pos.x - targetCamX;
+    const dy = camTargetY - targetCamY;
+    const dz = pos.z - targetCamZ;
+    const distHoriz = Math.hypot(dx, dz) || 0.001;
+
+    const targetYaw = Math.atan2(-dx, -dz);
+    const targetPitch = Math.atan2(dy, distHoriz);
+
+    // Cancelar animación anterior si existe
+    if (activeFlyAnimation) {
+        cancelAnimationFrame(activeFlyAnimation);
+        activeFlyAnimation = null;
+    }
+
+    const startX = flyCam.x;
+    const startY = flyCam.y;
+    const startZ = flyCam.z;
+    const startYaw = flyCam.yaw;
+    const startPitch = flyCam.pitch;
+
+    // Normalizar diferencia de yaw para evitar giros de 360 grados innecesarios
+    let diffYaw = (targetYaw - startYaw) % (Math.PI * 2);
+    if (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+    if (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+
+    const duration = 600; // 600ms vuelo suave cinemático
+    const startTime = performance.now();
+
+    function stepFly(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(1.0, elapsed / duration);
+        // EaseInOutCubic
+        const ease = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        flyCam.x = startX + (targetCamX - startX) * ease;
+        flyCam.y = startY + (targetCamY - startY) * ease;
+        flyCam.z = startZ + (targetCamZ - startZ) * ease;
+        flyCam.yaw = startYaw + diffYaw * ease;
+        flyCam.pitch = startPitch + (targetPitch - startPitch) * ease;
+
+        applyFlyCameraTransform();
+
+        if (progress < 1.0) {
+            activeFlyAnimation = requestAnimationFrame(stepFly);
+        } else {
+            activeFlyAnimation = null;
+            applyFlyCameraTransform();
+            // Seleccionar y spawnear halo luminoso
+            selectEntityFromLocator(target);
+            spawnLocatorBeacon(pos);
+            showDevToast(`🎯 Cámara enfocada en: ${target.icon || '📍'} ${target.name} (X: ${pos.x.toFixed(1)}, Z: ${pos.z.toFixed(1)})`, 4000);
+        }
+    }
+
+    activeFlyAnimation = requestAnimationFrame(stepFly);
+    // Disparar halo luminoso de inmediato
+    spawnLocatorBeacon(pos);
+}
+
+/**
+ * Trae una entidad y la coloca en el suelo frente a la cámara actual.
+ */
+function teleportEntityToFrontOfCamera(target) {
+    if (!target) return;
+    // Calcular punto a 3.5m frente a la cámara según su yaw
+    const forwardX = flyCam.x - Math.sin(flyCam.yaw) * 4.0;
+    const forwardZ = flyCam.z - Math.cos(flyCam.yaw) * 4.0;
+    const groundY = getHeightAt(forwardX, forwardZ);
+
+    const newPos = { x: forwardX, y: groundY, z: forwardZ };
+
+    // Si la entidad no estaba seleccionada, seleccionarla primero
+    selectEntityFromLocator(target);
+    applyLiveMoveToSelectedObject(newPos);
+    commitSelectedObjectMove(newPos);
+
+    showDevToast(`📍 "${target.name}" traído frente a la cámara en (${forwardX.toFixed(1)}, ${forwardZ.toFixed(1)})`);
+}
+
+/**
+ * Restaura la posición de una entidad a su última posición guardada oficial.
+ */
+function resetEntityToSavedPosition(target) {
+    if (!target || !target.savedPos) {
+        showDevToast('⚠️ No hay posición guardada para esta entidad');
+        return;
+    }
+    const saved = target.savedPos;
+    const groundY = getHeightAt(saved.x, saved.z);
+    const newPos = { x: saved.x, y: groundY, z: saved.z };
+
+    selectEntityFromLocator(target);
+    applyLiveMoveToSelectedObject(newPos);
+    commitSelectedObjectMove(newPos);
+
+    if (typeof saved.rotationY === 'number') {
+        applyRotationToSelected(saved.rotationY);
+    }
+    if (typeof saved.scale === 'number') {
+        applyScaleToSelected(saved.scale);
+    }
+
+    showDevToast(`🔄 "${target.name}" restablecido a su posición guardada (${saved.x.toFixed(1)}, ${saved.z.toFixed(1)})`);
+}
+
+/**
+ * Selecciona una entidad en Modo Dios a partir de su descriptor del localizador.
+ */
+function selectEntityFromLocator(target) {
+    if (!target) return;
+    if (target.entry) {
+        selectWorldObject(target.entry);
+        return;
+    }
+    if (target.type === 'player') {
+        selectWorldObject({
+            type: 'player',
+            mesh: runtimeState.player,
+            data: {
+                name: 'Robot Player (Jugador)',
+                icon: '🤖',
+                position: runtimeState.player.position,
+                rotationY: runtimeState.player.rotation.y,
+                scale: runtimeState.player.scale.x / 1.4
+            }
+        });
+    } else if (target.type === 'npc') {
+        selectWorldObject({
+            type: 'npc',
+            mesh: target.mesh,
+            data: {
+                name: `NPC ${target.name}`,
+                icon: target.icon,
+                position: target.pos,
+                rotationY: target.mesh ? target.mesh.rotation.y : (target.savedPos?.rotationY || 0),
+                scale: target.mesh ? target.mesh.scale.x : (target.savedPos?.scale || 1.8)
+            }
+        });
+    } else if (target.type === 'furniture') {
+        selectWorldObject({
+            type: 'furniture',
+            mesh: target.mesh,
+            data: {
+                name: 'Mueble con Cajón Secreto',
+                icon: '🪑',
+                position: target.pos,
+                rotationY: target.mesh ? target.mesh.rotation.y : (target.savedPos?.rotationY || Math.PI),
+                scale: target.mesh ? target.mesh.scale.x : 1.0
+            }
+        });
+    }
+}
 
 /**
  * Activa el Modo Dios en el juego.
@@ -169,8 +544,34 @@ export function enterGodMode() {
 /**
  * Desactiva el Modo Dios y regresa al Player.
  */
-export function exitGodMode() {
+export function exitGodMode(force = false) {
     if (!isGodModeActive) return;
+
+    if (!force && hasUnsavedChanges) {
+        showDevModalDialog({
+            title: '⚠️ Tienes Cambios Sin Guardar',
+            message: `Tienes ${pendingChangesCount} cambios en el escenario que aún no has guardado. Si sales ahora sin guardar, los cambios se mantendrán en esta sesión pero no se fijarán para GitHub ni entre reinicios completos. ¿Deseas salir o guardar primero?`,
+            confirmText: '💾 Guardar y Salir',
+            cancelText: '🚶 Salir sin Guardar',
+            isDanger: false,
+            onConfirm: async () => {
+                commitStagedWorldLayout();
+                commitStagedWorldObjects();
+                saveSceneVersion('Guardado desde Modo Dios');
+                saveLayoutVersion('Guardado desde Modo Dios');
+                try { await bakeCurrentWorldToCode(); } catch (_) {}
+                hasUnsavedChanges = false;
+                pendingChangesCount = 0;
+                showDevToast('✅ ¡Cambios guardados con éxito!');
+                exitGodMode(true);
+            },
+            onCancel: () => {
+                exitGodMode(true);
+            }
+        });
+        return;
+    }
+
     isGodModeActive = false;
     runtimeState.isGodMode = false;
 
@@ -344,11 +745,12 @@ function runGodModeLoop() {
     const delta = Math.min((now - lastFrameTime) / 1000, 0.05);
     lastFrameTime = now;
 
-    // 1. Actualizar posición de la cámara libre según teclas
-    updateFlyCameraPosition(delta);
-
-    // 2. Actualizar orientación de la cámara
-    applyFlyCameraTransform();
+    // 1. Actualizar posición de la cámara libre según teclas (solo si no hay una animación cinemática en curso)
+    if (!activeFlyAnimation) {
+        updateFlyCameraPosition(delta);
+        // 2. Actualizar orientación de la cámara
+        applyFlyCameraTransform();
+    }
 
     // 3. Actualizar raycast con el suelo si el ratón se mueve
     updateRaycastWithTerrain();
@@ -501,12 +903,23 @@ function renderHUDContent() {
     const uploadedModels = getUploadedModelsCatalog();
     const activeMeshes = getActiveWorldMeshes();
 
+    const locatableEntities = getAllLocatableEntities();
+
     hudContainer.innerHTML = `
         <button id="godCollapseBtn" class="godCollapseBtn" title="Ocultar/Mostrar HUD (Tecla H)">▾ Ocultar HUD</button>
         <div class="godBarHeader">
             <div class="godBarTitle">
                 <span class="godDotLive"></span>
                 <span>🌍 MODO DIOS &bull; EDITOR DE MUNDO</span>
+                ${hasUnsavedChanges ? `
+                    <span class="godPillBadge" style="background:rgba(234, 179, 8, 0.22);border:1.5px solid #eab308;color:#fef08a;padding:2px 8px;border-radius:6px;font-size:0.72rem;font-weight:800;animation:pulse 2s infinite;" title="Tienes cambios en vivo pendientes de guardar">
+                        🟡 Cambios sin guardar (${pendingChangesCount})
+                    </span>
+                ` : `
+                    <span class="godPillBadge" style="background:rgba(16, 185, 129, 0.15);border:1px solid rgba(16, 185, 129, 0.4);color:#34d399;padding:2px 7px;border-radius:6px;font-size:0.7rem;font-weight:700;">
+                        🟢 Sincronizado
+                    </span>
+                `}
             </div>
             <div class="godBarActions">
                 <button id="godGuideBtn" class="godPillBtn" style="background:rgba(212,175,55,0.18);border-color:rgba(212,175,55,0.5);color:#ffd54f;font-weight:700;" title="Ver controles y atajos de teclado (Tecla F1)">
@@ -515,20 +928,22 @@ function renderHUDContent() {
                 <button id="godSpeedBtn" class="godPillBtn" title="Velocidad de Vuelo (1x, 2x, 4x)">
                     🚀 ${flyCam.speedFactor}x
                 </button>
+                <button id="godLocatorBtn" class="godPillBtn ${isLocatorOpen ? 'active' : ''}" style="background:${isLocatorOpen ? '#0284c7' : 'rgba(14,165,233,0.18)'};border:1.5px solid #38bdf8;color:#e0f2fe;font-weight:800;" title="Abrir Localizador de Modelos (Encontrar a Alto, Panda, Telerín, Telerón, Player, Mueble...)">
+                    🧭 Localizador de Modelos (${locatableEntities.length})
+                </button>
                 <button id="godUndoBtn" class="godPillBtn" title="Deshacer último objeto colocado (Ctrl+Z)" ${activeMeshes.length === 0 ? 'style="opacity:0.5;cursor:not-allowed;"' : ''}>
                     ↶ Deshacer
                 </button>
                 <button id="godTeleportPlayerBtn" class="godActionBtn" style="background:#0284c7;" title="Traer al Player a la posición actual de la cámara">
                     📍 Traer Player
                 </button>
-                <button id="godBakeToCodeBtn" class="godActionBtn" style="background:#059669;border:1px solid #34d399;color:#ffffff;font-weight:800;box-shadow:0 0 10px rgba(16,185,129,0.4);" title="Fijar permanentemente el mapa actual en los archivos de código fuente (.js) para GitHub">
-                    💾 Fijar en Código (Git)
+                <!-- BOTÓN PRINCIPAL: GUARDAR Y HORNEAR ESCENARIO (OPCIÓN A) -->
+                <button id="godUnifiedSaveBtn" class="godActionBtn" style="background:${hasUnsavedChanges ? '#059669' : '#1e293b'};border:1.5px solid ${hasUnsavedChanges ? '#34d399' : '#475569'};color:#ffffff;font-weight:800;box-shadow:${hasUnsavedChanges ? '0 0 14px rgba(16,185,129,0.6)' : 'none'};" title="Guardar todos los cambios en LocalStorage y fijarlos en el código fuente para Git">
+                    💾 Guardar y Hornear Escenario
                 </button>
-                <button id="godSaveSceneBtn" class="godActionBtn" style="background:#15803d;" title="Guardar escenario y registrar nueva versión en historial">
-                    📦 Guardar Versión
-                </button>
-                <button id="godRevertBtn" class="godActionBtn" style="background:#b45309;" title="Descartar cambios y restaurar a la versión anterior">
-                    ↩️ Descartar
+                <!-- BOTÓN: DESCARTAR CAMBIOS Y VOLVER AL ÚLTIMO GUARDADO -->
+                <button id="godRevertBtn" class="godActionBtn" style="background:#b45309;border:1px solid #f59e0b;color:#fff;font-weight:700;" title="Descartar cambios no guardados y restaurar al estado confirmado">
+                    ↩️ Descartar Cambios
                 </button>
                 <button id="godOpenDevPanelBtn" class="godActionBtn" style="background:#334155;" title="Abrir Developer Suite (F9)">
                     ⚙️ DevSuite
@@ -608,20 +1023,38 @@ function renderHUDContent() {
                 🗺️ En Escena (${activeMeshes.length})
             </button>
 
-            <!-- CONTROLES DE TRANSFORMACIÓN RÁPIDA -->
+            <!-- CONTROLES DE TRANSFORMACIÓN RÁPIDA (PRECISIÓN Y CAMPOS EDITABLES) -->
             <div class="godTransformGroup">
-                <div class="godMiniInputGroup">
-                    <label>Rot (R/T):</label>
-                    <button id="godRotPrevBtn" class="godMiniBtn" title="Girar -45° (Tecla T)">-45°</button>
-                    <span id="godRotVal">${Math.round(THREE.MathUtils.radToDeg(currentRotationY))}°</span>
-                    <button id="godRotNextBtn" class="godMiniBtn" title="Girar +45° (Tecla R)">+45°</button>
+                <!-- ROTACIÓN PRECISA (Botones ±15° y campo numérico de grados editable) -->
+                <div class="godMiniInputGroup" title="Rotación en grados (0° a 360°). Escribe un ángulo o usa los botones ±15° (o atajos R / T. Con Shift: ±5°)">
+                    <label>Rot:</label>
+                    <button id="godRotPrevBtn" class="godMiniBtn" title="Girar -15° (Tecla T. Con Shift: -5°)">-15°</button>
+                    <input type="number" id="godRotInput" class="godNumericInput" min="0" max="360" step="5"
+                           value="${Math.round(((THREE.MathUtils.radToDeg(currentRotationY) % 360) + 360) % 360)}"
+                           style="width:48px;background:rgba(0,0,0,0.6);border:1px solid #38bdf8;color:#ffd54f;font-weight:700;font-size:0.75rem;padding:2px 4px;border-radius:4px;text-align:center;" />
+                    <span style="color:#94a3b8;font-size:0.72rem;margin-left:-2px;">°</span>
+                    <button id="godRotNextBtn" class="godMiniBtn" title="Girar +15° (Tecla R. Con Shift: +5°)">+15°</button>
                 </div>
 
-                <div class="godMiniInputGroup">
+                <!-- ESCALA LIBRE (Botones y campo numérico editable sin límites) -->
+                <div class="godMiniInputGroup" title="Escala métrica sin límite. Escribe directamente cualquier número (ej: 8, 15, 25) o usa botones +/-">
                     <label>Escala:</label>
-                    <button id="godScaleDownBtn" class="godMiniBtn" title="Reducir escala (-)">-</button>
-                    <span id="godScaleVal">${currentScale.toFixed(1)}x</span>
-                    <button id="godScaleUpBtn" class="godMiniBtn" title="Aumentar escala (+)">+</button>
+                    <button id="godScaleDownBtn" class="godMiniBtn" title="Reducir escala (Tecla -)">-</button>
+                    <input type="number" id="godScaleInput" class="godNumericInput" min="0.05" max="200" step="0.5"
+                           value="${parseFloat(currentScale.toFixed(2))}"
+                           style="width:48px;background:rgba(0,0,0,0.6);border:1px solid #38bdf8;color:#38bdf8;font-weight:700;font-size:0.75rem;padding:2px 4px;border-radius:4px;text-align:center;" />
+                    <span style="color:#94a3b8;font-size:0.72rem;margin-left:-2px;">x</span>
+                    <button id="godScaleUpBtn" class="godMiniBtn" title="Aumentar escala (Tecla +)">+</button>
+                </div>
+
+                <!-- ELEVACIÓN Y RESPECTO AL TERRENO -->
+                <div class="godMiniInputGroup" title="Ajustar altura respecto al terreno (enterrar o elevar)">
+                    <label>Elev. Y:</label>
+                    <button id="godElevDownBtn" class="godMiniBtn" title="Enterrar / Bajar altura (-15 cm)">▼</button>
+                    <span id="godElevVal" style="font-size:0.68rem;min-width:32px;text-align:center;">
+                        ${selectedWorldObject?.mesh?.userData?.relativeGroundOffset !== undefined ? `${(selectedWorldObject.mesh.userData.relativeGroundOffset >= 0 ? '+' : '')}${selectedWorldObject.mesh.userData.relativeGroundOffset.toFixed(2)}m` : '0.00m'}
+                    </span>
+                    <button id="godElevUpBtn" class="godMiniBtn" title="Elevar / Subir altura (+15 cm)">▲</button>
                 </div>
             </div>
 
@@ -633,6 +1066,54 @@ function renderHUDContent() {
                 </button>
             </div>
         </div>
+
+        <!-- PANEL DESPLEGABLE: LOCALIZADOR DE MODELOS / ENTIDADES (ALTO, PANDA, ETC.) -->
+        ${isLocatorOpen ? `
+            <div class="godLocatorPanel styledScrollbar" style="max-height:220px;overflow-y:auto;background:rgba(10,16,24,0.95);border:1.5px solid #38bdf8;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 24px rgba(0,0,0,0.85);margin-bottom:6px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(56,189,248,0.3);padding-bottom:5px;">
+                    <span style="color:#38bdf8;font-weight:800;font-size:0.78rem;display:flex;align-items:center;gap:6px;">
+                        🧭 LOCALIZADOR UNIVERSAL DE MODELOS Y PERSONAJES (${locatableEntities.length})
+                    </span>
+                    <span style="color:#94a3b8;font-size:0.7rem;">Haz clic en 🎯 para enfocar cámara o en 📍 para traerlo frente a ti</span>
+                </div>
+                ${locatableEntities.map(ent => {
+                    const posX = ent.pos?.x !== undefined ? ent.pos.x : (ent.savedPos?.x || 0);
+                    const posZ = ent.pos?.z !== undefined ? ent.pos.z : (ent.savedPos?.z || 0);
+                    const isSelected = selectedWorldObject && (
+                        (selectedWorldObject.type === ent.type && (selectedWorldObject.data?.name?.includes(ent.name) || selectedWorldObject.id === ent.id)) ||
+                        selectedWorldObject.mesh === ent.mesh
+                    );
+
+                    return `
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:${isSelected ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.05)'};border:${isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)'};padding:5px 8px;border-radius:6px;font-size:0.75rem;">
+                            <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;" class="godLocatorSelectRow" data-ent-id="${ent.id}">
+                                <span style="font-size:1.05rem;">${ent.icon}</span>
+                                <div style="display:flex;flex-direction:column;">
+                                    <strong style="color:${isSelected ? '#38bdf8' : '#fff'};">${escapeHtml(ent.name)}</strong>
+                                    <span style="color:#94a3b8;font-size:0.68rem;font-family:monospace;">
+                                        Pos: (X: ${posX.toFixed(1)}, Z: ${posZ.toFixed(1)})
+                                        ${ent.savedPos ? `&bull; Guardado: (${ent.savedPos.x.toFixed(1)}, ${ent.savedPos.z.toFixed(1)})` : ''}
+                                    </span>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:4px;align-items:center;">
+                                <button class="godLocatorFocusBtn" data-ent-id="${ent.id}" style="background:#0284c7;border:1px solid #38bdf8;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.72rem;font-weight:700;" title="Volar la cámara hacia este modelo">
+                                    🎯 Enfocar
+                                </button>
+                                <button class="godLocatorTeleportBtn" data-ent-id="${ent.id}" style="background:#059669;border:1px solid #34d399;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.72rem;font-weight:700;" title="Traer este modelo y situarlo en el suelo frente a la cámara">
+                                    📍 Traer al Frente
+                                </button>
+                                ${ent.savedPos ? `
+                                    <button class="godLocatorResetBtn" data-ent-id="${ent.id}" style="background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.72rem;font-weight:700;" title="Restablecer este modelo a su posición guardada original">
+                                        🔄 Reset Guardado
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        ` : ''}
 
         <!-- LISTA DESPLEGABLE DE OBJETOS EN ESCENARIO -->
         ${showObjectsListDrawer ? `
@@ -825,8 +1306,8 @@ function renderControlsGuideContent() {
                         <span style="background:rgba(2,132,199,0.3);border:1px solid #38bdf8;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#38bdf8;font-weight:700;">Arrastrar Clic</span><span style="color:#38bdf8;font-weight:700;">Mover en suelo en vivo</span>
                         <span style="background:rgba(2,132,199,0.3);border:1px solid #38bdf8;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#38bdf8;font-weight:700;">Tecla G</span><span style="color:#e0f2fe;">Agarrar (seguir cursor)</span>
                         <span style="background:rgba(124,58,237,0.3);border:1px solid #a78bfa;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#c4b5fd;font-weight:700;">Ctrl + D</span><span style="color:#c4b5fd;font-weight:700;">Duplicar seleccionado</span>
-                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">R / T</span><span style="color:#cbd5e1;">Rotar en giros ±45°</span>
-                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">+ / -</span><span style="color:#cbd5e1;">Escalar tamaño</span>
+                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">R / T</span><span style="color:#cbd5e1;">Rotar ±15° (Shift: ±5°)</span>
+                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">+ / -</span><span style="color:#cbd5e1;">Escalar (o teclear en HUD)</span>
                         <span style="background:rgba(185,28,28,0.25);border:1px solid #ef4444;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#fca5a5;">Supr / Backspace</span><span style="color:#fca5a5;">Eliminar elemento</span>
                     </div>
                 </div>
@@ -908,60 +1389,189 @@ function setupHUDEvents() {
         };
     }
 
-    // Fijar en Código Fuente (Git)
-    const bakeBtn = hudContainer.querySelector('#godBakeToCodeBtn');
-    if (bakeBtn) {
-        bakeBtn.onclick = async () => {
-            bakeBtn.disabled = true;
-            bakeBtn.textContent = '⏳ Fijando...';
-            showDevToast('⏳ Fijando escenario actual en los archivos de código fuente (.js)...', 2500);
+    // Alternar Localizador de Modelos
+    const locatorBtn = hudContainer.querySelector('#godLocatorBtn');
+    if (locatorBtn) {
+        locatorBtn.onclick = () => {
+            isLocatorOpen = !isLocatorOpen;
+            renderHUDContent();
+        };
+    }
+
+    // Eventos dentro del panel Localizador de Modelos (Delegación Robusta con closest)
+    if (isLocatorOpen) {
+        const locatorPanel = hudContainer.querySelector('.godLocatorPanel');
+        if (locatorPanel) {
+            locatorPanel.onclick = (e) => {
+                // 1. Obtener lista de entidades fresca en el momento exacto del clic
+                const currentEntities = getAllLocatableEntities();
+                const entitiesMap = new Map();
+                currentEntities.forEach(ent => entitiesMap.set(ent.id, ent));
+
+                // A. Botón 🎯 Enfocar
+                const focusBtn = e.target.closest('.godLocatorFocusBtn');
+                if (focusBtn) {
+                    e.stopPropagation();
+                    const entId = focusBtn.getAttribute('data-ent-id');
+                    const target = entitiesMap.get(entId);
+                    if (target) {
+                        focusCameraOnTarget(target);
+                    } else {
+                        showDevToast(`⚠️ No se encontró la entidad "${entId}" en el mapa.`);
+                    }
+                    return;
+                }
+
+                // B. Botón 📍 Traer al frente
+                const teleBtn = e.target.closest('.godLocatorTeleportBtn');
+                if (teleBtn) {
+                    e.stopPropagation();
+                    const entId = teleBtn.getAttribute('data-ent-id');
+                    const target = entitiesMap.get(entId);
+                    if (target) {
+                        teleportEntityToFrontOfCamera(target);
+                    } else {
+                        showDevToast(`⚠️ No se encontró la entidad "${entId}".`);
+                    }
+                    return;
+                }
+
+                // C. Botón 🔄 Reset a posición original
+                const resetBtn = e.target.closest('.godLocatorResetBtn');
+                if (resetBtn) {
+                    e.stopPropagation();
+                    const entId = resetBtn.getAttribute('data-ent-id');
+                    const target = entitiesMap.get(entId);
+                    if (target) {
+                        resetEntityToSavedPosition(target);
+                    } else {
+                        showDevToast(`⚠️ No se encontró la entidad "${entId}".`);
+                    }
+                    return;
+                }
+
+                // D. Clic en la fila para seleccionar
+                const row = e.target.closest('.godLocatorSelectRow');
+                if (row) {
+                    const entId = row.getAttribute('data-ent-id');
+                    const target = entitiesMap.get(entId);
+                    if (target) {
+                        selectEntityFromLocator(target);
+                        showDevToast(`📌 Seleccionado: ${target.icon || '📍'} ${target.name}`);
+                    }
+                }
+            };
+        }
+    }
+
+    // Botón Unificado: Guardar y Hornear Escenario (Opción A)
+    const unifiedSaveBtn = hudContainer.querySelector('#godUnifiedSaveBtn');
+    if (unifiedSaveBtn) {
+        unifiedSaveBtn.onclick = async () => {
+            unifiedSaveBtn.disabled = true;
+            unifiedSaveBtn.textContent = '⏳ Guardando y Horneando...';
+            showDevToast('💾 Guardando cambios en LocalStorage y horneando en código fuente para Git...', 3000);
 
             try {
-                const res = await bakeCurrentWorldToCode();
-                if (res.success) {
-                    showDevToast(`✅ ¡Escenario fijado en el código fuente! (${res.npcsCount || 4} NPCs, ${res.objectsCount || 0} objetos). Ya puedes sincronizar con GitHub.`, 5000);
+                // 1. Persistir cambios staged en memoria a LocalStorage y servidor
+                commitStagedWorldLayout();
+                commitStagedWorldObjects();
+
+                // 2. Crear versiones históricas de seguridad
+                saveSceneVersion('Guardado desde Modo Dios');
+                saveLayoutVersion('Guardado desde Modo Dios');
+
+                // 3. Hornear directamente en el código fuente de la app (.js) para GitHub
+                const bakeRes = await bakeCurrentWorldToCode();
+
+                hasUnsavedChanges = false;
+                pendingChangesCount = 0;
+
+                if (bakeRes.success) {
+                    showDevToast('✅ ¡Escenario guardado en LocalStorage y fijado con éxito en el código fuente para Git!', 5000);
                 } else {
-                    showDevToast(`⚠️ Error al fijar en código: ${res.error || res.message}`, 4000);
+                    showDevToast(`💾 Cambios guardados en memoria y LocalStorage. (Aviso Git: ${bakeRes.error || bakeRes.message})`, 4500);
                 }
             } catch (err) {
-                showDevToast(`⚠️ Error: ${err.message}`, 4000);
+                console.error('[GodMode] Error guardando escenario:', err);
+                showDevToast(`⚠️ Error al guardar: ${err.message}`, 4000);
             } finally {
-                bakeBtn.disabled = false;
-                bakeBtn.textContent = '💾 Fijar en Código (Git)';
+                unifiedSaveBtn.disabled = false;
                 renderHUDContent();
             }
         };
     }
 
-    // Guardar Versión
-    const saveBtn = hudContainer.querySelector('#godSaveSceneBtn');
-    if (saveBtn) {
-        saveBtn.onclick = () => {
-            const ver = saveSceneVersion();
-            saveLayoutVersion();
-            showDevToast(`💾 Escenario completo guardado permanentemente (${ver.name})`);
-            renderHUDContent();
-        };
-    }
-
-    // Descartar Cambios
+    // Descartar Cambios y Restaurar al Último Guardado
     const revertBtn = hudContainer.querySelector('#godRevertBtn');
     if (revertBtn) {
         revertBtn.onclick = () => {
             showDevModalDialog({
                 title: '↩️ Descartar Cambios del Escenario',
-                message: '¿Estás seguro de que deseas descartar los cambios no guardados y restaurar a la última versión guardada?',
+                message: '¿Estás seguro de descartar todos los cambios no guardados y restaurar los modelos (incluyendo Alto, Panda, Telerín y objetos) a la última posición guardada?',
                 confirmText: '↩️ Sí, Descartar Cambios',
                 cancelText: 'Cancelar',
                 isDanger: true,
                 onConfirm: async () => {
+                    // 1. Restaurar objetos del mundo colocados
                     await revertToLastSavedState();
-                    const versions = getLayoutVersions();
-                    if (versions.length > 0) {
-                        try { restoreLayoutVersion(versions[0].id); } catch (_) {}
+
+                    // 2. Recargar layout de entidades de fábrica / confirmado
+                    const confirmedLayout = reloadWorldLayoutFromStorage();
+
+                    // 3. Re-sincronizar mallas en vivo con las coordenadas confirmadas
+                    if (runtimeState.player && confirmedLayout.playerSpawn) {
+                        const groundY = getHeightAt(confirmedLayout.playerSpawn.x, confirmedLayout.playerSpawn.z);
+                        runtimeState.player.position.set(confirmedLayout.playerSpawn.x, groundY + (runtimeState.playerHeightOffset || 0), confirmedLayout.playerSpawn.z);
+                        if (typeof confirmedLayout.playerSpawn.rotationY === 'number') {
+                            runtimeState.player.rotation.y = confirmedLayout.playerSpawn.rotationY;
+                        }
                     }
+
+                    const npcsMap = confirmedLayout.npcs || {};
+                    const altoMesh = getAltoNPC();
+                    if (altoMesh && npcsMap.Alto) {
+                        const groundY = getHeightAt(npcsMap.Alto.x, npcsMap.Alto.z);
+                        altoMesh.position.set(npcsMap.Alto.x, groundY, npcsMap.Alto.z);
+                        if (typeof npcsMap.Alto.rotationY === 'number') altoMesh.rotation.y = npcsMap.Alto.rotationY;
+                        if (typeof npcsMap.Alto.scale === 'number') altoMesh.scale.setScalar(npcsMap.Alto.scale);
+                    }
+
+                    const pandaMesh = getPandaNPC();
+                    if (pandaMesh && npcsMap.Panda) {
+                        const groundY = getHeightAt(npcsMap.Panda.x, npcsMap.Panda.z);
+                        pandaMesh.position.set(npcsMap.Panda.x, groundY, npcsMap.Panda.z);
+                        if (typeof npcsMap.Panda.rotationY === 'number') pandaMesh.rotation.y = npcsMap.Panda.rotationY;
+                    }
+
+                    const telerinMesh = getTelerinNPC();
+                    if (telerinMesh && (npcsMap['Telerín'] || npcsMap['Telerin'])) {
+                        const t = npcsMap['Telerín'] || npcsMap['Telerin'];
+                        const groundY = getHeightAt(t.x, t.z);
+                        telerinMesh.position.set(t.x, groundY, t.z);
+                        if (typeof t.rotationY === 'number') telerinMesh.rotation.y = t.rotationY;
+                    }
+
+                    const teleronMesh = getTeleronNPC();
+                    if (teleronMesh && (npcsMap['Telerón'] || npcsMap['Teleron'])) {
+                        const t = npcsMap['Telerón'] || npcsMap['Teleron'];
+                        const groundY = getHeightAt(t.x, t.z);
+                        teleronMesh.position.set(t.x, groundY, t.z);
+                        if (typeof t.rotationY === 'number') teleronMesh.rotation.y = t.rotationY;
+                    }
+
+                    const muebleMesh = getMuebleObject();
+                    if (muebleMesh && confirmedLayout.furniture?.mueble) {
+                        const m = confirmedLayout.furniture.mueble;
+                        const groundY = getHeightAt(m.x, m.z);
+                        muebleMesh.position.set(m.x, groundY + 0.45, m.z);
+                        if (typeof m.rotationY === 'number') muebleMesh.rotation.y = m.rotationY;
+                    }
+
+                    hasUnsavedChanges = false;
+                    pendingChangesCount = 0;
                     clearSelectionHelper();
-                    showDevToast('↩️ Cambios descartados');
+                    showDevToast('↩️ Cambios no guardados descartados. Escenario restaurado a la versión confirmada.');
                     renderHUDContent();
                 }
             });
@@ -1132,27 +1742,76 @@ function setupHUDEvents() {
         };
     });
 
-    // Rotación
+    // Rotación Precisa (Botones ±15° y campo numérico)
     const rotPrev = hudContainer.querySelector('#godRotPrevBtn');
     const rotNext = hudContainer.querySelector('#godRotNextBtn');
+    const rotInput = hudContainer.querySelector('#godRotInput');
     if (rotPrev && rotNext) {
         rotPrev.onclick = () => {
-            applyRotationToSelected(currentRotationY - Math.PI / 4);
+            // Giros precisos de 15° (o 5° si se mantiene shift)
+            applyRotationToSelected(currentRotationY - THREE.MathUtils.degToRad(15));
         };
         rotNext.onclick = () => {
-            applyRotationToSelected(currentRotationY + Math.PI / 4);
+            applyRotationToSelected(currentRotationY + THREE.MathUtils.degToRad(15));
+        };
+    }
+    if (rotInput) {
+        const commitRotInput = () => {
+            const deg = parseFloat(rotInput.value);
+            if (!isNaN(deg)) {
+                applyRotationToSelected(THREE.MathUtils.degToRad(deg));
+            }
+        };
+        rotInput.onchange = commitRotInput;
+        rotInput.onkeydown = (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                commitRotInput();
+                rotInput.blur();
+            }
         };
     }
 
-    // Escala
+    // Escala Libre (Botones +/- sin límite forzado y campo numérico editable)
     const scaleDown = hudContainer.querySelector('#godScaleDownBtn');
     const scaleUp = hudContainer.querySelector('#godScaleUpBtn');
+    const scaleInput = hudContainer.querySelector('#godScaleInput');
     if (scaleDown && scaleUp) {
         scaleDown.onclick = () => {
-            applyScaleToSelected(Math.max(0.2, currentScale - 0.2));
+            const step = currentScale > 5.0 ? 1.0 : (currentScale > 1.0 ? 0.2 : 0.1);
+            applyScaleToSelected(Math.max(0.05, currentScale - step));
         };
         scaleUp.onclick = () => {
-            applyScaleToSelected(Math.min(5.0, currentScale + 0.2));
+            const step = currentScale >= 5.0 ? 1.0 : (currentScale >= 1.0 ? 0.2 : 0.1);
+            applyScaleToSelected(Math.max(0.05, currentScale + step));
+        };
+    }
+    if (scaleInput) {
+        const commitScaleInput = () => {
+            const sc = parseFloat(scaleInput.value);
+            if (!isNaN(sc) && sc > 0) {
+                applyScaleToSelected(sc);
+            }
+        };
+        scaleInput.onchange = commitScaleInput;
+        scaleInput.onkeydown = (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                commitScaleInput();
+                scaleInput.blur();
+            }
+        };
+    }
+
+    // Elevación Y (Enterrar / Elevar respecto al suelo)
+    const elevDown = hudContainer.querySelector('#godElevDownBtn');
+    const elevUp = hudContainer.querySelector('#godElevUpBtn');
+    if (elevDown && elevUp) {
+        elevDown.onclick = () => {
+            applyElevationOffsetToSelected(-0.15);
+        };
+        elevUp.onclick = () => {
+            applyElevationOffsetToSelected(+0.15);
         };
     }
 
@@ -1345,20 +2004,26 @@ function onKeyDown(e) {
         case 'ShiftRight':
             flyKeys.speedBoost = true;
             break;
-        case 'KeyR':
-            // Rotar +45°
+        case 'KeyR': {
+            // Rotar a la derecha: 15° normal, 5° con Shift
             e.preventDefault();
             e.stopPropagation();
-            applyRotationToSelected(currentRotationY + Math.PI / 4);
-            showDevToast(`🔄 Rotación: ${Math.round(THREE.MathUtils.radToDeg(currentRotationY))}°`);
+            const stepDeg = e.shiftKey ? 5 : 15;
+            applyRotationToSelected(currentRotationY + THREE.MathUtils.degToRad(stepDeg));
+            const curDeg = Math.round(((THREE.MathUtils.radToDeg(currentRotationY) % 360) + 360) % 360);
+            showDevToast(`🔄 Rotación (+${stepDeg}°): ${curDeg}°`);
             break;
-        case 'KeyT':
-            // Rotar -45°
+        }
+        case 'KeyT': {
+            // Rotar a la izquierda: 15° normal, 5° con Shift
             e.preventDefault();
             e.stopPropagation();
-            applyRotationToSelected(currentRotationY - Math.PI / 4);
-            showDevToast(`🔄 Rotación: ${Math.round(THREE.MathUtils.radToDeg(currentRotationY))}°`);
+            const stepDeg = e.shiftKey ? 5 : 15;
+            applyRotationToSelected(currentRotationY - THREE.MathUtils.degToRad(stepDeg));
+            const curDeg = Math.round(((THREE.MathUtils.radToDeg(currentRotationY) % 360) + 360) % 360);
+            showDevToast(`🔄 Rotación (-${stepDeg}°): ${curDeg}°`);
             break;
+        }
         case 'KeyZ':
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
@@ -1371,15 +2036,21 @@ function onKeyDown(e) {
             }
             break;
         case 'Equal':
-        case 'NumpadAdd':
-            // Escalar +
-            applyScaleToSelected(Math.min(5.0, currentScale + 0.2));
+        case 'NumpadAdd': {
+            // Escalar + (sin límite de 5.0x, con pasos acordes al tamaño)
+            const step = currentScale >= 5.0 ? 1.0 : (currentScale >= 1.0 ? 0.2 : 0.1);
+            applyScaleToSelected(currentScale + step);
+            showDevToast(`🔍 Escala: ${currentScale.toFixed(2)}x`);
             break;
+        }
         case 'Minus':
-        case 'NumpadSubtract':
-            // Escalar -
-            applyScaleToSelected(Math.max(0.2, currentScale - 0.2));
+        case 'NumpadSubtract': {
+            // Escalar - (mínimo seguro 0.05)
+            const step = currentScale > 5.0 ? 1.0 : (currentScale > 1.0 ? 0.2 : 0.1);
+            applyScaleToSelected(Math.max(0.05, currentScale - step));
+            showDevToast(`🔍 Escala: ${currentScale.toFixed(2)}x`);
             break;
+        }
         case 'Delete':
         case 'Backspace':
             executeDeleteSelectedObject();
@@ -1617,6 +2288,8 @@ async function handlePlaceObjectClick() {
 
     const placed = await placeObjectInWorld(itemDesc, pos, currentRotationY, currentScale);
     if (placed) {
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
         showDevToast(`✅ Plantado "${placed.record.name}" en (${pos.x.toFixed(1)}, ${pos.z.toFixed(1)})`);
 
         // Efecto sonoro visual o destello suave en el cursor
@@ -1937,11 +2610,15 @@ function applyLiveMoveToSelectedObject(targetPos) {
         }
     } else if (selectedWorldObject.type === 'npc') {
         if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.position.set(targetPos.x, targetPos.y, targetPos.z);
+            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            selectedWorldObject.mesh.traverse(child => {
+                if (child.isMesh) child.frustumCulled = false;
+            });
+            selectedWorldObject.mesh.visible = true;
         }
     } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
         if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.position.set(targetPos.x, targetPos.y + 0.45, targetPos.z);
+            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
         }
     } else if (selectedWorldObject.category === 'instanced') {
         moveInstancedObject(
@@ -2044,7 +2721,8 @@ async function detachInstancedObjectToCustom(instObj) {
         isSolid: true
     };
 
-    const targetPos = (selectedWorldObject === instObj && hasValidGroundHit) ? currentGroundHit : pos;
+    const origGroundY = getHeightAt(origPos.x, origPos.z);
+    const origRelativeOffset = isRock ? 0 : (isTree ? -0.35 : (pos.y - origGroundY));
 
     const placedEntry = await placeObjectInWorld(
         itemDesc,
@@ -2055,12 +2733,16 @@ async function detachInstancedObjectToCustom(instObj) {
     );
 
     if (placedEntry && placedEntry.mesh) {
+        placedEntry.mesh.userData.relativeGroundOffset = origRelativeOffset;
+        if (placedEntry.record) placedEntry.record.relativeGroundOffset = origRelativeOffset;
+        snapObjectToTerrain(placedEntry.mesh, targetPos.x, targetPos.z, origRelativeOffset);
+
         const newSelected = {
             ...placedEntry,
             type: 'custom'
         };
         selectWorldObject(newSelected);
-        showDevToast(`✨ ${itemDesc.name} independizado y guardado de forma permanente`);
+        showDevToast(`✨ ${itemDesc.name} independizado (altura natural conservada)`);
         return newSelected;
     }
 
@@ -2068,13 +2750,14 @@ async function detachInstancedObjectToCustom(instObj) {
 }
 
 /**
- * Consolida la posición final del objeto: actualiza chunks, colisiones y persistencia.
+ * Consolida la posición final del objeto: actualiza chunks, colisiones y memoria staged.
+ * No persiste en disco ni LocalStorage hasta que el usuario pulse 'Guardar y Hornear Escenario'.
  */
 function commitSelectedObjectMove(targetPos) {
     if (!selectedWorldObject || !targetPos) return;
 
     if (selectedWorldObject.type === 'custom') {
-        updatePlacedObjectTransform(selectedWorldObject.id, { x: targetPos.x, z: targetPos.z });
+        updatePlacedObjectTransform(selectedWorldObject.id, { x: targetPos.x, z: targetPos.z }, false);
         if (selectedWorldObject.data?.position) {
             selectedWorldObject.data.position.x = targetPos.x;
             selectedWorldObject.data.position.z = targetPos.z;
@@ -2083,30 +2766,37 @@ function commitSelectedObjectMove(targetPos) {
         if (runtimeState.player) {
             const offset = runtimeState.playerHeightOffset || 0;
             runtimeState.player.position.set(targetPos.x, targetPos.y + offset, targetPos.z);
-            updateEntityTransform('playerSpawn', null, { x: targetPos.x, z: targetPos.z });
+            updateEntityTransform('playerSpawn', null, { x: targetPos.x, z: targetPos.z }, false);
         }
     } else if (selectedWorldObject.type === 'npc') {
         if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.position.set(targetPos.x, targetPos.y, targetPos.z);
+            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            selectedWorldObject.mesh.traverse(child => {
+                if (child.isMesh) child.frustumCulled = false;
+            });
+            selectedWorldObject.mesh.visible = true;
             const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
             if (npcName) {
-                updateEntityTransform('npcs', npcName, { x: targetPos.x, z: targetPos.z });
+                updateEntityTransform('npcs', npcName, { x: targetPos.x, z: targetPos.z }, false);
             }
         }
     } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
         if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.position.set(targetPos.x, targetPos.y + 0.45, targetPos.z);
-            updateEntityTransform('furniture', 'mueble', { x: targetPos.x, z: targetPos.z });
+            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            updateEntityTransform('furniture', 'mueble', { x: targetPos.x, z: targetPos.z }, false);
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
         detachInstancedObjectToCustom(instToDetach).then(newCustom => {
             if (newCustom && newCustom.mesh && targetPos) {
                 snapObjectToTerrain(newCustom.mesh, targetPos.x, targetPos.z);
-                updatePlacedObjectTransform(newCustom.id, { x: targetPos.x, z: targetPos.z });
+                updatePlacedObjectTransform(newCustom.id, { x: targetPos.x, z: targetPos.z }, false);
             }
         });
     }
+
+    hasUnsavedChanges = true;
+    pendingChangesCount++;
 
     if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
         selectionBoxHelper.update();
@@ -2143,11 +2833,22 @@ function selectWorldObject(objEntry) {
         box.applyMatrix4(instMatrix);
         selectionBoxHelper = new THREE.Box3Helper(box, objEntry.type === 'tree' ? 0x22c55e : 0xa1a1aa);
         scene.add(selectionBoxHelper);
-    } else {
+    } else if (objEntry.mesh) {
         const color = objEntry.type === 'player' ? 0x38bdf8 :
                       objEntry.type === 'npc' ? 0x10b981 :
                       objEntry.type === 'furniture' ? 0xa855f7 : 0xf59e0b;
-        selectionBoxHelper = new THREE.BoxHelper(objEntry.mesh, color);
+        try {
+            selectionBoxHelper = new THREE.BoxHelper(objEntry.mesh, color);
+            scene.add(selectionBoxHelper);
+        } catch (_) {}
+    } else if (objEntry.data?.position) {
+        const p = objEntry.data.position;
+        const groundY = getHeightAt(p.x, p.z);
+        const box = new THREE.Box3(
+            new THREE.Vector3(p.x - 0.5, groundY, p.z - 0.5),
+            new THREE.Vector3(p.x + 0.5, groundY + 1.8, p.z + 0.5)
+        );
+        selectionBoxHelper = new THREE.Box3Helper(box, 0x10b981);
         scene.add(selectionBoxHelper);
     }
 
@@ -2183,8 +2884,13 @@ function clearSelectionHelper(rerender = true) {
 
 function applyRotationToSelected(newRotY) {
     currentRotationY = newRotY;
+    const degNorm = Math.round(((THREE.MathUtils.radToDeg(currentRotationY) % 360) + 360) % 360);
     const rotVal = document.getElementById('godRotVal');
-    if (rotVal) rotVal.textContent = `${Math.round(THREE.MathUtils.radToDeg(currentRotationY))}°`;
+    if (rotVal) rotVal.textContent = `${degNorm}°`;
+    const rotInput = document.getElementById('godRotInput');
+    if (rotInput && document.activeElement !== rotInput) {
+        rotInput.value = degNorm.toString();
+    }
 
     if (!selectedWorldObject) {
         updateGhostTransform();
@@ -2192,33 +2898,36 @@ function applyRotationToSelected(newRotY) {
     }
 
     if (selectedWorldObject.type === 'custom') {
-        updatePlacedObjectTransform(selectedWorldObject.id, { rotationY: currentRotationY });
+        updatePlacedObjectTransform(selectedWorldObject.id, { rotationY: currentRotationY }, false);
     } else if (selectedWorldObject.type === 'player') {
         if (runtimeState.player) {
             runtimeState.player.rotation.y = currentRotationY;
-            updateEntityTransform('playerSpawn', null, { rotationY: currentRotationY });
+            updateEntityTransform('playerSpawn', null, { rotationY: currentRotationY }, false);
         }
     } else if (selectedWorldObject.type === 'npc') {
         if (selectedWorldObject.mesh) {
             selectedWorldObject.mesh.rotation.y = currentRotationY;
             const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
             if (npcName) {
-                updateEntityTransform('npcs', npcName, { rotationY: currentRotationY });
+                updateEntityTransform('npcs', npcName, { rotationY: currentRotationY }, false);
             }
         }
     } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
         if (selectedWorldObject.mesh) {
             selectedWorldObject.mesh.rotation.y = currentRotationY;
-            updateEntityTransform('furniture', 'mueble', { rotationY: currentRotationY });
+            updateEntityTransform('furniture', 'mueble', { rotationY: currentRotationY }, false);
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
         detachInstancedObjectToCustom(instToDetach).then(newCustom => {
             if (newCustom) {
-                updatePlacedObjectTransform(newCustom.id, { rotationY: currentRotationY });
+                updatePlacedObjectTransform(newCustom.id, { rotationY: currentRotationY }, false);
             }
         });
     }
+
+    hasUnsavedChanges = true;
+    pendingChangesCount++;
 
     if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
         selectionBoxHelper.update();
@@ -2227,9 +2936,13 @@ function applyRotationToSelected(newRotY) {
 }
 
 function applyScaleToSelected(newScale) {
-    currentScale = newScale;
+    currentScale = Math.max(0.01, newScale);
     const sVal = document.getElementById('godScaleVal');
-    if (sVal) sVal.textContent = `${currentScale.toFixed(1)}x`;
+    if (sVal) sVal.textContent = `${currentScale.toFixed(2)}x`;
+    const scaleInput = document.getElementById('godScaleInput');
+    if (scaleInput && document.activeElement !== scaleInput) {
+        scaleInput.value = parseFloat(currentScale.toFixed(2)).toString();
+    }
 
     if (!selectedWorldObject) {
         updateGhostTransform();
@@ -2237,7 +2950,7 @@ function applyScaleToSelected(newScale) {
     }
 
     if (selectedWorldObject.type === 'custom') {
-        updatePlacedObjectTransform(selectedWorldObject.id, { scale: currentScale });
+        updatePlacedObjectTransform(selectedWorldObject.id, { scale: currentScale }, false);
     } else if (selectedWorldObject.type === 'player') {
         if (runtimeState.player) {
             runtimeState.player.scale.set(currentScale * 1.4, currentScale * 1.4, currentScale * 1.4);
@@ -2247,27 +2960,72 @@ function applyScaleToSelected(newScale) {
             selectedWorldObject.mesh.scale.setScalar(currentScale);
             const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
             if (npcName) {
-                updateEntityTransform('npcs', npcName, { scale: currentScale });
+                updateEntityTransform('npcs', npcName, { scale: currentScale }, false);
             }
         }
     } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
         if (selectedWorldObject.mesh) {
             selectedWorldObject.mesh.scale.setScalar(currentScale);
-            updateEntityTransform('furniture', 'mueble', { scale: currentScale });
+            updateEntityTransform('furniture', 'mueble', { scale: currentScale }, false);
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
         detachInstancedObjectToCustom(instToDetach).then(newCustom => {
             if (newCustom) {
-                updatePlacedObjectTransform(newCustom.id, { scale: currentScale });
+                updatePlacedObjectTransform(newCustom.id, { scale: currentScale }, false);
             }
         });
     }
+
+    hasUnsavedChanges = true;
+    pendingChangesCount++;
 
     if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
         selectionBoxHelper.update();
     }
     updateGhostTransform();
+}
+
+/**
+ * Ajusta la elevación o enterramiento relativo respecto a la superficie del terreno.
+ * Permite enterrar más una roca o elevar un elemento del suelo de forma personalizada.
+ */
+function applyElevationOffsetToSelected(deltaY) {
+    if (!selectedWorldObject) return;
+
+    const mesh = selectedWorldObject.mesh;
+    if (!mesh) return;
+
+    const groundY = getHeightAt(mesh.position.x, mesh.position.z);
+    let currentRel = mesh.userData?.relativeGroundOffset;
+    if (typeof currentRel !== 'number') {
+        currentRel = mesh.position.y - groundY;
+    }
+
+    const newRel = currentRel + deltaY;
+    mesh.userData.relativeGroundOffset = newRel;
+    mesh.position.y = groundY + newRel;
+    mesh.updateMatrixWorld(true);
+
+    if (selectedWorldObject.type === 'custom') {
+        updatePlacedObjectTransform(selectedWorldObject.id, {
+            position: { x: mesh.position.x, z: mesh.position.z, elevationOffset: newRel }
+        }, false);
+    }
+
+    hasUnsavedChanges = true;
+    pendingChangesCount++;
+
+    const elevSpan = document.getElementById('godElevVal');
+    if (elevSpan) {
+        elevSpan.textContent = `${newRel >= 0 ? '+' : ''}${newRel.toFixed(2)}m`;
+    }
+
+    if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
+        selectionBoxHelper.update();
+    }
+
+    showDevToast(`📏 Elevación ajustada: ${newRel >= 0 ? '+' : ''}${newRel.toFixed(2)}m respecto al suelo`);
 }
 
 async function executeMoveSelectedToCursor() {

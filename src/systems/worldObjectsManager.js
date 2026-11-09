@@ -164,14 +164,42 @@ export function computeGroundOffset(mesh) {
 
 /**
  * Posiciona un objeto con precisión en las coordenadas (x, z) del terreno,
- * asegurando que su base toque la superficie según getHeightAt(x, z).
+ * asegurando que conserve su altura relativa natural respecto al suelo (groundOffset / enterramiento).
+ *
+ * @param {THREE.Object3D} mesh Modelo 3D a posicionar
+ * @param {number} x Coordenada X destino
+ * @param {number} z Coordenada Z destino
+ * @param {number|null} customOffset Offset relativo opcional respecto al suelo. Si es null, usa el offset natural o preexistente.
  */
-export function snapObjectToTerrain(mesh, x, z) {
+export function snapObjectToTerrain(mesh, x, z, customOffset = null) {
     if (!mesh) return;
-    mesh.position.set(x, mesh.position.y, z);
-    const groundOffset = computeGroundOffset(mesh);
+
+    // 1. Determinar el offset relativo respecto a la superficie del suelo
+    let finalOffset = 0;
+
+    if (typeof customOffset === 'number') {
+        finalOffset = customOffset;
+        mesh.userData.relativeGroundOffset = finalOffset;
+    } else if (typeof mesh.userData?.relativeGroundOffset === 'number') {
+        // Preservar el enterramiento o elevación relativa que ya tenía asignada este objeto
+        finalOffset = mesh.userData.relativeGroundOffset;
+    } else {
+        // Si es una roca (pivote en el centro), preservar su posición natural a medio enterrar (offset = 0)
+        const isRock = mesh.userData?.isRock || mesh.name?.includes('rock');
+        const isTree = mesh.userData?.isTree || mesh.name?.includes('tree');
+
+        if (isRock) {
+            finalOffset = 0; // Centro en cota de tierra: 50% enterrada naturalmente
+        } else if (isTree) {
+            finalOffset = -0.35; // Raíces ancladas en el subsuelo
+        } else {
+            finalOffset = computeGroundOffset(mesh); // Apoyo en su base
+        }
+        mesh.userData.relativeGroundOffset = finalOffset;
+    }
+
     const groundY = getHeightAt(x, z);
-    mesh.position.set(x, groundY + groundOffset, z);
+    mesh.position.set(x, groundY + finalOffset, z);
     mesh.updateMatrixWorld(true);
 }
 
@@ -350,6 +378,7 @@ export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scal
         logicType: itemDesc.logicType || 'default',
         logicConfig: itemDesc.logicConfig ? { ...itemDesc.logicConfig } : {},
         position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+        relativeGroundOffset: mesh.userData.relativeGroundOffset,
         rotationY: mesh.rotation.y,
         scale: s,
         placedAt: Date.now()
@@ -367,8 +396,10 @@ export async function placeObjectInWorld(itemDesc, position, rotationY = 0, scal
 
 /**
  * Actualiza la posición, rotación, escala o solidez de un objeto ya colocado.
+ * Si shouldPersist es false, solo actualiza la malla viva y datos en memoria (modo edición/staged).
+ * Si shouldPersist es true, sincroniza con LocalStorage y el servidor.
  */
-export function updatePlacedObjectTransform(id, { x, z, position, rotationY, scale, isSolid }) {
+export function updatePlacedObjectTransform(id, { x, z, position, rotationY, scale, isSolid }, shouldPersist = true) {
     const entry = activeWorldObjects.get(id);
     if (!entry) return null;
 
@@ -390,17 +421,19 @@ export function updatePlacedObjectTransform(id, { x, z, position, rotationY, sca
 
     const posX = x !== undefined ? x : (position?.x !== undefined ? position.x : undefined);
     const posZ = z !== undefined ? z : (position?.z !== undefined ? position.z : undefined);
+    const elevY = position?.elevationOffset !== undefined ? position.elevationOffset : undefined;
 
-    if (posX !== undefined || posZ !== undefined) {
+    if (posX !== undefined || posZ !== undefined || elevY !== undefined) {
         const newX = posX !== undefined ? posX : mesh.position.x;
         const newZ = posZ !== undefined ? posZ : mesh.position.z;
 
         // Migrar de chunk visual al moverse
         unregisterVisualFromChunk(mesh);
-        snapObjectToTerrain(mesh, newX, newZ);
+        snapObjectToTerrain(mesh, newX, newZ, elevY);
         registerVisualInChunk(mesh, mesh.position.x, mesh.position.z);
 
         data.position = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+        data.relativeGroundOffset = mesh.userData.relativeGroundOffset;
         transformChanged = true;
     }
 
@@ -431,15 +464,29 @@ export function updatePlacedObjectTransform(id, { x, z, position, rotationY, sca
         rebuildSpatialGrid(collidables);
     }
 
-    // Sincronizar persistencia
-    const all = getSavedWorldObjects();
-    const idx = all.findIndex(o => o.id === id);
-    if (idx >= 0) {
-        all[idx] = { ...data };
-        saveWorldObjects(all);
+    // Sincronizar persistencia únicamente si se solicita explícitamente
+    if (shouldPersist) {
+        const all = getSavedWorldObjects();
+        const idx = all.findIndex(o => o.id === id);
+        if (idx >= 0) {
+            all[idx] = { ...data };
+            saveWorldObjects(all);
+        }
     }
 
     return entry;
+}
+
+/**
+ * Persiste explícitamente todos los objetos activos en memoria a LocalStorage y al servidor.
+ */
+export function commitStagedWorldObjects() {
+    const all = [];
+    activeWorldObjects.forEach((entry) => {
+        all.push({ ...entry.data });
+    });
+    saveWorldObjects(all);
+    return all;
 }
 
 /**
@@ -638,8 +685,9 @@ export async function loadAndSpawnWorldObjects() {
                 mesh.scale.set(s, s, s);
                 mesh.rotation.y = typeof item.rotationY === 'number' ? item.rotationY : 0;
 
-                // Snap exacto al terreno
-                snapObjectToTerrain(mesh, item.position.x, item.position.z);
+                // Snap exacto al terreno preservando el enterramiento original (relativeGroundOffset)
+                const savedOffset = typeof item.relativeGroundOffset === 'number' ? item.relativeGroundOffset : null;
+                snapObjectToTerrain(mesh, item.position.x, item.position.z, savedOffset);
 
                 // Configurar colisión física
                 const solid = item.isSolid !== false;

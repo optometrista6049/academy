@@ -137,9 +137,11 @@ export function getEntityTransform(category, entityId, fallback = null) {
 }
 
 /**
- * Actualiza la posición, rotación o escala de una entidad y la persiste permanentemente.
+ * Actualiza la posición, rotación o escala de una entidad.
+ * Si shouldPersist es false, solo actualiza la memoria activa (modo edición/staged).
+ * Si shouldPersist es true, guarda en LocalStorage y sincroniza con el servidor.
  */
-export function updateEntityTransform(category, entityId, transform) {
+export function updateEntityTransform(category, entityId, transform, shouldPersist = true) {
     const layout = getWorldLayout();
     const cleanId = category === 'npcs' ? normalizeEntityName(entityId) : entityId;
 
@@ -158,24 +160,42 @@ export function updateEntityTransform(category, entityId, transform) {
         };
     }
 
-    layout.updatedAt = Date.now();
+    if (shouldPersist) {
+        layout.updatedAt = Date.now();
 
-    // Guardar en LocalStorage
-    try {
-        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-    } catch (e) {
-        console.warn('[WorldLayoutSystem] Error guardando layout local:', e);
+        // Guardar en LocalStorage
+        try {
+            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+        } catch (e) {
+            console.warn('[WorldLayoutSystem] Error guardando layout local:', e);
+        }
+
+        // Sincronizar inmediatamente al archivo en disco del servidor
+        sendServerLayoutSync({
+            action: 'update-entity',
+            category,
+            entityId: cleanId,
+            transform
+        });
     }
 
-    // Sincronizar inmediatamente al archivo en disco del servidor
-    sendServerLayoutSync({
-        action: 'update-entity',
-        category,
-        entityId: cleanId,
-        transform
-    });
-
     return layout;
+}
+
+/**
+ * Persiste explícitamente el layout actual en memoria a LocalStorage y al servidor.
+ */
+export function commitStagedWorldLayout() {
+    if (!currentLayout) return currentLayout;
+    return saveWorldLayout(currentLayout);
+}
+
+/**
+ * Recarga y descarta cambios no guardados en memoria volviendo al estado confirmado en LocalStorage.
+ */
+export function reloadWorldLayoutFromStorage() {
+    currentLayout = null;
+    return initWorldLayout();
 }
 
 /**

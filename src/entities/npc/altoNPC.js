@@ -90,7 +90,7 @@ export function loadAltoNPC(){
 
             });
 
-            playAnimationByKeyword('idle');
+            playAnimationByKeyword('assembly_loop');
 
         }
 
@@ -101,6 +101,12 @@ export function loadAltoNPC(){
 function findAnimation(keyword){
 
     keyword = keyword.toLowerCase();
+
+    // Preferir versión _loop si se busca assembly
+    if (keyword === 'assembly' || keyword === 'assembly_loop') {
+        const loopMatch = Object.keys(actions).find(n => n.toLowerCase().includes('assembly_loop'));
+        if (loopMatch) return actions[loopMatch];
+    }
 
     for(const name in actions){
 
