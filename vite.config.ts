@@ -24,6 +24,153 @@ export default defineConfig(() => {
             });
           };
 
+          const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = 5 * 1024 * 1024;
+          const writeCustomAssetsBundle = () => {
+            const now = Date.now();
+            const scanBinaryDir = (dirs: string[], regex: RegExp) => {
+              const found = new Map<string, { filename: string; fullPath: string; size: number; mtimeMs: number }>();
+              for (const dir of dirs) {
+                if (!fs.existsSync(dir)) continue;
+                for (const entry of fs.readdirSync(dir)) {
+                  if (!regex.test(entry)) continue;
+                  const full = path.resolve(dir, entry);
+                  try {
+                    const stat = fs.statSync(full);
+                    if (!stat.isFile()) continue;
+                    const prev = found.get(entry);
+                    if (!prev || stat.mtimeMs > prev.mtimeMs) {
+                      found.set(entry, { filename: entry, fullPath: full, size: stat.size, mtimeMs: stat.mtimeMs });
+                    }
+                  } catch (_) {}
+                }
+              }
+              return Array.from(found.values()).sort((a, b) => a.filename.localeCompare(b.filename));
+            };
+
+            const models = scanBinaryDir(
+              [path.resolve(__dirname, 'assets/models/custom'), path.resolve(__dirname, 'public/assets/models/custom')],
+              /\.(glb|gltf)$/i
+            );
+            const docs = scanBinaryDir(
+              [path.resolve(__dirname, 'assets/docs'), path.resolve(__dirname, 'public/assets/docs')],
+              /\.pdf$/i
+            );
+
+            const modelData: Record<string, string> = {};
+            const modelMeta: Record<string, { filename: string; size: number; skippedOversize: boolean }> = {};
+            const skippedOversize: string[] = [];
+            let bundledModelCount = 0;
+
+            for (const m of models) {
+              const skipped = m.size > CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES;
+              modelMeta[m.filename] = { filename: m.filename, size: m.size, skippedOversize: skipped };
+              if (skipped) {
+                skippedOversize.push(m.filename);
+              } else {
+                const mime = m.filename.toLowerCase().endsWith('.gltf') ? 'model/gltf+json' : 'model/gltf-binary';
+                modelData[m.filename] = `data:${mime};base64,${fs.readFileSync(m.fullPath).toString('base64')}`;
+                bundledModelCount++;
+              }
+            }
+
+            const docData: Record<string, string> = {};
+            const docMeta: Record<string, { filename: string; size: number; skippedOversize: boolean }> = {};
+            let bundledDocCount = 0;
+
+            for (const d of docs) {
+              const skipped = d.size > CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES;
+              docMeta[d.filename] = { filename: d.filename, size: d.size, skippedOversize: skipped };
+              if (skipped) {
+                skippedOversize.push(d.filename);
+              } else {
+                docData[d.filename] = `data:application/pdf;base64,${fs.readFileSync(d.fullPath).toString('base64')}`;
+                bundledDocCount++;
+              }
+            }
+
+            const bundleCode = `/* ======================================================
+   MONTESERIN ACADEMY - CUSTOM ASSETS FALLBACK BUNDLE (AUTO-GENERATED)
+   Contiene copias Data-URI Base64 en texto plano (.js) de modelos .GLB/.GLTF
+   y documentos .PDF personalizados para garantizar disponibilidad total en
+   GitHub Pages aunque el sincronizador omita binarios creados en tiempo de ejecución.
+   Regenerado automáticamente por vite.config.ts al subir, borrar u hornear.
+   ====================================================== */
+
+export const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = ${CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES};
+export const CUSTOM_ASSETS_BUNDLE_UPDATED_AT = ${now};
+
+export const BUNDLED_CUSTOM_MODELS_META = ${JSON.stringify(modelMeta, null, 4)};
+export const BUNDLED_CUSTOM_DOCS_META = ${JSON.stringify(docMeta, null, 4)};
+
+export const BUNDLED_CUSTOM_MODELS = ${JSON.stringify(modelData, null, 4)};
+export const BUNDLED_CUSTOM_DOCS = ${JSON.stringify(docData, null, 4)};
+
+function extractAssetFilename(urlOrFilename) {
+    if (!urlOrFilename || typeof urlOrFilename !== "string") return "";
+    const noHash = urlOrFilename.split("#")[0].split("?")[0].trim();
+    if (!noHash || noHash.startsWith("data:") || noHash.startsWith("blob:")) return "";
+    const parts = noHash.split("/");
+    const last = parts[parts.length - 1] || "";
+    try {
+        return decodeURIComponent(last);
+    } catch (_) {
+        return last;
+    }
+}
+
+function findInBundleMap(map, urlOrFilename) {
+    const fname = extractAssetFilename(urlOrFilename);
+    if (!fname || !map) return null;
+    if (map[fname]) return map[fname];
+    const lower = fname.toLowerCase();
+    for (const key of Object.keys(map)) {
+        if (key.toLowerCase() === lower) return map[key];
+    }
+    return null;
+}
+
+export function getBundledCustomModelDataUri(urlOrFilename) {
+    return findInBundleMap(BUNDLED_CUSTOM_MODELS, urlOrFilename);
+}
+
+export function getBundledCustomDocDataUri(urlOrFilename) {
+    return findInBundleMap(BUNDLED_CUSTOM_DOCS, urlOrFilename);
+}
+
+export function getBundledCustomDocsList() {
+    return Object.keys(BUNDLED_CUSTOM_DOCS_META).map((fname) => {
+        const meta = BUNDLED_CUSTOM_DOCS_META[fname] || {};
+        return {
+            filename: fname,
+            url: "./assets/docs/" + encodeURIComponent(fname),
+            assetPath: "assets/docs/" + fname,
+            size: Number(meta.size || 0),
+            updatedAt: CUSTOM_ASSETS_BUNDLE_UPDATED_AT,
+            inAssets: true,
+            inPublic: true,
+            inBundle: Boolean(BUNDLED_CUSTOM_DOCS[fname]),
+            skippedOversize: Boolean(meta.skippedOversize)
+        };
+    }).sort((a, b) => a.filename.localeCompare(b.filename));
+}
+`;
+
+            const targetPath = path.resolve(__dirname, 'src/systems/customAssetsBundle.js');
+            const tmpPath = `${targetPath}.tmp`;
+            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+            fs.writeFileSync(tmpPath, bundleCode, 'utf8');
+            fs.renameSync(tmpPath, targetPath);
+
+            return {
+              modelCount: models.length,
+              docCount: docs.length,
+              bundledModelCount,
+              bundledDocCount,
+              skippedOversize,
+              updatedAt: now
+            };
+          };
+
           server.middlewares.use('/api/upload-logo', async (req, res) => {
             if (req.method === 'POST') {
               try {
@@ -159,12 +306,15 @@ export default defineConfig(() => {
                 fs.writeFileSync(filePath, buffer);
                 fs.writeFileSync(publicFilePath, buffer);
 
+                const bundleStats = writeCustomAssetsBundle();
+
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
                   url: `./assets/models/custom/${safeName}`,
                   filename: safeName,
-                  size: buffer.length
+                  size: buffer.length,
+                  bundleStats
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -321,6 +471,8 @@ export default defineConfig(() => {
                 fs.writeFileSync(assetFilePath, buffer);
                 fs.writeFileSync(publicFilePath, buffer);
 
+                const bundleStats = writeCustomAssetsBundle();
+
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
@@ -328,7 +480,8 @@ export default defineConfig(() => {
                   url: `./assets/docs/${encodeURIComponent(safeName)}`,
                   assetPath: `assets/docs/${safeName}`,
                   size: buffer.length,
-                  updatedAt: Date.now()
+                  updatedAt: Date.now(),
+                  bundleStats
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -349,8 +502,9 @@ export default defineConfig(() => {
                     deleted = true;
                   }
                 });
+                const bundleStats = writeCustomAssetsBundle();
                 res.setHeader('Content-Type', 'application/json');
-                return res.end(JSON.stringify({ success: true, deleted, filename: safeName }));
+                return res.end(JSON.stringify({ success: true, deleted, filename: safeName, bundleStats }));
               };
 
               try {
@@ -859,6 +1013,9 @@ export const DEFAULT_3D_PRESETS = ${JSON.stringify(customItems, null, 4)};
                   fs.writeFileSync(path.resolve(publicDataDir, 'custom_3d_items.json'), cStr, 'utf8');
                 }
 
+                // 5. Regenerar src/systems/customAssetsBundle.js con todos los .GLB/.GLTF y .PDF actuales
+                const bundleStats = writeCustomAssetsBundle();
+
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
@@ -866,7 +1023,8 @@ export const DEFAULT_3D_PRESETS = ${JSON.stringify(customItems, null, 4)};
                   message: 'Escenario, objetos y catálogo 3D horneados con éxito en el código fuente para Git',
                   npcsCount: Object.keys(bakedLayout?.npcs || {}).length,
                   objectsCount: objectsList.length,
-                  customItemsCount: hasCustomItems ? customItems.length : 0
+                  customItemsCount: hasCustomItems ? customItems.length : 0,
+                  bundleStats
                 }));
               } catch (err) {
                 console.error('[Server] Error en /api/bake-world-to-code:', err);

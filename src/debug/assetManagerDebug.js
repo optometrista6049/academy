@@ -8,6 +8,7 @@ import { registryCatalog } from '../ui/registry/registryCatalog.js';
 import { equipItem, loadGLBEquipment } from '../player/playerEquipment.js';
 import { showDevModalDialog, escapeHtml } from './devModalDialog.js';
 import { showDevToast } from './devPanel.js';
+import { getBundledCustomDocsList, getBundledCustomDocDataUri } from '../systems/customAssetsBundle.js';
 
 const PDF_PRESET_SLOTS = [
     {
@@ -487,7 +488,7 @@ function setupPdfManagerEvents() {
                         </div>
                     </div>
                     <div class="devPdfItemActions">
-                        <a href="${escapeHtml(doc.url)}?v=${Date.now()}" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn" title="Abrir PDF en nueva pestaña">
+                        <a href="${escapeHtml(doc.url)}?v=${Date.now()}" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn devOpenPdfBtn" data-filename="${escapeHtml(doc.filename)}" data-url="${escapeHtml(doc.url)}" title="Abrir PDF en nueva pestaña">
                             👁️ Ver
                         </a>
                         <button type="button" class="devPdfMiniBtn devCopyPdfPathBtn" data-path="${escapeHtml(doc.assetPath)}" title="Copiar ruta del proyecto">
@@ -500,6 +501,32 @@ function setupPdfManagerEvents() {
                 </div>
             `;
         }).join('');
+
+        listContainer.querySelectorAll('.devOpenPdfBtn').forEach((link) => {
+            link.onclick = async (e) => {
+                const rawUrl = link.getAttribute('data-url');
+                const fname = link.getAttribute('data-filename');
+                const bundledDataUri = getBundledCustomDocDataUri(rawUrl) || getBundledCustomDocDataUri(fname);
+                if (!bundledDataUri) return;
+
+                try {
+                    const headRes = await fetch(rawUrl, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+                    const ctype = (headRes?.headers?.get('content-type') || '').toLowerCase();
+                    if (headRes && headRes.ok && ctype.includes('application/pdf')) {
+                        return;
+                    }
+                    e.preventDefault();
+                    const blob = await fetch(bundledDataUri).then(r => r.blob());
+                    const blobUrl = URL.createObjectURL(blob);
+                    link.href = blobUrl;
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.click();
+                } catch (_) {}
+            };
+        });
 
         listContainer.querySelectorAll('.devCopyPdfPathBtn').forEach((btn) => {
             btn.onclick = () => copyToClipboard(btn.getAttribute('data-path'));
@@ -537,13 +564,21 @@ function setupPdfManagerEvents() {
 
     async function fetchPdfLibrary() {
         try {
-            const res = await fetch('/api/upload-pdf');
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const res = await fetch('/api/upload-pdf', { cache: 'no-store' });
+            const ctype = (res.headers.get('content-type') || '').toLowerCase();
+            if (!res.ok || !ctype.includes('application/json')) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
             existingServerPdfs = Array.isArray(data.docs) ? data.docs : [];
             renderPdfLibraryList(existingServerPdfs);
             updatePathHintAndUploadState();
         } catch (err) {
+            const bundledDocs = getBundledCustomDocsList();
+            if (bundledDocs.length > 0) {
+                existingServerPdfs = bundledDocs;
+                renderPdfLibraryList(existingServerPdfs);
+                updatePathHintAndUploadState();
+                return;
+            }
             if (listContainer) {
                 listContainer.innerHTML = `<div class="devPdfEmptyMsg">No se pudo consultar <code>/api/upload-pdf</code> (${escapeHtml(err.message || err)}).</div>`;
             }

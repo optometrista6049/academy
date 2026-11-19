@@ -7,7 +7,7 @@
      para cualquier nueva partida ("Nueva Experiencia") o sesión.
    ====================================================== */
 
-import { DEV_CONFIG } from '../config/devConfig.js';
+import { DEV_CONFIG, isLocalEditorRuntime } from '../config/devConfig.js';
 
 export const DEFAULT_WORLD_LAYOUT = {
     "playerSpawn": {
@@ -71,7 +71,7 @@ export const DEFAULT_WORLD_LAYOUT = {
             }
         ]
     },
-    "updatedAt": 1795082595071
+    "updatedAt": 1795088784152
 };
 
 const LAYOUT_STORAGE_KEY = 'monteserin_world_layout';
@@ -79,6 +79,7 @@ const LAYOUT_VERSIONS_KEY = 'monteserin_world_layout_versions';
 const MAX_LAYOUT_VERSIONS = 15;
 
 let currentLayout = null;
+let layoutSyncPromise = null;
 
 function buildNormalizedLayout(sourceLayout, extraHidden = null) {
     return {
@@ -91,15 +92,28 @@ function buildNormalizedLayout(sourceLayout, extraHidden = null) {
 }
 
 /**
- * Inicializa y carga el layout activo desde LocalStorage (solo en modo DEV) o los valores oficiales.
+ * Permite esperar de forma segura a que termine la sincronización inicial del layout antes de spawnear Player y NPCs.
+ */
+export function waitForInitialLayoutSync(timeoutMs = 1500) {
+    if (typeof window === 'undefined') return Promise.resolve();
+    initWorldLayout();
+    if (!layoutSyncPromise) return Promise.resolve();
+    return Promise.race([
+        layoutSyncPromise,
+        new Promise((resolve) => setTimeout(resolve, timeoutMs))
+    ]);
+}
+
+/**
+ * Inicializa y carga el layout activo desde LocalStorage (solo en entorno de edición local) o los valores oficiales.
  */
 export function initWorldLayout() {
     if (currentLayout) return currentLayout;
 
-    // En versión definitiva para jugadores (DEV_CONFIG.enabled === false), ignorar cachés locales de edición
-    if (!DEV_CONFIG.enabled) {
+    // En versión jugador o despliegue estático (GitHub Pages), ignorar cachés locales de edición
+    if (!isLocalEditorRuntime()) {
         currentLayout = JSON.parse(JSON.stringify(DEFAULT_WORLD_LAYOUT));
-        syncWorldLayoutWithServer();
+        layoutSyncPromise = syncWorldLayoutWithServer();
         return currentLayout;
     }
 
@@ -128,7 +142,7 @@ export function initWorldLayout() {
     }
 
     // Sincronizar en segundo plano con el servidor o manifiesto estático
-    syncWorldLayoutWithServer();
+    layoutSyncPromise = syncWorldLayoutWithServer();
     return currentLayout;
 }
 
@@ -200,20 +214,22 @@ export function updateEntityTransform(category, entityId, transform, shouldPersi
     if (shouldPersist) {
         layout.updatedAt = Date.now();
 
-        // Guardar en LocalStorage
-        try {
-            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-        } catch (e) {
-            console.warn('[WorldLayoutSystem] Error guardando layout local:', e);
-        }
+        if (isLocalEditorRuntime()) {
+            // Guardar en LocalStorage solo en entorno local de edición
+            try {
+                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+            } catch (e) {
+                console.warn('[WorldLayoutSystem] Error guardando layout local:', e);
+            }
 
-        // Sincronizar inmediatamente al archivo en disco del servidor
-        sendServerLayoutSync({
-            action: 'update-entity',
-            category,
-            entityId: cleanId,
-            transform
-        });
+            // Sincronizar inmediatamente al archivo en disco del servidor
+            sendServerLayoutSync({
+                action: 'update-entity',
+                category,
+                entityId: cleanId,
+                transform
+            });
+        }
     }
 
     return layout;
@@ -238,17 +254,20 @@ export function reloadWorldLayoutFromStorage() {
 /**
  * Guarda una versión completa del layout del mundo.
  */
-export function saveWorldLayout(newLayout) {
-    currentLayout = { ...newLayout, updatedAt: Date.now() };
-    try {
-        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
-    } catch (e) {
-        console.warn('[WorldLayoutSystem] Error guardando layout completo:', e);
+export function saveWorldLayout(newLayout, explicitUpdatedAt = null) {
+    const ts = Number(explicitUpdatedAt) || Date.now();
+    currentLayout = { ...newLayout, updatedAt: ts };
+    if (isLocalEditorRuntime()) {
+        try {
+            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+        } catch (e) {
+            console.warn('[WorldLayoutSystem] Error guardando layout completo:', e);
+        }
+        sendServerLayoutSync({
+            action: 'save-layout',
+            layout: currentLayout
+        });
     }
-    sendServerLayoutSync({
-        action: 'save-layout',
-        layout: currentLayout
-    });
     return currentLayout;
 }
 
@@ -331,7 +350,7 @@ function normalizeEntityName(name) {
  * Envía las actualizaciones del layout al servidor en disco.
  */
 function sendServerLayoutSync(payload) {
-    if (typeof window === 'undefined' || !DEV_CONFIG.enabled) return;
+    if (typeof window === 'undefined' || !isLocalEditorRuntime()) return;
     try {
         fetch('/api/world-layout', {
             method: 'POST',
@@ -405,16 +424,18 @@ export function hideProceduralInstance(category, descriptor, shouldPersist = fal
         if (shouldPersist) {
             layout.updatedAt = Date.now();
 
-            try {
-                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-            } catch (e) {
-                console.warn('[WorldLayoutSystem] Error guardando ocultos localmente:', e);
-            }
+            if (isLocalEditorRuntime()) {
+                try {
+                    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+                } catch (e) {
+                    console.warn('[WorldLayoutSystem] Error guardando ocultos localmente:', e);
+                }
 
-            sendServerLayoutSync({
-                action: 'save-layout',
-                layout
-            });
+                sendServerLayoutSync({
+                    action: 'save-layout',
+                    layout
+                });
+            }
         }
     }
 
@@ -463,8 +484,9 @@ async function syncWorldLayoutWithServer() {
     try {
         let serverLayout = null;
         let isDevApi = false;
+        const localEditor = isLocalEditorRuntime();
 
-        if (DEV_CONFIG.enabled) {
+        if (localEditor) {
             const res = await fetch('/api/world-layout', { cache: 'no-store' }).catch(() => null);
             const ctype = (res?.headers?.get('content-type') || '').toLowerCase();
             if (res && res.ok && ctype.includes('application/json')) {
@@ -490,10 +512,11 @@ async function syncWorldLayoutWithServer() {
 
         if (!serverLayout) return;
 
-        if (!DEV_CONFIG.enabled) {
-            const defaultTime = Number(DEFAULT_WORLD_LAYOUT.updatedAt || 0);
-            const staticTime = Number(serverLayout.updatedAt || 0);
-            if (staticTime > defaultTime) {
+        const defaultTime = Number(DEFAULT_WORLD_LAYOUT.updatedAt || 0);
+        const serverTime = Number(serverLayout.updatedAt || 0);
+
+        if (!localEditor) {
+            if (serverTime > defaultTime) {
                 currentLayout = buildNormalizedLayout(serverLayout);
             }
             return;
@@ -501,14 +524,22 @@ async function syncWorldLayoutWithServer() {
 
         const localRaw = localStorage.getItem(LAYOUT_STORAGE_KEY);
         if (!localRaw) {
-            currentLayout = buildNormalizedLayout(serverLayout);
-            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+            if (serverTime >= defaultTime) {
+                currentLayout = buildNormalizedLayout(serverLayout);
+                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+            } else {
+                currentLayout = JSON.parse(JSON.stringify(DEFAULT_WORLD_LAYOUT));
+                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+                if (isDevApi) {
+                    sendServerLayoutSync({ action: 'save-layout', layout: currentLayout });
+                }
+            }
         } else {
             const localParsed = JSON.parse(localRaw);
             const localTime = Number(localParsed.updatedAt || 0);
-            const serverTime = Number(serverLayout.updatedAt || 0);
+            const newestLocalOrCode = Math.max(localTime, defaultTime);
 
-            if (serverTime > localTime) {
+            if (serverTime > newestLocalOrCode) {
                 currentLayout = buildNormalizedLayout(serverLayout, localParsed.hiddenProcedural);
                 localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
             } else if (isDevApi && localTime > serverTime) {

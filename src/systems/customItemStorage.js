@@ -6,7 +6,7 @@
    ====================================================== */
 
 import * as THREE from 'three';
-import { DEV_CONFIG } from '../config/devConfig.js';
+import { DEV_CONFIG, isLocalEditorRuntime } from '../config/devConfig.js';
 
 const STORAGE_KEY = 'monteserin_custom_3d_items_v1';
 const STORAGE_UPDATED_KEY = 'monteserin_custom_3d_items_updated_v1';
@@ -165,7 +165,7 @@ function sortCustomItemsByRecency(list) {
  * ordenados de más reciente a más antiguo.
  */
 export function getCustomItems() {
-    if (!DEV_CONFIG.enabled) {
+    if (!isLocalEditorRuntime()) {
         return sortCustomItemsByRecency(staticOfficialCustomItems || DEFAULT_3D_PRESETS);
     }
 
@@ -472,7 +472,7 @@ export function buildThreeMeshFromCode(code) {
  * Envía las mutaciones de objetos al servidor para persistencia automática en disco.
  */
 function sendServerSync(payload) {
-    if (typeof window === 'undefined' || !DEV_CONFIG.enabled) return;
+    if (typeof window === 'undefined' || !isLocalEditorRuntime()) return;
     try {
         fetch('/api/custom-items', {
             method: 'POST',
@@ -496,8 +496,9 @@ export async function initServerSync() {
     try {
         let serverItems = null;
         let isDevApi = false;
+        const localEditor = isLocalEditorRuntime();
 
-        if (DEV_CONFIG.enabled) {
+        if (localEditor) {
             const res = await fetch('/api/custom-items', { cache: 'no-store' }).catch(() => null);
             const contentType = (res?.headers?.get('content-type') || '').toLowerCase();
             if (res && res.ok && contentType.includes('application/json')) {
@@ -521,10 +522,13 @@ export async function initServerSync() {
             }
         }
 
-        if (!DEV_CONFIG.enabled) {
+        if (!localEditor) {
             if (Array.isArray(serverItems) && serverItems.length > 0) {
-                staticOfficialCustomItems = sortCustomItemsByRecency(serverItems);
-                notifyStorageUpdate();
+                const serverMaxTime = serverItems.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), 0);
+                if (serverMaxTime > Number(DEFAULT_3D_PRESETS_UPDATED_AT || 0)) {
+                    staticOfficialCustomItems = sortCustomItemsByRecency(serverItems);
+                    notifyStorageUpdate();
+                }
             }
             return;
         }

@@ -322,13 +322,14 @@ import {
 }
 from './debug/worldEditor.js';
 import { loadAndSpawnWorldObjects } from './systems/worldObjectsManager.js';
+import { waitForInitialLayoutSync } from './systems/worldLayoutSystem.js';
 
 
 // ======================================================
 // START GAME
 // ======================================================
 
-function startGame(){
+async function startGame(){
 
     showLoadingScreen();
 
@@ -397,6 +398,7 @@ function startGame(){
 
     generateMountainRange();
 
+    await waitForInitialLayoutSync(1500);
 
     
     loadPlayer();

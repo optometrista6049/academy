@@ -19,7 +19,8 @@ import { registerCollidableInGrid, rebuildSpatialGrid, registerVisualInChunk, un
 import { createIndividualTree } from '../environment/trees.js';
 import { createIndividualRock } from '../environment/rocks.js';
 import { DEFAULT_PLACED_WORLD_OBJECTS, DEFAULT_PLACED_WORLD_OBJECTS_UPDATED_AT } from './worldObjectsDefaults.js';
-import { DEV_CONFIG } from '../config/devConfig.js';
+import { DEV_CONFIG, isLocalEditorRuntime } from '../config/devConfig.js';
+import { getBundledCustomModelDataUri } from './customAssetsBundle.js';
 
 const STORAGE_KEY = 'monteserin_world_placed_objects_v1';
 const STORAGE_UPDATED_KEY = 'monteserin_world_placed_objects_updated_v1';
@@ -161,21 +162,26 @@ export async function checkGlbAvailability(rawUrl, filenameHint = '') {
         }
     }
 
+    const bundledData =
+        (url ? getBundledCustomModelDataUri(url) : null) ||
+        (filename ? getBundledCustomModelDataUri(filename) : null);
+    const inBundle = Boolean(bundledData);
+
     const cachedData =
         (url ? await getGlbFromLocalCache(url) : null) ||
         (filename ? await getGlbFromLocalCache(filename) : null);
     const inCache = Boolean(cachedData);
 
-    // Auto-sanar servidor si el binario vive en IndexedDB pero faltaba en disco
-    if (!onServer && inCache && filename && !url.startsWith('blob:')) {
+    // Auto-sanar servidor local si el binario vive en IndexedDB pero faltaba en disco
+    if (!onServer && inCache && filename && !url.startsWith('blob:') && isLocalEditorRuntime()) {
         const restored = await reuploadCachedGlbToServer(filename, cachedData);
         if (restored) {
             onServer = true;
         }
     }
 
-    const status = onServer ? 'server' : (inCache ? 'cache' : 'missing');
-    return { status, onServer, inCache, url, filename };
+    const status = onServer ? 'server' : (inBundle ? 'bundle' : (inCache ? 'cache' : 'missing'));
+    return { status, onServer, inBundle, inCache, url, filename };
 }
 
 /**
@@ -183,7 +189,7 @@ export async function checkGlbAvailability(rawUrl, filenameHint = '') {
  * y los añade al catálogo local del usuario si no estaban registrados.
  */
 export async function syncServerModelsCatalog() {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined' || !isLocalEditorRuntime()) return [];
     try {
         const res = await fetch('/api/upload-custom-model', { method: 'GET', cache: 'no-store' });
         if (!res.ok) return getUploadedModelsCatalog();
@@ -208,7 +214,7 @@ export async function syncServerModelsCatalog() {
  * Revisa el catálogo local y auto-restaura en el servidor cualquier .GLB que exista en IndexedDB pero falte en disco.
  */
 export async function syncCachedModelsToServer() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !isLocalEditorRuntime()) return;
     const catalog = getUploadedModelsCatalog();
     for (const item of catalog) {
         if (!item?.url || item.url.startsWith('blob:')) continue;
@@ -465,7 +471,7 @@ export function normalizeLegacyCopyNames(objectsList) {
  * Obtiene la lista de objetos guardados en el escenario.
  */
 export function getSavedWorldObjects() {
-    if (!DEV_CONFIG.enabled) {
+    if (!isLocalEditorRuntime()) {
         const official = staticOfficialWorldObjects || (Array.isArray(DEFAULT_PLACED_WORLD_OBJECTS) ? JSON.parse(JSON.stringify(DEFAULT_PLACED_WORLD_OBJECTS)) : []);
         return normalizeLegacyCopyNames(official).list;
     }
@@ -509,7 +515,7 @@ export function saveWorldObjects(objectsList, explicitUpdatedAt = null) {
         ? objectsList.map(obj => (obj && typeof obj === 'object' && obj.url ? { ...obj, url: normalizeCustomModelUrl(obj.url) } : obj))
         : [];
     const ts = Number(explicitUpdatedAt) || Date.now();
-    if (!DEV_CONFIG.enabled) {
+    if (!isLocalEditorRuntime()) {
         staticOfficialWorldObjects = normalized;
         staticOfficialWorldUpdatedAt = ts;
         return;
@@ -696,37 +702,51 @@ export async function instantiateWorldObject(itemDesc) {
                     resolve(fallback);
                 };
 
+                const tryIndexedDbRescue = async () => {
+                    try {
+                        const filename = (url.split('/').pop() || '').split('?')[0];
+                        const cachedData = (await getGlbFromLocalCache(url)) ||
+                                           (filename ? await getGlbFromLocalCache(filename) : null);
+                        if (cachedData) {
+                            console.log('[WorldObjectsManager] ¡Rescatando y renderizando modelo GLB desde IndexedDB local!', itemDesc.name || filename);
+                            if (filename && !url.startsWith('blob:') && isLocalEditorRuntime()) {
+                                reuploadCachedGlbToServer(filename, cachedData);
+                            }
+                            loader.load(
+                                cachedData,
+                                setupModel,
+                                undefined,
+                                () => handleMissing()
+                            );
+                            return;
+                        }
+                    } catch (cacheErr) {
+                        console.warn('[WorldObjectsManager] Error en rescate IndexedDB:', cacheErr);
+                    }
+                    handleMissing();
+                };
+
                 loader.load(
                     url,
                     setupModel,
                     undefined,
                     async (err) => {
-                        console.warn('[WorldObjectsManager] Advertencia cargando GLB por URL:', url, err);
+                        console.warn('[WorldObjectsManager] URL GLB no disponible, intentando bundle embebido / caché:', url, err?.message || err);
 
-                        // Intentar rescate desde la base de datos local IndexedDB
-                        try {
-                            const filename = (url.split('/').pop() || '').split('?')[0];
-                            const cachedData = (await getGlbFromLocalCache(url)) ||
-                                               (filename ? await getGlbFromLocalCache(filename) : null);
-                            if (cachedData) {
-                                console.log('[WorldObjectsManager] ¡Rescatando y renderizando modelo GLB desde IndexedDB local!', itemDesc.name || filename);
-                                // Auto-restaurar en el servidor en segundo plano para que también quede disponible en disco / GitHub
-                                if (filename && !url.startsWith('blob:')) {
-                                    reuploadCachedGlbToServer(filename, cachedData);
+                        const bundledDataUri = getBundledCustomModelDataUri(url) || getBundledCustomModelDataUri(itemDesc.name || '');
+                        if (bundledDataUri) {
+                            loader.load(
+                                bundledDataUri,
+                                setupModel,
+                                undefined,
+                                async () => {
+                                    await tryIndexedDbRescue();
                                 }
-                                loader.load(
-                                    cachedData,
-                                    setupModel,
-                                    undefined,
-                                    () => handleMissing()
-                                );
-                                return;
-                            }
-                        } catch (cacheErr) {
-                            console.warn('[WorldObjectsManager] Error en rescate IndexedDB:', cacheErr);
+                            );
+                            return;
                         }
 
-                        handleMissing();
+                        await tryIndexedDbRescue();
                     }
                 );
             });
@@ -1719,7 +1739,7 @@ export function deleteSceneVersion(versionId) {
  * Garantiza persistencia física en disco sin consumir tokens de IA.
  */
 function sendWorldServerSync(payload) {
-    if (typeof window === 'undefined' || !DEV_CONFIG.enabled) return;
+    if (typeof window === 'undefined' || !isLocalEditorRuntime()) return;
     try {
         fetch('/api/world-objects', {
             method: 'POST',
@@ -1776,7 +1796,8 @@ export function initWorldServerSync() {
 
     worldSyncPromise = (async () => {
         try {
-            if (DEV_CONFIG.enabled) {
+            const localEditor = isLocalEditorRuntime();
+            if (localEditor) {
                 syncServerModelsCatalog().catch(() => {});
                 syncCachedModelsToServer().catch(() => {});
             }
@@ -1784,7 +1805,7 @@ export function initWorldServerSync() {
             let data = null;
             let isDevApi = false;
 
-            if (DEV_CONFIG.enabled) {
+            if (localEditor) {
                 const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
                 const timer = controller ? setTimeout(() => controller.abort(), 2200) : null;
                 const res = await fetch('/api/world-objects', {
@@ -1822,11 +1843,11 @@ export function initWorldServerSync() {
             const { list: serverObjects, changed: serverNormalized } = normalizeLegacyCopyNames(rawServerObjects);
             const serverVersions = Array.isArray(data.versions) ? data.versions : [];
             const serverUpdatedAt = Number(data.updatedAt || 0);
+            const defaultTime = Number(DEFAULT_PLACED_WORLD_OBJECTS_UPDATED_AT || 0);
 
-            // Modo jugador final: nunca escribe ni lee cachés de editor de localStorage
-            if (!DEV_CONFIG.enabled) {
-                const defaultTime = Number(DEFAULT_PLACED_WORLD_OBJECTS_UPDATED_AT || 0);
-                if (serverObjects.length > 0 && serverUpdatedAt >= defaultTime) {
+            // Modo jugador final o despliegue estático (GitHub Pages): nunca lee ni pisa con cachés locales de editor
+            if (!localEditor) {
+                if (serverObjects.length > 0 && serverUpdatedAt > defaultTime) {
                     staticOfficialWorldObjects = serverObjects;
                     staticOfficialWorldUpdatedAt = serverUpdatedAt;
                     purgeStaleActiveObjects(serverObjects);
@@ -1843,12 +1864,13 @@ export function initWorldServerSync() {
             const localUpdatedAt = Number(localStorage.getItem(STORAGE_UPDATED_KEY) || 0);
             const localVersions = getSceneVersions();
 
+            const effectiveLocalTime = localRaw === null ? defaultTime : Math.max(localUpdatedAt, defaultTime);
             const serverHasDataOrNewerClear =
                 serverObjects.length > 0 ||
-                (serverUpdatedAt > localUpdatedAt && localRaw !== null);
+                (serverUpdatedAt > effectiveLocalTime && localRaw !== null);
 
             if (serverHasDataOrNewerClear) {
-                if (localRaw === null || serverUpdatedAt >= localUpdatedAt) {
+                if ((localRaw === null && serverUpdatedAt >= defaultTime) || serverUpdatedAt >= effectiveLocalTime) {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(serverObjects));
                     localStorage.setItem(STORAGE_UPDATED_KEY, String(serverUpdatedAt || Date.now()));
                     purgeStaleActiveObjects(serverObjects);

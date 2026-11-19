@@ -56,7 +56,7 @@ export async function bakeCurrentWorldToCode() {
 
         // 2. Solo tras confirmación real del servidor, sincronizar timestamps y registrar snapshot único
         if (layout && typeof layout === 'object') {
-            saveWorldLayout({ ...layout, updatedAt: bakedAt });
+            saveWorldLayout({ ...layout, updatedAt: bakedAt }, bakedAt);
         }
         saveWorldObjects(placedObjects, bakedAt);
         saveLayoutVersion('Fijado en Código (Git)');
@@ -67,6 +67,7 @@ export async function bakeCurrentWorldToCode() {
             message: 'Escenario fijado exitosamente en el código fuente (.js + .json) para Git.',
             npcsCount: result.npcsCount || Object.keys(layout?.npcs || {}).length,
             objectsCount: result.objectsCount ?? placedObjects.length,
+            bundleStats: result.bundleStats || null,
             bakedAt
         };
     } catch (err) {
