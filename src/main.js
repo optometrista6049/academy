@@ -25,6 +25,11 @@ import {
 from './ui/mainMenu.js';
 
 import {
+    DEV_CONFIG
+}
+from './config/devConfig.js';
+
+import {
     initDevSuite
 }
 from './debug/devPanel.js';
@@ -397,7 +402,9 @@ function startGame(){
     loadPlayer();
 
    
-    initworldEditor();
+    if (DEV_CONFIG.enabled) {
+        initworldEditor();
+    }
 
     loadAndSpawnWorldObjects();
 
@@ -449,7 +456,7 @@ function startGame(){
 
             updateTeleronNPC,
 
-            updateworldEditor,
+            ...(DEV_CONFIG.enabled ? [updateworldEditor] : []),
 
             updateVisibilitySystem
 
@@ -487,7 +494,9 @@ window.addEventListener(
 
 createOrientationOverlay();
 
-initDevSuite();
+if (DEV_CONFIG.enabled) {
+    initDevSuite();
+}
 
 initSessionBatterySystem();
 

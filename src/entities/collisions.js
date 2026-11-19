@@ -82,6 +82,42 @@ export function collide(nextPosition, currentPosition = null){
         const ox = o.position.x;
         const oz = o.position.z;
 
+        const obb = o.userData?.obbCollision;
+        if (obb && typeof obb.halfX === 'number' && typeof obb.halfZ === 'number') {
+            const ry = o.rotation ? o.rotation.y : 0;
+            const cosR = Math.cos(ry);
+            const sinR = Math.sin(ry);
+            const dx = px - ox;
+            const dz = pz - oz;
+            const lx = dx * cosR - dz * sinR - (obb.offsetX || 0);
+            const lz = dx * sinR + dz * cosR - (obb.offsetZ || 0);
+
+            const clampedX = Math.max(-obb.halfX, Math.min(obb.halfX, lx));
+            const clampedZ = Math.max(-obb.halfZ, Math.min(obb.halfZ, lz));
+            const ex = lx - clampedX;
+            const ez = lz - clampedZ;
+            const boxDistSq = ex * ex + ez * ez;
+
+            if (boxDistSq < PLAYER_RADIUS * PLAYER_RADIUS) {
+                if (currentPosition) {
+                    const cdx = currentPosition.x - ox;
+                    const cdz = currentPosition.z - oz;
+                    const clx = cdx * cosR - cdz * sinR - (obb.offsetX || 0);
+                    const clz = cdx * sinR + cdz * cosR - (obb.offsetZ || 0);
+                    const cClampedX = Math.max(-obb.halfX, Math.min(obb.halfX, clx));
+                    const cClampedZ = Math.max(-obb.halfZ, Math.min(obb.halfZ, clz));
+                    const cex = clx - cClampedX;
+                    const cez = clz - cClampedZ;
+                    const currBoxDistSq = cex * cex + cez * cez;
+                    if (currBoxDistSq < PLAYER_RADIUS * PLAYER_RADIUS && boxDistSq > currBoxDistSq) {
+                        continue;
+                    }
+                }
+                return true;
+            }
+            continue;
+        }
+
         const dx = px - ox;
         const dz = pz - oz;
 

@@ -14,9 +14,8 @@ import { renderWorldEditorTab } from './worldEditorTab.js';
 import { renderSessionBatteryTab, cleanupSessionBatteryTab } from './sessionBatteryTab.js';
 import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
 
-export const DEV_CONFIG = {
-    enabled: true // Cambiar a false para distribución final a alumnos
-};
+import { DEV_CONFIG } from '../config/devConfig.js';
+export { DEV_CONFIG };
 
 let devModalRoot = null;
 let currentTab = 'missions';
@@ -27,6 +26,7 @@ export function initDevSuite() {
 
     // Escuchar tecla F9 o Ctrl+Shift+D para abrir/cerrar
     window.addEventListener('keydown', (e) => {
+        if (!DEV_CONFIG.enabled) return;
         if (e.key === 'F9' || (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd'))) {
             e.preventDefault();
             toggleDevPanel();
@@ -38,6 +38,7 @@ export function initDevSuite() {
 }
 
 export function openDevPanel() {
+    if (!DEV_CONFIG.enabled) return;
     if (!devModalRoot) {
         buildDevModal();
     }
@@ -56,6 +57,7 @@ export function closeDevPanel() {
 }
 
 export function toggleDevPanel() {
+    if (!DEV_CONFIG.enabled) return;
     if (devModalRoot && devModalRoot.style.display === 'flex') {
         closeDevPanel();
     } else {

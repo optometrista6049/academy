@@ -3,3 +3,10 @@ dist
 .DS_Store
 *.log
 backups
+backups/
+.backups/
+.backup_*/
+_backup_*/
+src_backup/
+*.backup*
+*.pre_opt1.*

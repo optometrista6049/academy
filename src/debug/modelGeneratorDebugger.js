@@ -494,16 +494,30 @@ function renderLibraryCards() {
         head: '👑 Cabeza'
     };
 
+    const nameCounts = new Map();
+    items.forEach(it => {
+        const key = (it.name || '').trim().toLowerCase();
+        nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+    });
+
     grid.innerHTML = items.map((item) => {
         const isCurrent = genCurrentId === item.id;
         const socketText = socketLabels[item.socket] || item.socket;
+        const nameKey = (item.name || '').trim().toLowerCase();
+        const hasDupName = (nameCounts.get(nameKey) || 0) > 1;
+        const timeTag = item.updatedAt
+            ? new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '';
+        const dupBadge = hasDupName
+            ? `<span style="font-size:0.62rem;color:#fbbf24;background:rgba(245,158,11,0.16);border:1px solid rgba(245,158,11,0.4);padding:0 4px;border-radius:4px;margin-left:4px;">${timeTag || item.id.slice(-4)}</span>`
+            : '';
         return `
-            <div class="devLibCard ${isCurrent ? 'activeCard' : ''}" data-id="${item.id}" title="Haz clic para cargar este objeto en el editor y visor 3D">
+            <div class="devLibCard ${isCurrent ? 'activeCard' : ''}" data-id="${item.id}" title="ID: ${escapeHtml(item.id)} · Clic para cargar este objeto en el editor y visor 3D">
                 <div class="devLibCardTop">
                     <span class="devLibIcon">${escapeHtml(item.icon || '📦')}</span>
                     <div class="devLibMeta">
                         <div class="devLibNameRow">
-                            <span class="devLibName" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                            <span class="devLibName" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}${dupBadge}</span>
                             <button class="devRenameBtn renameCardBtn" data-id="${item.id}" title="Cambiar nombre de este objeto">✏️</button>
                         </div>
                         <div class="devLibSocket">${socketText}</div>
@@ -670,6 +684,18 @@ function handleSaveAsNewItem() {
     const codeEditor = document.getElementById('devCodeEditor');
 
     let name = (nameInput?.value || '').trim() || 'Modelo Three.js (Copia)';
+    const existingNames = new Set(getCustomItems().map(i => (i.name || '').trim().toLowerCase()));
+    if (existingNames.has(name.toLowerCase())) {
+        let copyIdx = 1;
+        let candidate = `${name} (Copia)`;
+        while (existingNames.has(candidate.toLowerCase())) {
+            copyIdx++;
+            candidate = `${name} (Copia ${copyIdx})`;
+        }
+        name = candidate;
+        if (nameInput) nameInput.value = name;
+    }
+
     const icon = (iconInput?.value || '').trim() || '📦';
     const socket = socketSelect?.value || 'rightHand';
     const code = codeEditor?.value || genCurrentCode;

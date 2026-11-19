@@ -7,6 +7,8 @@
      para cualquier nueva partida ("Nueva Experiencia") o sesión.
    ====================================================== */
 
+import { DEV_CONFIG } from '../config/devConfig.js';
+
 export const DEFAULT_WORLD_LAYOUT = {
     "playerSpawn": {
         "x": 0,
@@ -21,9 +23,9 @@ export const DEFAULT_WORLD_LAYOUT = {
             "scale": 1.8
         },
         "Alto": {
-            "x": -7.12,
-            "z": 1.08,
-            "rotationY": 1.25,
+            "x": 206.97917252483347,
+            "z": -196.05004522154618,
+            "rotationY": 4.128839038188898,
             "scale": 2.7
         },
         "Telerín": {
@@ -48,38 +50,73 @@ export const DEFAULT_WORLD_LAYOUT = {
         }
     },
     "hiddenProcedural": {
-        "trees": [],
-        "rocks": []
+        "trees": [
+            {
+                "id": "trees_6_idx_1",
+                "archIdx": 6,
+                "geoType": 0,
+                "instanceIdx": 1,
+                "x": 194.54,
+                "z": -188.57
+            }
+        ],
+        "rocks": [
+            {
+                "id": "rocks_0_idx_11",
+                "archIdx": 0,
+                "geoType": "dodecaedro",
+                "instanceIdx": 11,
+                "x": -113.78,
+                "z": 7.09
+            }
+        ]
     },
-    "updatedAt": 1793393077663
+    "updatedAt": 1795082595071
 };
 
 const LAYOUT_STORAGE_KEY = 'monteserin_world_layout';
 const LAYOUT_VERSIONS_KEY = 'monteserin_world_layout_versions';
+const MAX_LAYOUT_VERSIONS = 15;
 
 let currentLayout = null;
 
+function buildNormalizedLayout(sourceLayout, extraHidden = null) {
+    return {
+        ...DEFAULT_WORLD_LAYOUT,
+        ...sourceLayout,
+        npcs: { ...DEFAULT_WORLD_LAYOUT.npcs, ...(sourceLayout?.npcs || {}) },
+        furniture: { ...DEFAULT_WORLD_LAYOUT.furniture, ...(sourceLayout?.furniture || {}) },
+        hiddenProcedural: mergeHiddenProcedural(sourceLayout?.hiddenProcedural, extraHidden)
+    };
+}
+
 /**
- * Inicializa y carga el layout activo desde LocalStorage o los valores por defecto.
+ * Inicializa y carga el layout activo desde LocalStorage (solo en modo DEV) o los valores oficiales.
  */
 export function initWorldLayout() {
     if (currentLayout) return currentLayout;
+
+    // En versión definitiva para jugadores (DEV_CONFIG.enabled === false), ignorar cachés locales de edición
+    if (!DEV_CONFIG.enabled) {
+        currentLayout = JSON.parse(JSON.stringify(DEFAULT_WORLD_LAYOUT));
+        syncWorldLayoutWithServer();
+        return currentLayout;
+    }
 
     try {
         const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object') {
-                currentLayout = {
-                    ...DEFAULT_WORLD_LAYOUT,
-                    ...parsed,
-                    npcs: { ...DEFAULT_WORLD_LAYOUT.npcs, ...(parsed.npcs || {}) },
-                    furniture: { ...DEFAULT_WORLD_LAYOUT.furniture, ...(parsed.furniture || {}) },
-                    hiddenProcedural: {
-                        trees: Array.isArray(parsed.hiddenProcedural?.trees) ? parsed.hiddenProcedural.trees : [],
-                        rocks: Array.isArray(parsed.hiddenProcedural?.rocks) ? parsed.hiddenProcedural.rocks : []
-                    }
-                };
+                const defaultTime = Number(DEFAULT_WORLD_LAYOUT.updatedAt || 0);
+                const localTime = Number(parsed.updatedAt || 0);
+                if (defaultTime > localTime) {
+                    // El código horneado del repositorio/GitHub Pages es más nuevo que la caché local antigua
+                    currentLayout = JSON.parse(JSON.stringify(DEFAULT_WORLD_LAYOUT));
+                    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+                } else {
+                    currentLayout = buildNormalizedLayout(parsed);
+                }
             }
         }
     } catch (e) {
@@ -90,7 +127,7 @@ export function initWorldLayout() {
         currentLayout = JSON.parse(JSON.stringify(DEFAULT_WORLD_LAYOUT));
     }
 
-    // Sincronizar en segundo plano con el servidor
+    // Sincronizar en segundo plano con el servidor o manifiesto estático
     syncWorldLayoutWithServer();
     return currentLayout;
 }
@@ -246,6 +283,9 @@ export function saveLayoutVersion(customName = '') {
     };
 
     versions.unshift(versionRecord);
+    if (versions.length > MAX_LAYOUT_VERSIONS) {
+        versions.length = MAX_LAYOUT_VERSIONS;
+    }
     try {
         localStorage.setItem(LAYOUT_VERSIONS_KEY, JSON.stringify(versions));
     } catch (err) {
@@ -291,7 +331,7 @@ function normalizeEntityName(name) {
  * Envía las actualizaciones del layout al servidor en disco.
  */
 function sendServerLayoutSync(payload) {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !DEV_CONFIG.enabled) return;
     try {
         fetch('/api/world-layout', {
             method: 'POST',
@@ -303,19 +343,37 @@ function sendServerLayoutSync(payload) {
     } catch (_) {}
 }
 
+function mergeHiddenProcedural(primary, fallback = null) {
+    const merged = { trees: [], rocks: [] };
+    if (fallback && typeof fallback === 'object') {
+        Object.keys(fallback).forEach((k) => {
+            if (Array.isArray(fallback[k])) merged[k] = fallback[k];
+        });
+    }
+    if (primary && typeof primary === 'object') {
+        Object.keys(primary).forEach((k) => {
+            if (Array.isArray(primary[k])) merged[k] = primary[k];
+        });
+    }
+    return merged;
+}
+
 /**
- * Registra una instancia procedural como oculta/eliminada permanentemente.
+ * Registra una instancia procedural como oculta/eliminada.
+ * Si shouldPersist es false, solo actualiza la memoria activa (modo edición/staged)
+ * hasta que el usuario pulse 'Guardar y Hornear Escenario'.
  */
-export function hideProceduralInstance(category, descriptor) {
+export function hideProceduralInstance(category, descriptor, shouldPersist = false) {
     const layout = getWorldLayout();
+    const safeCat = String(category || 'procedural').trim() || 'procedural';
     if (!layout.hiddenProcedural) {
         layout.hiddenProcedural = { trees: [], rocks: [] };
     }
-    if (!Array.isArray(layout.hiddenProcedural[category])) {
-        layout.hiddenProcedural[category] = [];
+    if (!Array.isArray(layout.hiddenProcedural[safeCat])) {
+        layout.hiddenProcedural[safeCat] = [];
     }
 
-    const list = layout.hiddenProcedural[category];
+    const list = layout.hiddenProcedural[safeCat];
     // Evitar duplicados por id o proximidad de coordenadas
     const alreadyExists = list.some(item => {
         if (descriptor.id && item.id === descriptor.id) return true;
@@ -336,28 +394,31 @@ export function hideProceduralInstance(category, descriptor) {
 
     if (!alreadyExists) {
         list.push({
-            id: descriptor.id || `${category}_${descriptor.archIdx ?? descriptor.geoType ?? 0}_idx_${descriptor.instanceIdx ?? list.length}`,
+            id: descriptor.id || `${safeCat}_${descriptor.archIdx ?? descriptor.geoType ?? 0}_idx_${descriptor.instanceIdx ?? list.length}`,
             archIdx: descriptor.archIdx,
             geoType: descriptor.geoType,
             instanceIdx: descriptor.instanceIdx,
             x: typeof descriptor.x === 'number' ? Math.round(descriptor.x * 100) / 100 : undefined,
             z: typeof descriptor.z === 'number' ? Math.round(descriptor.z * 100) / 100 : undefined
         });
-        layout.updatedAt = Date.now();
 
-        try {
-            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-        } catch (e) {
-            console.warn('[WorldLayoutSystem] Error guardando ocultos localmente:', e);
+        if (shouldPersist) {
+            layout.updatedAt = Date.now();
+
+            try {
+                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+            } catch (e) {
+                console.warn('[WorldLayoutSystem] Error guardando ocultos localmente:', e);
+            }
+
+            sendServerLayoutSync({
+                action: 'save-layout',
+                layout
+            });
         }
-
-        sendServerLayoutSync({
-            action: 'save-layout',
-            layout
-        });
     }
 
-    return layout.hiddenProcedural[category];
+    return layout.hiddenProcedural[safeCat];
 }
 
 /**
@@ -400,48 +461,58 @@ export function getHiddenProceduralInstances(category) {
 async function syncWorldLayoutWithServer() {
     if (typeof window === 'undefined') return;
     try {
-        const res = await fetch('/api/world-layout').catch(() => null);
-        if (res && res.ok) {
-            const data = await res.json();
-            if (data.success && data.layout && typeof data.layout === 'object' && Object.keys(data.layout).length > 0) {
-                const serverLayout = data.layout;
-                const localRaw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+        let serverLayout = null;
+        let isDevApi = false;
 
-                if (!localRaw) {
-                    // Si el navegador está limpio (primera vez o caché borrada), adoptar lo del servidor en disco
-                    currentLayout = {
-                        ...DEFAULT_WORLD_LAYOUT,
-                        ...serverLayout,
-                        npcs: { ...DEFAULT_WORLD_LAYOUT.npcs, ...(serverLayout.npcs || {}) },
-                        furniture: { ...DEFAULT_WORLD_LAYOUT.furniture, ...(serverLayout.furniture || {}) },
-                        hiddenProcedural: {
-                            trees: Array.isArray(serverLayout.hiddenProcedural?.trees) ? serverLayout.hiddenProcedural.trees : [],
-                            rocks: Array.isArray(serverLayout.hiddenProcedural?.rocks) ? serverLayout.hiddenProcedural.rocks : []
-                        }
-                    };
-                    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
-                } else {
-                    // Si ambos existen, el de fecha más reciente manda
-                    const localParsed = JSON.parse(localRaw);
-                    const localTime = localParsed.updatedAt || 0;
-                    const serverTime = serverLayout.updatedAt || 0;
-
-                    if (serverTime > localTime) {
-                        currentLayout = {
-                            ...DEFAULT_WORLD_LAYOUT,
-                            ...serverLayout,
-                            npcs: { ...DEFAULT_WORLD_LAYOUT.npcs, ...(serverLayout.npcs || {}) },
-                            furniture: { ...DEFAULT_WORLD_LAYOUT.furniture, ...(serverLayout.furniture || {}) },
-                            hiddenProcedural: {
-                                trees: Array.isArray(serverLayout.hiddenProcedural?.trees) ? serverLayout.hiddenProcedural.trees : (localParsed.hiddenProcedural?.trees || []),
-                                rocks: Array.isArray(serverLayout.hiddenProcedural?.rocks) ? serverLayout.hiddenProcedural.rocks : (localParsed.hiddenProcedural?.rocks || [])
-                            }
-                        };
-                        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
-                    } else if (localTime > serverTime) {
-                        sendServerLayoutSync({ action: 'save-layout', layout: localParsed });
-                    }
+        if (DEV_CONFIG.enabled) {
+            const res = await fetch('/api/world-layout', { cache: 'no-store' }).catch(() => null);
+            const ctype = (res?.headers?.get('content-type') || '').toLowerCase();
+            if (res && res.ok && ctype.includes('application/json')) {
+                const data = await res.json();
+                if (data?.success && data.layout && typeof data.layout === 'object' && Object.keys(data.layout).length > 0) {
+                    serverLayout = data.layout;
+                    isDevApi = true;
                 }
+            }
+        }
+
+        // Fallback estático a ./assets/data/world_layout.json (GitHub Pages / producción)
+        if (!serverLayout) {
+            const staticRes = await fetch('./assets/data/world_layout.json', { cache: 'no-store' }).catch(() => null);
+            const staticType = (staticRes?.headers?.get('content-type') || '').toLowerCase();
+            if (staticRes && staticRes.ok && staticType.includes('application/json')) {
+                const parsedStatic = await staticRes.json().catch(() => null);
+                if (parsedStatic && typeof parsedStatic === 'object' && Object.keys(parsedStatic).length > 0) {
+                    serverLayout = parsedStatic;
+                }
+            }
+        }
+
+        if (!serverLayout) return;
+
+        if (!DEV_CONFIG.enabled) {
+            const defaultTime = Number(DEFAULT_WORLD_LAYOUT.updatedAt || 0);
+            const staticTime = Number(serverLayout.updatedAt || 0);
+            if (staticTime > defaultTime) {
+                currentLayout = buildNormalizedLayout(serverLayout);
+            }
+            return;
+        }
+
+        const localRaw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+        if (!localRaw) {
+            currentLayout = buildNormalizedLayout(serverLayout);
+            localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+        } else {
+            const localParsed = JSON.parse(localRaw);
+            const localTime = Number(localParsed.updatedAt || 0);
+            const serverTime = Number(serverLayout.updatedAt || 0);
+
+            if (serverTime > localTime) {
+                currentLayout = buildNormalizedLayout(serverLayout, localParsed.hiddenProcedural);
+                localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(currentLayout));
+            } else if (isDevApi && localTime > serverTime) {
+                sendServerLayoutSync({ action: 'save-layout', layout: localParsed });
             }
         }
     } catch (e) {

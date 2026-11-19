@@ -358,7 +358,7 @@ export function openLogoUploadModal(defaultTab = 'carnet') {
         try {
             // Guardar en localStorage para disponibilidad inmediata en el cliente
             localStorage.setItem('monteserin_official_carnet_data', carnetRawBase64);
-            localStorage.setItem('monteserin_official_carnet_url', '/assets/carnet/carnet_oficial.jpg');
+            localStorage.setItem('monteserin_official_carnet_url', './assets/carnet/carnet_oficial.jpg');
 
             // Enviar archivo binario al servidor para persistirlo en disco
             const resp = await fetch('/api/upload-carnet', {
@@ -368,7 +368,7 @@ export function openLogoUploadModal(defaultTab = 'carnet') {
             });
 
             const data = await resp.json();
-            const carnetUrl = `${window.location.origin}/assets/carnet/carnet_oficial.jpg?v=${Date.now()}`;
+            const carnetUrl = new URL(`./assets/carnet/carnet_oficial.jpg?v=${Date.now()}`, window.location.href).href;
 
             carnetVerifyLink.href = carnetUrl;
             carnetVerifiedBox.style.display = 'flex';

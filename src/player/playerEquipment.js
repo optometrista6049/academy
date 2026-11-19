@@ -164,6 +164,17 @@ export function equipItem(socketName, item3D, transform = {}) {
     );
     item3D.scale.set(scaleX, scaleY, scaleZ);
 
+    // Opción A: Asegurar que los detectores no emitan luces dinámicas que alteren el sombreado del robot o proyecten halos en el suelo
+    if (item3D && (item3D.name === "DetectorDeMetales" || item3D.name?.toLowerCase().includes("detector"))) {
+        const lightsToRemove = [];
+        item3D.traverse((child) => {
+            if (child.isLight) lightsToRemove.push(child);
+        });
+        lightsToRemove.forEach((light) => {
+            if (light.parent) light.parent.remove(light);
+        });
+    }
+
     socket.add(item3D);
     playerEquipment.equipped[socketName] = {
         mesh: item3D,

@@ -638,8 +638,8 @@ export function createForest() {
         foliageMesh.castShadow = true;
         foliageMesh.receiveShadow = false;
 
-        trunkMesh.userData = { isTree: true, type: 'tree', pairMesh: foliageMesh, archetypeIndex: archIdx, name: `Árbol (Arquetipo ${archIdx + 1})`, instances: bucket };
-        foliageMesh.userData = { isTree: true, type: 'tree', pairMesh: trunkMesh, archetypeIndex: archIdx, name: `Árbol (Arquetipo ${archIdx + 1})`, instances: bucket };
+        trunkMesh.userData = { isTree: true, type: 'tree', source: 'tree', proceduralCategory: 'trees', defaultGroundOffset: -0.35, pairMesh: foliageMesh, archetypeIndex: archIdx, name: `Árbol (Arquetipo ${archIdx + 1})`, instances: bucket };
+        foliageMesh.userData = { isTree: true, type: 'tree', source: 'tree', proceduralCategory: 'trees', defaultGroundOffset: -0.35, pairMesh: trunkMesh, archetypeIndex: archIdx, name: `Árbol (Arquetipo ${archIdx + 1})`, instances: bucket };
 
         for (let i = 0; i < bucket.length; i++) {
             const inst = bucket[i];

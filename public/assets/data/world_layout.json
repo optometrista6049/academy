@@ -12,9 +12,9 @@
       "scale": 1.8
     },
     "Alto": {
-      "x": -7.12,
-      "z": 1.08,
-      "rotationY": 1.25,
+      "x": 206.97917252483347,
+      "z": -196.05004522154618,
+      "rotationY": 4.128839038188898,
       "scale": 2.7
     },
     "Telerín": {
@@ -39,8 +39,26 @@
     }
   },
   "hiddenProcedural": {
-    "trees": [],
-    "rocks": []
+    "trees": [
+      {
+        "id": "trees_6_idx_1",
+        "archIdx": 6,
+        "geoType": 0,
+        "instanceIdx": 1,
+        "x": 194.54,
+        "z": -188.57
+      }
+    ],
+    "rocks": [
+      {
+        "id": "rocks_0_idx_11",
+        "archIdx": 0,
+        "geoType": "dodecaedro",
+        "instanceIdx": 11,
+        "x": -113.78,
+        "z": 7.09
+      }
+    ]
   },
-  "updatedAt": 1793393077663
+  "updatedAt": 1795082595071
 }

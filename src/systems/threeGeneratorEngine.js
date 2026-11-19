@@ -519,7 +519,7 @@ const shaftMat = new THREE.MeshStandardMaterial({ color: ${structColor.hex}, met
 const rubberMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 });
 const accentMat = new THREE.MeshStandardMaterial({ color: ${accentColor}, metalness: 0.4, roughness: 0.3 });
 const screenMat = new THREE.MeshStandardMaterial({ color: ${screenGlow}, emissive: ${structColor.hex}, emissiveIntensity: 1.2, roughness: 0.1 });
-const coilMat = new THREE.MeshStandardMaterial({ color: ${coilColor.hex}, metalness: 0.65, roughness: 0.3 });
+const coilMat = new THREE.MeshStandardMaterial({ color: ${coilColor.hex}, metalness: 0.65, roughness: 0.3, emissive: ${coilColor.hex}, emissiveIntensity: 0.25 });
 
 // 1. Mástil telescópico central con inclinación ergonómica
 const shaftGeo = new THREE.CylinderGeometry(0.016, 0.018, 0.95, 16);
@@ -590,11 +590,6 @@ const crossZ = new THREE.Mesh(crossGeo, coilMat);
 crossZ.position.set(0, -0.30, -0.29);
 crossZ.rotation.x = Math.PI / 2;
 group.add(crossZ);
-
-// Luz de detección bajo la bobina
-const coilLight = new THREE.PointLight(${coilColor.glow}, 0.9, 1.2);
-coilLight.position.set(0, -0.28, -0.29);
-group.add(coilLight);
 `;
 
     if (hasBackpack) {
@@ -957,34 +952,45 @@ offsets.forEach(([x, y, z]) => {
 
     if (hasLaptop) {
         code += `
-// 3. Portátil integrado sobre el escritorio
+// 3. Portátil integrado ampliado sobre el escritorio
 const lapChassisMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.15 });
+const lapKeyboardMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85, metalness: 0.1 });
 const lapScreenMat = new THREE.MeshStandardMaterial({ color: ${pal.glow}, emissive: ${pal.primary}, emissiveIntensity: 1.2 });
 
-// Base del portátil
-const lapBase = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.015, 0.22), lapChassisMat);
-lapBase.position.set(0, 0.75, 0.05);
+// Base del portátil ampliada
+const lapBase = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.024, 0.40), lapChassisMat);
+lapBase.position.set(0, 0.757, 0.05);
 group.add(lapBase);
 
-// Tapa y pantalla abierta
+// Teclado integrado
+const lapKeyboard = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.004, 0.17), lapKeyboardMat);
+lapKeyboard.position.set(0, 0.771, 0.00);
+group.add(lapKeyboard);
+
+// Tapa y pantalla abierta ampliada
 const lapLidGroup = new THREE.Group();
-lapLidGroup.position.set(0, 0.755, -0.06);
+lapLidGroup.position.set(0, 0.769, -0.15);
 lapLidGroup.rotation.x = -1.90;
 
-const lapLid = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.010, 0.22), lapChassisMat);
-lapLid.position.set(0, 0, 0.11);
+const lapLid = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.016, 0.40), lapChassisMat);
+lapLid.position.set(0, 0, 0.20);
 lapLidGroup.add(lapLid);
 
-const lapScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.18), lapScreenMat);
-lapScreen.position.set(0, 0.006, 0.11);
+const lapScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.34), lapScreenMat);
+lapScreen.position.set(0, 0.009, 0.20);
 lapScreen.rotation.x = -Math.PI / 2;
 lapLidGroup.add(lapScreen);
+
+const lapScreenInner = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.34), lapScreenMat);
+lapScreenInner.position.set(0, -0.009, 0.20);
+lapScreenInner.rotation.x = Math.PI / 2;
+lapLidGroup.add(lapScreenInner);
 
 group.add(lapLidGroup);
 
 // Luz del portátil iluminando el escritorio
-const lapLight = new THREE.PointLight(${pal.glow}, 0.9, 1.8);
-lapLight.position.set(0, 0.88, 0.02);
+const lapLight = new THREE.PointLight(${pal.glow}, 1.15, 2.2);
+lapLight.position.set(0, 0.98, 0.02);
 group.add(lapLight);
 `;
     }

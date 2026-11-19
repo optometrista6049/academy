@@ -1,6 +1,7 @@
 import { runtimeState }
 
 from '../state/runtimeState.js';
+import { DEV_CONFIG } from '../config/devConfig.js';
 
 let panel;
 
@@ -9,6 +10,7 @@ let panel;
 // =====================================================
 
 export function initworldEditor(){
+    if (!DEV_CONFIG.enabled) return;
 
     panel = document.createElement('div');
 
@@ -104,6 +106,7 @@ let lastPanelUpdateTime = 0;
 let lastCoordString = '';
 
 export function updateworldEditor(){
+    if (!DEV_CONFIG.enabled) return;
 
     if(
         !panel ||

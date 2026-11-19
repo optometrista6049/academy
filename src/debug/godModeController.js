@@ -10,7 +10,6 @@
    ====================================================== */
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { scene } from '../core/scene.js';
 import { camera } from '../core/camera.js';
 import { runtimeState } from '../state/runtimeState.js';
@@ -27,11 +26,23 @@ import {
     uploadLocalModelToServer,
     registerUploadedModel,
     getUploadedModelsCatalog,
+    deleteUploadedModel,
+    checkGlbAvailability,
+    syncServerModelsCatalog,
+    instantiateWorldObject,
+    normalizeCustomModelUrl,
     undoLastPlacedObject,
     saveSceneVersion,
     revertToLastSavedState,
     getSavedWorldObjects,
+    getMissingWorldObjects,
+    clearMissingWorldObjects,
     duplicateWorldObject,
+    duplicateWorldObjectAdjacent,
+    computeSnapPositionForObject,
+    resolveScaleXYZ,
+    getObjectScaleXYZFromData,
+    getObjectLocalBounds,
     updateWorldObjectLogic,
     commitStagedWorldObjects
 } from '../systems/worldObjectsManager.js';
@@ -55,8 +66,10 @@ import {
     reloadWorldLayoutFromStorage
 } from '../systems/worldLayoutSystem.js';
 import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
-import { collidables } from '../entities/collisions.js';
+import { collidables, addCollidable } from '../entities/collisions.js';
+import { rebuildSpatialGrid } from '../systems/chunkSystem.js';
 import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
+import { DEV_CONFIG } from '../config/devConfig.js';
 
 let isGodModeActive = false;
 let godAnimationId = null;
@@ -90,6 +103,10 @@ let activeCatalogTab = 'library'; // 'library' | 'system' | 'customGlb'
 let selectedCatalogItem = null;
 let currentRotationY = 0;
 let currentScale = 1.0;
+let currentScaleXYZ = { x: 1.0, y: 1.0, z: 1.0 };
+let isScaleUnlocked = false;
+let isEdgeSnapEnabled = true;
+let lastSnapResult = null;
 
 // Objeto del mundo actualmente seleccionado para editar/mover
 let selectedWorldObject = null;
@@ -97,10 +114,13 @@ let selectedWorldObject = null;
 // Control de cambios no guardados en memoria (Opción A: Guardado explícito)
 let hasUnsavedChanges = false;
 let pendingChangesCount = 0;
+// Respaldo en memoria de instancias procedurales ocultadas/desacopladas antes de hornear
+let stagedInstancedBackups = [];
 
 // Elementos 3D auxiliares del modo dios
 let placementCursor = null;
 let ghostMesh = null;
+let ghostHitboxHelper = null;
 let selectionBoxHelper = null;
 let hudContainer = null;
 let showObjectsListDrawer = false;
@@ -127,8 +147,22 @@ let hasMovedSignificantly = false;
 let controlsGuidePanel = null;
 let isGuideCollapsed = false;
 
-// Estado del panel Localizador de Modelos / Entidades
+// Ventanas flotantes independientes (Opción 2: Localizador, En Escena, Lógica, Catálogo 3D)
+let locatorWindowPanel = null;
+let objectsWindowPanel = null;
+let logicWindowPanel = null;
+let catalogWindowPanel = null;
+let activeLogicCloseFn = null;
+
+// Estado del panel Localizador y Catálogo 3D
 let isLocatorOpen = false;
+let isCatalogOpen = true;
+let isCatalogPinned = true;
+let catalogSearchQuery = '';
+
+// Gestión de posiciones persistentes y Z-index de ventanas flotantes
+const GOD_WINDOW_POS_STORAGE_KEY = 'monteserin_godmode_window_positions_v1';
+let godWindowZCounter = 999991;
 
 /**
  * Retorna la lista unificada de entidades del mundo para el Localizador de Modelos.
@@ -498,6 +532,7 @@ function selectEntityFromLocator(target) {
  * Activa el Modo Dios en el juego.
  */
 export function enterGodMode() {
+    if (!DEV_CONFIG.enabled) return;
     if (isGodModeActive) return;
     isGodModeActive = true;
     runtimeState.isGodMode = true;
@@ -523,12 +558,13 @@ export function enterGodMode() {
     // 3. Crear elementos visuales 3D auxiliares (cursor de suelo)
     createPlacementCursor();
 
-    // 4. Iniciar con PUNTERO LIBRE (sin ningún ítem preseleccionado)
+    // 4. Iniciar con PUNTERO LIBRE (sin ningún ítem preseleccionado) y Catálogo 3D abierto por defecto
     selectedCatalogItem = null;
     destroyGhostMesh();
     currentTool = 'place';
+    isCatalogOpen = true;
 
-    // 5. Crear la barra flotante (HUD)
+    // 5. Crear la barra flotante (HUD) y ventanas activas
     createGodModeHUD();
 
     // 6. Conectar eventos de teclado y ratón
@@ -538,7 +574,37 @@ export function enterGodMode() {
     lastFrameTime = performance.now();
     runGodModeLoop();
 
-    showDevToast('🌍 Modo Dios Activado: Vuela con Flechas/WASD y haz clic para colocar elementos');
+    // 8. Descubrir modelos .GLB del servidor/Git y comprobar disponibilidad real de Modelos PC
+    syncServerModelsCatalog().then(() => refreshUploadedModelsStatus());
+
+    const missingObjs = getMissingWorldObjects();
+    if (missingObjs.length > 0) {
+        showDevToast(`⚠️ Se omitieron ${missingObjs.length} objetos .GLB sin archivo (en lugar de mostrar cubos). Puedes limpiarlos desde "En Escena" o "Localizador".`, 5500);
+    } else {
+        showDevToast('🌍 Modo Dios Activado: Vuela con Flechas/WASD y haz clic para colocar elementos');
+    }
+}
+
+const modelAvailabilityMap = new Map();
+let isCheckingModelsStatus = false;
+
+async function refreshUploadedModelsStatus() {
+    if (isCheckingModelsStatus) return;
+    isCheckingModelsStatus = true;
+    try {
+        const models = getUploadedModelsCatalog();
+        for (const m of models) {
+            if (!m || !m.url) continue;
+            const res = await checkGlbAvailability(m.url, m.filename);
+            modelAvailabilityMap.set(m.id, res.status);
+            if (res.url) modelAvailabilityMap.set(res.url, res.status);
+        }
+        if (isGodModeActive && activeCatalogTab === 'customGlb' && catalogWindowPanel) {
+            updateCatalogGridContent();
+        }
+    } finally {
+        isCheckingModelsStatus = false;
+    }
 }
 
 /**
@@ -557,12 +623,19 @@ export function exitGodMode(force = false) {
             onConfirm: async () => {
                 commitStagedWorldLayout();
                 commitStagedWorldObjects();
-                saveSceneVersion('Guardado desde Modo Dios');
-                saveLayoutVersion('Guardado desde Modo Dios');
-                try { await bakeCurrentWorldToCode(); } catch (_) {}
+                stagedInstancedBackups = [];
+                const bakeRes = await bakeCurrentWorldToCode();
+                if (!bakeRes?.success) {
+                    saveSceneVersion('Guardado local (sin hornear)');
+                    saveLayoutVersion('Guardado local (sin hornear)');
+                }
                 hasUnsavedChanges = false;
                 pendingChangesCount = 0;
-                showDevToast('✅ ¡Cambios guardados con éxito!');
+                if (bakeRes?.success) {
+                    showDevToast('✅ ¡Escenario guardado y horneado en código (.js + .json) para Git!', 4500);
+                } else {
+                    showDevToast(`⚠️ Guardado en navegador, pero NO horneado en código (.js): ${bakeRes?.error || bakeRes?.message || 'Sin servidor dev'}`, 5500);
+                }
                 exitGodMode(true);
             },
             onCancel: () => {
@@ -588,7 +661,7 @@ export function exitGodMode(force = false) {
     // Desconectar eventos
     unbindGodModeEvents();
 
-    // Remover HUD flotante y guía de controles
+    // Remover HUD flotante y todas las ventanas flotantes independientes
     if (hudContainer && hudContainer.parentNode) {
         hudContainer.parentNode.removeChild(hudContainer);
         hudContainer = null;
@@ -596,6 +669,16 @@ export function exitGodMode(force = false) {
     if (controlsGuidePanel && controlsGuidePanel.parentNode) {
         controlsGuidePanel.parentNode.removeChild(controlsGuidePanel);
         controlsGuidePanel = null;
+    }
+    destroyLocatorWindow();
+    destroyObjectsWindow();
+    destroyCatalogWindow();
+    if (typeof activeLogicCloseFn === 'function') {
+        activeLogicCloseFn();
+    } else if (logicWindowPanel && logicWindowPanel.parentNode) {
+        unlockInput('objectLogicModal');
+        logicWindowPanel.parentNode.removeChild(logicWindowPanel);
+        logicWindowPanel = null;
     }
 
     // Restaurar cámara del player
@@ -667,32 +750,55 @@ function destroyPlacementCursor() {
  * Establece el ítem activo para colocar y genera su fantasma semitransparente.
  */
 async function setSelectedItem(itemDesc) {
-    selectedCatalogItem = itemDesc;
+    let resolvedDesc = itemDesc;
+    if (resolvedDesc && resolvedDesc.source === 'custom' && resolvedDesc.sourceId) {
+        const latest = getCustomItemById(resolvedDesc.sourceId);
+        if (latest) {
+            resolvedDesc = {
+                ...resolvedDesc,
+                name: latest.name || resolvedDesc.name,
+                icon: latest.icon || resolvedDesc.icon,
+                code: latest.code
+            };
+        }
+    }
+
+    selectedCatalogItem = resolvedDesc;
     destroyGhostMesh();
 
-    if (!itemDesc) return;
+    if (!resolvedDesc) return;
 
     // Generar clon semitransparente para previsualizar antes de plantar
     let baseMesh = null;
-    if (itemDesc.source === 'custom' && itemDesc.code) {
+    if (resolvedDesc.source === 'custom' && resolvedDesc.code) {
         const { buildThreeMeshFromCode } = await import('../systems/customItemStorage.js');
-        const built = buildThreeMeshFromCode(itemDesc.code);
+        const built = buildThreeMeshFromCode(resolvedDesc.code);
         if (built.success && built.object) baseMesh = built.object;
-    } else if (itemDesc.source === 'system') {
+    } else if (resolvedDesc.source === 'system') {
         const { createProceduralItem } = await import('../player/playerEquipment.js');
-        baseMesh = createProceduralItem(itemDesc.sourceId);
-    } else if (itemDesc.source === 'tree') {
+        baseMesh = createProceduralItem(resolvedDesc.sourceId);
+    } else if (resolvedDesc.source === 'tree') {
         const { createIndividualTree } = await import('../environment/trees.js');
-        baseMesh = createIndividualTree(itemDesc.archetypeIndex ?? 0);
-    } else if (itemDesc.source === 'rock') {
+        baseMesh = createIndividualTree(resolvedDesc.archetypeIndex ?? 0);
+    } else if (resolvedDesc.source === 'rock') {
         const { createIndividualRock } = await import('../environment/rocks.js');
-        baseMesh = createIndividualRock(itemDesc.geoType ?? 0);
-    } else if (itemDesc.source === 'glb' && itemDesc.url) {
-        baseMesh = await new Promise((resolve) => {
-            const loader = new GLTFLoader();
-            loader.setWithCredentials(true);
-            loader.load(itemDesc.url, (g) => resolve(g.scene || g.scenes[0]), undefined, () => resolve(null));
+        baseMesh = createIndividualRock(resolvedDesc.geoType ?? 0);
+    } else if (resolvedDesc.source === 'glb' && resolvedDesc.url) {
+        baseMesh = await instantiateWorldObject({
+            ...resolvedDesc,
+            url: normalizeCustomModelUrl(resolvedDesc.url),
+            failOnMissingGlb: true
         });
+        if (!baseMesh) {
+            modelAvailabilityMap.set(resolvedDesc.sourceId || resolvedDesc.url, 'missing');
+            selectedCatalogItem = null;
+            updateHUDActiveItemBadge();
+            if (activeCatalogTab === 'customGlb' && catalogWindowPanel) {
+                updateCatalogGridContent();
+            }
+            showDevToast(`⚠️ Falta el archivo .GLB de "${resolvedDesc.name}". Pulsa "📁 Cargar .GLB del PC" para volver a subirlo.`, 4500);
+            return;
+        }
     }
 
     if (baseMesh) {
@@ -711,13 +817,102 @@ async function setSelectedItem(itemDesc) {
         });
 
         scene.add(ghostMesh);
+
+        ghostHitboxHelper = createOrientedBoxHelper(ghostMesh, 0x2dd4bf);
+        scene.add(ghostHitboxHelper);
+
         updateGhostTransform();
     }
 
     updateHUDActiveItemBadge();
 }
 
+function disposeHelperObject(helper) {
+    if (!helper) return;
+    scene.remove(helper);
+    if (helper.geometry && typeof helper.geometry.dispose === 'function') {
+        helper.geometry.dispose();
+    }
+    if (helper.material) {
+        if (Array.isArray(helper.material)) {
+            helper.material.forEach(m => m && typeof m.dispose === 'function' && m.dispose());
+        } else if (typeof helper.material.dispose === 'function') {
+            helper.material.dispose();
+        }
+    }
+}
+
+function createOrientedBoxHelper(mesh, color = 0xf59e0b) {
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const edgesGeo = new THREE.EdgesGeometry(boxGeo);
+    boxGeo.dispose();
+
+    const mat = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.92,
+        depthTest: true
+    });
+    const wire = new THREE.LineSegments(edgesGeo, mat);
+    wire.raycast = () => {};
+    wire.userData.lastBoxDims = { w: 1, h: 1, d: 1, scaleX: NaN, scaleY: NaN, scaleZ: NaN };
+
+    wire.update = () => {
+        if (!mesh) return;
+        const sx = mesh.scale.x;
+        const sy = mesh.scale.y;
+        const sz = mesh.scale.z;
+        const last = wire.userData.lastBoxDims;
+
+        if (
+            Math.abs(sx - last.scaleX) > 0.0005 ||
+            Math.abs(sy - last.scaleY) > 0.0005 ||
+            Math.abs(sz - last.scaleZ) > 0.0005 ||
+            !wire.userData.cachedLocalBounds
+        ) {
+            const bounds = getObjectLocalBounds(mesh);
+            wire.userData.cachedLocalBounds = bounds;
+            last.scaleX = sx;
+            last.scaleY = sy;
+            last.scaleZ = sz;
+
+            if (
+                Math.abs(bounds.width - last.w) > 0.001 ||
+                Math.abs(bounds.height - last.h) > 0.001 ||
+                Math.abs(bounds.depth - last.d) > 0.001
+            ) {
+                const newBox = new THREE.BoxGeometry(bounds.width, bounds.height, bounds.depth);
+                const newEdges = new THREE.EdgesGeometry(newBox);
+                newBox.dispose();
+                if (wire.geometry) wire.geometry.dispose();
+                wire.geometry = newEdges;
+                last.w = bounds.width;
+                last.h = bounds.height;
+                last.d = bounds.depth;
+            }
+        }
+
+        const b = wire.userData.cachedLocalBounds;
+        const ry = mesh.rotation.y || 0;
+        const cosR = Math.cos(ry);
+        const sinR = Math.sin(ry);
+        const wx = mesh.position.x + b.centerOffset.x * cosR + b.centerOffset.z * sinR;
+        const wz = mesh.position.z - b.centerOffset.x * sinR + b.centerOffset.z * cosR;
+        const wy = mesh.position.y + (b.centerOffset.y || 0);
+
+        wire.position.set(wx, wy, wz);
+        wire.rotation.set(0, ry, 0);
+    };
+
+    wire.update();
+    return wire;
+}
+
 function destroyGhostMesh() {
+    if (ghostHitboxHelper) {
+        disposeHelperObject(ghostHitboxHelper);
+        ghostHitboxHelper = null;
+    }
     if (ghostMesh) {
         scene.remove(ghostMesh);
         ghostMesh = null;
@@ -727,11 +922,30 @@ function destroyGhostMesh() {
 function updateGhostTransform() {
     if (!ghostMesh || !hasValidGroundHit) return;
 
-    ghostMesh.scale.set(currentScale, currentScale, currentScale);
+    ghostMesh.scale.set(currentScaleXYZ.x, currentScaleXYZ.y, currentScaleXYZ.z);
     ghostMesh.rotation.y = currentRotationY;
 
+    let targetX = currentGroundHit.x;
+    let targetZ = currentGroundHit.z;
+
+    if (isEdgeSnapEnabled && currentTool === 'place') {
+        const snap = computeSnapPositionForObject(ghostMesh, targetX, targetZ, currentRotationY);
+        lastSnapResult = snap;
+        if (snap && snap.snapped) {
+            targetX = snap.x;
+            targetZ = snap.z;
+            ghostMesh.rotation.y = snap.rotationY;
+        }
+    } else {
+        lastSnapResult = null;
+    }
+
     // Snap exacto al terreno con cálculo métrico
-    snapObjectToTerrain(ghostMesh, currentGroundHit.x, currentGroundHit.z);
+    snapObjectToTerrain(ghostMesh, targetX, targetZ);
+
+    if (ghostHitboxHelper && typeof ghostHitboxHelper.update === 'function') {
+        ghostHitboxHelper.update();
+    }
 }
 
 /**
@@ -755,20 +969,28 @@ function runGodModeLoop() {
     // 3. Actualizar raycast con el suelo si el ratón se mueve
     updateRaycastWithTerrain();
 
-    // 4. Actualizar cursor y fantasma
+    // 4. Actualizar fantasma y cursor (respetando imán de bordes si está imantado)
+    if (ghostMesh) {
+        const showGhost = (currentTool === 'place' && hasValidGroundHit);
+        ghostMesh.visible = showGhost;
+        if (hasValidGroundHit) {
+            updateGhostTransform();
+        }
+        if (ghostHitboxHelper) {
+            ghostHitboxHelper.visible = showGhost;
+        }
+    }
+
     const isMovingObject = (isDraggingSelectedObject && hasMovedSignificantly) || isGrabModeActive;
     if (placementCursor) {
         placementCursor.visible = hasValidGroundHit && (currentTool === 'place' || isMovingObject);
         if (hasValidGroundHit) {
-            placementCursor.position.set(currentGroundHit.x, currentGroundHit.y + 0.02, currentGroundHit.z);
-            placementCursor.rotation.y = currentRotationY;
-        }
-    }
-
-    if (ghostMesh) {
-        ghostMesh.visible = (currentTool === 'place' && hasValidGroundHit);
-        if (hasValidGroundHit) {
-            updateGhostTransform();
+            const useSnapCursor = isEdgeSnapEnabled && lastSnapResult && lastSnapResult.snapped;
+            const curX = useSnapCursor ? lastSnapResult.x : currentGroundHit.x;
+            const curZ = useSnapCursor ? lastSnapResult.z : currentGroundHit.z;
+            const curY = useSnapCursor ? getHeightAt(curX, curZ) : currentGroundHit.y;
+            placementCursor.position.set(curX, curY + 0.02, curZ);
+            placementCursor.rotation.y = useSnapCursor ? lastSnapResult.rotationY : currentRotationY;
         }
     }
 
@@ -882,6 +1104,237 @@ function updateRaycastWithTerrain() {
     hasValidGroundHit = (t > 0.1 && t < 750);
 }
 
+function loadSavedWindowPositions() {
+    try {
+        const raw = localStorage.getItem(GOD_WINDOW_POS_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function saveWindowPosition(windowId, left, top) {
+    if (!windowId) return;
+    try {
+        const map = loadSavedWindowPositions();
+        map[windowId] = { left: Math.round(left), top: Math.round(top) };
+        localStorage.setItem(GOD_WINDOW_POS_STORAGE_KEY, JSON.stringify(map));
+    } catch (_) {}
+}
+
+function clearSavedWindowPosition(windowId) {
+    if (!windowId) return;
+    try {
+        const map = loadSavedWindowPositions();
+        delete map[windowId];
+        localStorage.setItem(GOD_WINDOW_POS_STORAGE_KEY, JSON.stringify(map));
+    } catch (_) {}
+}
+
+function bringWindowToFront(panelEl) {
+    if (!panelEl) return;
+    godWindowZCounter = Math.min(9999980, godWindowZCounter + 1);
+    panelEl.style.zIndex = String(godWindowZCounter);
+}
+
+function clampWindowToViewport(panelEl, windowId = null, persistIfAdjusted = false) {
+    if (!panelEl || !panelEl.isConnected) return;
+    const rect = panelEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 8;
+
+    const maxLeft = Math.max(margin, vw - rect.width - margin);
+    const maxTop = Math.max(margin, vh - rect.height - margin);
+
+    const curLeft = parseFloat(panelEl.style.left);
+    const curTop = parseFloat(panelEl.style.top);
+    const baseLeft = Number.isFinite(curLeft) ? curLeft : rect.left;
+    const baseTop = Number.isFinite(curTop) ? curTop : rect.top;
+
+    const clampedLeft = Math.max(margin, Math.min(maxLeft, baseLeft));
+    const clampedTop = Math.max(margin, Math.min(maxTop, baseTop));
+
+    panelEl.style.left = `${Math.round(clampedLeft)}px`;
+    panelEl.style.top = `${Math.round(clampedTop)}px`;
+    panelEl.style.right = 'auto';
+    panelEl.style.bottom = 'auto';
+    panelEl.style.transform = 'none';
+
+    if (persistIfAdjusted && windowId && (Math.abs(clampedLeft - baseLeft) > 1 || Math.abs(clampedTop - baseTop) > 1)) {
+        saveWindowPosition(windowId, clampedLeft, clampedTop);
+    }
+}
+
+function applyWindowPosition(panelEl, windowId, getDefaultPosFn) {
+    if (!panelEl) return;
+    const saved = loadSavedWindowPositions()[windowId];
+    panelEl.style.right = 'auto';
+    panelEl.style.bottom = 'auto';
+    panelEl.style.transform = 'none';
+
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+        panelEl.style.left = `${saved.left}px`;
+        panelEl.style.top = `${saved.top}px`;
+    } else {
+        const rect = panelEl.getBoundingClientRect();
+        const def = typeof getDefaultPosFn === 'function'
+            ? getDefaultPosFn(rect)
+            : { left: 16, top: 16 };
+        panelEl.style.left = `${Math.round(def.left)}px`;
+        panelEl.style.top = `${Math.round(def.top)}px`;
+    }
+    clampWindowToViewport(panelEl, windowId, false);
+}
+
+function resetWindowPosition(panelEl, windowId, getDefaultPosFn, label = 'Ventana') {
+    if (!panelEl) return;
+    clearSavedWindowPosition(windowId);
+    const rect = panelEl.getBoundingClientRect();
+    const def = typeof getDefaultPosFn === 'function'
+        ? getDefaultPosFn(rect)
+        : { left: 16, top: 16 };
+    panelEl.style.right = 'auto';
+    panelEl.style.bottom = 'auto';
+    panelEl.style.transform = 'none';
+    panelEl.style.left = `${Math.round(def.left)}px`;
+    panelEl.style.top = `${Math.round(def.top)}px`;
+    clampWindowToViewport(panelEl, windowId, false);
+    bringWindowToFront(panelEl);
+    showDevToast(`⟲ ${label} devuelta a su posición original`, 1800);
+}
+
+function setupDraggableWindow(panelEl, handleEl, windowId, getDefaultPosFn, label = 'Ventana') {
+    if (!panelEl || !handleEl) return;
+
+    if (!panelEl.dataset.zOrderBound) {
+        panelEl.dataset.zOrderBound = '1';
+        panelEl.addEventListener('mousedown', () => {
+            bringWindowToFront(panelEl);
+        });
+    }
+
+    handleEl.classList.add('godDragHandle');
+    if (!handleEl.getAttribute('title')) {
+        handleEl.setAttribute('title', 'Arrastra para mover libremente · Doble clic para restablecer posición');
+    }
+
+    handleEl.onmousedown = (e) => {
+        if (e.button !== 0) return;
+        if (e.target.closest('button, input, select, textarea, a, label, [data-no-drag]')) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        bringWindowToFront(panelEl);
+
+        const rect = panelEl.getBoundingClientRect();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const origLeft = rect.left;
+        const origTop = rect.top;
+
+        panelEl.style.right = 'auto';
+        panelEl.style.bottom = 'auto';
+        panelEl.style.transform = 'none';
+        panelEl.style.left = `${Math.round(origLeft)}px`;
+        panelEl.style.top = `${Math.round(origTop)}px`;
+        panelEl.style.transition = 'none';
+        document.body.style.userSelect = 'none';
+
+        const onDragMove = (ev) => {
+            ev.stopPropagation();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const curRect = panelEl.getBoundingClientRect();
+            const margin = 8;
+            const maxLeft = Math.max(margin, vw - curRect.width - margin);
+            const maxTop = Math.max(margin, vh - curRect.height - margin);
+
+            const nextLeft = Math.max(margin, Math.min(maxLeft, origLeft + (ev.clientX - startX)));
+            const nextTop = Math.max(margin, Math.min(maxTop, origTop + (ev.clientY - startY)));
+
+            panelEl.style.left = `${Math.round(nextLeft)}px`;
+            panelEl.style.top = `${Math.round(nextTop)}px`;
+        };
+
+        const onDragEnd = (ev) => {
+            ev.stopPropagation();
+            window.removeEventListener('mousemove', onDragMove, true);
+            window.removeEventListener('mouseup', onDragEnd, true);
+            document.body.style.userSelect = '';
+
+            const finalRect = panelEl.getBoundingClientRect();
+            saveWindowPosition(windowId, finalRect.left, finalRect.top);
+        };
+
+        window.addEventListener('mousemove', onDragMove, true);
+        window.addEventListener('mouseup', onDragEnd, true);
+    };
+
+    handleEl.ondblclick = (e) => {
+        if (e.target.closest('button, input, select, textarea, a, label, [data-no-drag]')) return;
+        e.stopPropagation();
+        resetWindowPosition(panelEl, windowId, getDefaultPosFn, label);
+    };
+}
+
+function getDefaultHudWindowPos(rect) {
+    const w = rect?.width || Math.min(1040, window.innerWidth * 0.94);
+    const h = rect?.height || 230;
+    return {
+        left: Math.max(8, Math.round((window.innerWidth - w) / 2)),
+        top: Math.max(8, window.innerHeight - h - 16)
+    };
+}
+
+function getDefaultGuideWindowPos() {
+    return { left: 16, top: 16 };
+}
+
+function getDefaultLocatorWindowPos(rect) {
+    const w = rect?.width || 470;
+    return {
+        left: Math.max(8, window.innerWidth - w - 16),
+        top: 16
+    };
+}
+
+function getDefaultObjectsWindowPos(rect) {
+    const w = rect?.width || 440;
+    return {
+        left: Math.max(8, window.innerWidth - w - 16),
+        top: 84
+    };
+}
+
+function getDefaultLogicWindowPos(rect) {
+    const w = rect?.width || 480;
+    const h = rect?.height || 430;
+    return {
+        left: Math.max(8, Math.round((window.innerWidth - w) / 2)),
+        top: Math.max(8, Math.round((window.innerHeight - h) / 2))
+    };
+}
+
+function getDefaultCatalogWindowPos() {
+    return {
+        left: 16,
+        top: Math.max(120, Math.min(205, Math.round(window.innerHeight * 0.24)))
+    };
+}
+
+function onGodModeWindowResize() {
+    if (!isGodModeActive) return;
+    if (hudContainer) clampWindowToViewport(hudContainer, 'hud', false);
+    if (controlsGuidePanel) clampWindowToViewport(controlsGuidePanel, 'guide', false);
+    if (locatorWindowPanel) clampWindowToViewport(locatorWindowPanel, 'locator', false);
+    if (objectsWindowPanel) clampWindowToViewport(objectsWindowPanel, 'objects', false);
+    if (logicWindowPanel) clampWindowToViewport(logicWindowPanel, 'logic', false);
+    if (catalogWindowPanel) clampWindowToViewport(catalogWindowPanel, 'catalog', false);
+}
+
 /**
  * Crea la barra de herramientas flotante (HUD) del Modo Dios.
  */
@@ -890,10 +1343,22 @@ function createGodModeHUD() {
     hudContainer.id = 'devGodModeBar';
     hudContainer.className = 'devGodModeBar';
 
-    renderHUDContent();
     document.body.appendChild(hudContainer);
+    renderHUDContent();
+    applyWindowPosition(hudContainer, 'hud', getDefaultHudWindowPos);
+    bringWindowToFront(hudContainer);
 
     createGodModeControlsGuide();
+
+    if (isCatalogOpen) {
+        createOrUpdateCatalogWindow();
+    }
+    if (isLocatorOpen) {
+        createOrUpdateLocatorWindow();
+    }
+    if (showObjectsListDrawer) {
+        createOrUpdateObjectsWindow();
+    }
 }
 
 function renderHUDContent() {
@@ -902,13 +1367,14 @@ function renderHUDContent() {
     const customItems = getCustomItems();
     const uploadedModels = getUploadedModelsCatalog();
     const activeMeshes = getActiveWorldMeshes();
+    const isCollapsed = hudContainer.classList.contains('collapsed');
 
     const locatableEntities = getAllLocatableEntities();
 
     hudContainer.innerHTML = `
-        <button id="godCollapseBtn" class="godCollapseBtn" title="Ocultar/Mostrar HUD (Tecla H)">▾ Ocultar HUD</button>
-        <div class="godBarHeader">
+        <div class="godBarHeader" id="godHudDragHandle" title="Arrastra desde aquí para mover el HUD · Doble clic para centrar abajo">
             <div class="godBarTitle">
+                <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
                 <span class="godDotLive"></span>
                 <span>🌍 MODO DIOS &bull; EDITOR DE MUNDO</span>
                 ${hasUnsavedChanges ? `
@@ -921,15 +1387,18 @@ function renderHUDContent() {
                     </span>
                 `}
             </div>
-            <div class="godBarActions">
+            <div class="godBarActions" style="flex-wrap:wrap;">
                 <button id="godGuideBtn" class="godPillBtn" style="background:rgba(212,175,55,0.18);border-color:rgba(212,175,55,0.5);color:#ffd54f;font-weight:700;" title="Ver controles y atajos de teclado (Tecla F1)">
                     ⌨️ Guía (F1)
                 </button>
                 <button id="godSpeedBtn" class="godPillBtn" title="Velocidad de Vuelo (1x, 2x, 4x)">
                     🚀 ${flyCam.speedFactor}x
                 </button>
-                <button id="godLocatorBtn" class="godPillBtn ${isLocatorOpen ? 'active' : ''}" style="background:${isLocatorOpen ? '#0284c7' : 'rgba(14,165,233,0.18)'};border:1.5px solid #38bdf8;color:#e0f2fe;font-weight:800;" title="Abrir Localizador de Modelos (Encontrar a Alto, Panda, Telerín, Telerón, Player, Mueble...)">
-                    🧭 Localizador de Modelos (${locatableEntities.length})
+                <button id="godCatalogBtn" class="godPillBtn ${isCatalogOpen ? 'active' : ''}" style="background:${isCatalogOpen ? '#b45309' : 'rgba(212,175,55,0.18)'};border:1.5px solid #d4af37;color:#fef3c7;font-weight:800;" title="Abrir/Cerrar ventana independiente de Catálogo de Modelos 3D">
+                    🎨 Catálogo (${customItems.length + 10 + uploadedModels.length})
+                </button>
+                <button id="godLocatorBtn" class="godPillBtn ${isLocatorOpen ? 'active' : ''}" style="background:${isLocatorOpen ? '#0284c7' : 'rgba(14,165,233,0.18)'};border:1.5px solid #38bdf8;color:#e0f2fe;font-weight:800;" title="Abrir ventana flotante Localizador de Modelos">
+                    🧭 Localizador (${locatableEntities.length})
                 </button>
                 <button id="godUndoBtn" class="godPillBtn" title="Deshacer último objeto colocado (Ctrl+Z)" ${activeMeshes.length === 0 ? 'style="opacity:0.5;cursor:not-allowed;"' : ''}>
                     ↶ Deshacer
@@ -939,17 +1408,19 @@ function renderHUDContent() {
                 </button>
                 <!-- BOTÓN PRINCIPAL: GUARDAR Y HORNEAR ESCENARIO (OPCIÓN A) -->
                 <button id="godUnifiedSaveBtn" class="godActionBtn" style="background:${hasUnsavedChanges ? '#059669' : '#1e293b'};border:1.5px solid ${hasUnsavedChanges ? '#34d399' : '#475569'};color:#ffffff;font-weight:800;box-shadow:${hasUnsavedChanges ? '0 0 14px rgba(16,185,129,0.6)' : 'none'};" title="Guardar todos los cambios en LocalStorage y fijarlos en el código fuente para Git">
-                    💾 Guardar y Hornear Escenario
+                    💾 Guardar y Hornear
                 </button>
                 <!-- BOTÓN: DESCARTAR CAMBIOS Y VOLVER AL ÚLTIMO GUARDADO -->
                 <button id="godRevertBtn" class="godActionBtn" style="background:#b45309;border:1px solid #f59e0b;color:#fff;font-weight:700;" title="Descartar cambios no guardados y restaurar al estado confirmado">
-                    ↩️ Descartar Cambios
+                    ↩️ Descartar
                 </button>
                 <button id="godOpenDevPanelBtn" class="godActionBtn" style="background:#334155;" title="Abrir Developer Suite (F9)">
                     ⚙️ DevSuite
                 </button>
+                <button id="godHudResetPosBtn" class="godWinIconBtn" title="Restablecer posición original del HUD (abajo centrado)">⟲</button>
+                <button id="godCollapseBtn" class="godCollapseBtn" title="Ocultar/Mostrar cuerpo del HUD (Tecla H)">${isCollapsed ? '▴ Mostrar' : '▾ Ocultar'}</button>
                 <button id="godExitBtn" class="godActionBtn godExitBtn" title="Salir de Modo Dios y volver al Player">
-                    🚶 Salir al Player
+                    🚶 Salir
                 </button>
             </div>
         </div>
@@ -963,10 +1434,13 @@ function renderHUDContent() {
                 <button class="godToolBtn ${currentTool === 'select' ? 'active' : ''}" data-tool="select" title="Selector Universal: haz clic en cualquier Player, NPC, Árbol, Roca, Mueble u Objeto">
                     🎯 Selector Universal
                 </button>
+                <button id="godEdgeSnapToggleBtn" class="godToolBtn ${isEdgeSnapEnabled ? 'active' : ''}" style="${isEdgeSnapEnabled ? 'background:#0f766e;border-color:#2dd4bf;color:#fff;' : ''}" title="Imán de Bordes: pega objetos borde-con-borde y alinea ángulos a 90° automáticamente al mover o colocar (Tecla M)">
+                    🧲 Imán: ${isEdgeSnapEnabled ? 'ON' : 'OFF'}
+                </button>
             </div>
 
             <!-- ESTADO DEL OBJETO ACTIVO / DESELECCIONAR -->
-            <div class="godItemStatusWrap">
+            <div class="godItemStatusWrap" style="display:flex;align-items:center;gap:5px;">
                 ${selectedCatalogItem ? `
                     <button id="godClearItemBtn" class="godPillBtn" style="background:#1e293b;border-color:#ffd54f;color:#ffd54f;font-weight:700;" title="Deseleccionar y dejar el cursor libre de objetos">
                         ✕ Soltar: <strong>${escapeHtml(selectedCatalogItem.name)}</strong>
@@ -976,11 +1450,16 @@ function renderHUDContent() {
                         🟢 Puntero Libre (Sin Objeto)
                     </span>
                 `}
+                ${!isCatalogOpen ? `
+                    <button id="godQuickOpenCatalogBtn" class="godPillBtn" style="background:rgba(212,175,55,0.2);border-color:#d4af37;color:#ffd54f;font-weight:700;padding:4px 8px;" title="Abrir ventana de Catálogo 3D para elegir otro modelo">
+                        🎨 Elegir Modelo
+                    </button>
+                ` : ''}
             </div>
 
             <!-- CONTROLES Y ACCIONES DEL ELEMENTO SELECCIONADO (SELECTOR UNIVERSAL) -->
             ${selectedWorldObject ? `
-                <div class="godSelectedWrap" style="display:flex;align-items:center;gap:6px;">
+                <div class="godSelectedWrap" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span class="godPillBadge" style="background:rgba(212, 175, 55, 0.18);border:1px solid rgba(212, 175, 55, 0.5);color:#ffd54f;padding:4px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;">
                         ${selectedWorldObject.data?.icon || '📦'} ${escapeHtml(selectedWorldObject.data?.name || 'Objeto')}
                     </span>
@@ -991,10 +1470,26 @@ function renderHUDContent() {
                         ${isGrabModeActive ? '✋ Fijar (G)' : '✋ Agarrar (G)'}
                     </button>
                     ${(selectedWorldObject.type === 'custom' || selectedWorldObject.category === 'instanced') ? `
-                        <button id="godDuplicateSelectedBtn" class="godActionBtn" style="background:#7c3aed;border-color:#a78bfa;font-weight:700;" title="Duplicar este elemento con su escala y rotación exacta (Atajo: Ctrl + D)">
+                        <button id="godDuplicateSelectedBtn" class="godActionBtn" style="background:#7c3aed;border-color:#a78bfa;font-weight:700;" title="Duplicar este elemento desplazado (Atajo: Ctrl + D)">
                             📑 Duplicar (Ctrl+D)
                         </button>
+                        <div style="display:inline-flex;align-items:center;gap:2px;background:rgba(15,118,110,0.3);border:1px solid #2dd4bf;border-radius:6px;padding:1px 4px;" title="Clonar pegado exactamente borde-con-borde siguiendo la rotación y tamaño real del objeto (Atajo Auto: Ctrl+Shift+D)">
+                            <button id="godAdjacentAutoBtn" class="godActionBtn" style="background:#0f766e;border-color:#2dd4bf;font-weight:800;padding:2px 6px;" title="Clonar pegado al lado en línea continua (Ctrl+Shift+D)">
+                                🧲 Pegar al lado
+                            </button>
+                            <button class="godMiniBtn godAdjacentDirBtn" data-dir="left" title="Pegar al borde izquierdo del objeto">⬅</button>
+                            <button class="godMiniBtn godAdjacentDirBtn" data-dir="back" title="Pegar al borde trasero del objeto">⬆</button>
+                            <button class="godMiniBtn godAdjacentDirBtn" data-dir="front" title="Pegar al borde delantero del objeto">⬇</button>
+                            <button class="godMiniBtn godAdjacentDirBtn" data-dir="right" title="Pegar al borde derecho del objeto">➡</button>
+                        </div>
                     ` : ''}
+                    <div style="display:inline-flex;align-items:center;gap:2px;background:rgba(30,41,59,0.75);border:1px solid #475569;border-radius:6px;padding:1px 4px;" title="Micro-ajuste de 5 cm (Atajo: Alt+Flechas, o Shift+Alt+Flechas para 25 cm)">
+                        <span style="font-size:0.65rem;color:#94a3b8;padding:0 2px;">Ajuste:</span>
+                        <button class="godMiniBtn godNudgeBtn" data-nudge="left" title="Mover 5 cm izquierda (Alt+⬅)">◀</button>
+                        <button class="godMiniBtn godNudgeBtn" data-nudge="up" title="Mover 5 cm adelante (Alt+⬆)">▲</button>
+                        <button class="godMiniBtn godNudgeBtn" data-nudge="down" title="Mover 5 cm atrás (Alt+⬇)">▼</button>
+                        <button class="godMiniBtn godNudgeBtn" data-nudge="right" title="Mover 5 cm derecha (Alt+➡)">▶</button>
+                    </div>
                     ${selectedWorldObject.type === 'custom' ? `
                         <button id="godToggleSolidBtn" class="godActionBtn" style="${selectedWorldObject.data?.isSolid !== false ? 'background:#059669;border-color:#10b981;' : 'background:#475569;border-color:#64748b;'}font-weight:700;" title="Alternar entre física sólida con colisión o elemento decorativo traspasable">
                             ${selectedWorldObject.data?.isSolid !== false ? '🧱 Sólido' : '👻 Traspasable'}
@@ -1036,15 +1531,35 @@ function renderHUDContent() {
                     <button id="godRotNextBtn" class="godMiniBtn" title="Girar +15° (Tecla R. Con Shift: +5°)">+15°</button>
                 </div>
 
-                <!-- ESCALA LIBRE (Botones y campo numérico editable sin límites) -->
-                <div class="godMiniInputGroup" title="Escala métrica sin límite. Escribe directamente cualquier número (ej: 8, 15, 25) o usa botones +/-">
+                <!-- ESCALA LIBRE + DESBLOQUEO INDEPENDIENTE POR EJES X / Y / Z -->
+                <div class="godMiniInputGroup" title="Escala uniforme (🔗) o desbloqueada por eje individual X (ancho), Y (alto), Z (fondo) (🔓)">
                     <label>Escala:</label>
-                    <button id="godScaleDownBtn" class="godMiniBtn" title="Reducir escala (Tecla -)">-</button>
-                    <input type="number" id="godScaleInput" class="godNumericInput" min="0.05" max="200" step="0.5"
+                    <button id="godScaleLockBtn" class="godMiniBtn" style="padding:2px 5px;${isScaleUnlocked ? 'background:#b45309;border-color:#f59e0b;color:#fff;' : 'background:#0369a1;border-color:#38bdf8;color:#fff;'}" title="${isScaleUnlocked ? 'Ejes desbloqueados (🔓): edita X, Y o Z por separado. Clic para bloquear proporción 🔗' : 'Proporción bloqueada (🔗): escala las 3 dimensiones juntas. Clic para desbloquear X / Y / Z 🔓'}">
+                        ${isScaleUnlocked ? '🔓' : '🔗'}
+                    </button>
+                    <button id="godScaleDownBtn" class="godMiniBtn" title="Reducir escala proporcionalmente (Tecla -)">-</button>
+                    <input type="number" id="godScaleInput" class="godNumericInput" min="0.05" max="200" step="0.2"
                            value="${parseFloat(currentScale.toFixed(2))}"
-                           style="width:48px;background:rgba(0,0,0,0.6);border:1px solid #38bdf8;color:#38bdf8;font-weight:700;font-size:0.75rem;padding:2px 4px;border-radius:4px;text-align:center;" />
+                           style="width:46px;background:rgba(0,0,0,0.6);border:1px solid #38bdf8;color:#38bdf8;font-weight:700;font-size:0.75rem;padding:2px 4px;border-radius:4px;text-align:center;" />
                     <span style="color:#94a3b8;font-size:0.72rem;margin-left:-2px;">x</span>
-                    <button id="godScaleUpBtn" class="godMiniBtn" title="Aumentar escala (Tecla +)">+</button>
+                    <button id="godScaleUpBtn" class="godMiniBtn" title="Aumentar escala proporcionalmente (Tecla +)">+</button>
+                    ${isScaleUnlocked ? `
+                        <span style="color:#f87171;font-size:0.7rem;font-weight:800;margin-left:3px;">X</span>
+                        <input type="number" id="godScaleXInput" class="godNumericInput" min="0.05" max="200" step="0.1"
+                               value="${parseFloat(currentScaleXYZ.x.toFixed(2))}"
+                               title="Escala eje X (Anchura)"
+                               style="width:44px;background:rgba(0,0,0,0.65);border:1px solid #f87171;color:#fecaca;font-weight:700;font-size:0.72rem;padding:2px 3px;border-radius:4px;text-align:center;" />
+                        <span style="color:#4ade80;font-size:0.7rem;font-weight:800;margin-left:2px;">Y</span>
+                        <input type="number" id="godScaleYInput" class="godNumericInput" min="0.05" max="200" step="0.1"
+                               value="${parseFloat(currentScaleXYZ.y.toFixed(2))}"
+                               title="Escala eje Y (Altura)"
+                               style="width:44px;background:rgba(0,0,0,0.65);border:1px solid #4ade80;color:#bbf7d0;font-weight:700;font-size:0.72rem;padding:2px 3px;border-radius:4px;text-align:center;" />
+                        <span style="color:#60a5fa;font-size:0.7rem;font-weight:800;margin-left:2px;">Z</span>
+                        <input type="number" id="godScaleZInput" class="godNumericInput" min="0.05" max="200" step="0.1"
+                               value="${parseFloat(currentScaleXYZ.z.toFixed(2))}"
+                               title="Escala eje Z (Profundidad)"
+                               style="width:44px;background:rgba(0,0,0,0.65);border:1px solid #60a5fa;color:#bfdbfe;font-weight:700;font-size:0.72rem;padding:2px 3px;border-radius:4px;text-align:center;" />
+                    ` : ''}
                 </div>
 
                 <!-- ELEVACIÓN Y RESPECTO AL TERRENO -->
@@ -1067,160 +1582,359 @@ function renderHUDContent() {
             </div>
         </div>
 
-        <!-- PANEL DESPLEGABLE: LOCALIZADOR DE MODELOS / ENTIDADES (ALTO, PANDA, ETC.) -->
-        ${isLocatorOpen ? `
-            <div class="godLocatorPanel styledScrollbar" style="max-height:220px;overflow-y:auto;background:rgba(10,16,24,0.95);border:1.5px solid #38bdf8;border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 24px rgba(0,0,0,0.85);margin-bottom:6px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(56,189,248,0.3);padding-bottom:5px;">
-                    <span style="color:#38bdf8;font-weight:800;font-size:0.78rem;display:flex;align-items:center;gap:6px;">
-                        🧭 LOCALIZADOR UNIVERSAL DE MODELOS Y PERSONAJES (${locatableEntities.length})
+        <!-- PIE CON ATAJOS Y CONSEJOS -->
+        <div class="godBarFooter">
+            <span>🧲 <b>Ctrl+Shift+D:</b> Pegar al lado &bull; <b>M:</b> Imán &bull; <b>Alt+Flechas:</b> 5cm &bull; <b>🔗/🔓:</b> Escalar 1 eje &bull; <b>Arrastra cabeceras ⋮⋮</b> para mover ventanas</span>
+        </div>
+    `;
+
+    setupHUDEvents();
+    clampWindowToViewport(hudContainer, 'hud', false);
+
+    if (isCatalogOpen) {
+        createOrUpdateCatalogWindow();
+    } else {
+        destroyCatalogWindow();
+    }
+    if (isLocatorOpen) {
+        createOrUpdateLocatorWindow();
+    }
+    if (showObjectsListDrawer) {
+        createOrUpdateObjectsWindow();
+    }
+}
+
+const SYSTEM_CATALOG_ITEMS = [
+    { id: 'flashlight', name: 'Linterna', icon: '🔦', tag: 'Equipo' },
+    { id: 'key', name: 'Llave Dorada', icon: '🔑', tag: 'Objeto' },
+    { id: 'notebook', name: 'Cuaderno', icon: '📓', tag: 'Objeto' },
+    { id: 'wrench', name: 'Llave Inglesa', icon: '🔧', tag: 'Herramienta' },
+    { id: 'card', name: 'Carnet Oficial', icon: '🪪', tag: 'Objeto' },
+    { id: 'tree_1', name: 'Roble Ancestral', icon: '🌲', tag: 'Árbol' },
+    { id: 'tree_2', name: 'Pino Silvestre', icon: '🌲', tag: 'Árbol' },
+    { id: 'tree_3', name: 'Abedul Esbelto', icon: '🌳', tag: 'Árbol' },
+    { id: 'rock_dodec', name: 'Roca Dodecaédrica', icon: '🪨', tag: 'Roca' },
+    { id: 'rock_icosa', name: 'Roca Icosaédrica', icon: '🪨', tag: 'Roca' }
+];
+
+function formatShortItemDate(ts) {
+    if (!ts) return 'Preset';
+    try {
+        const d = new Date(ts);
+        return d.toLocaleDateString([], { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (_) {
+        return 'Personalizado';
+    }
+}
+
+function renderCatalogItemsHTML(customItems, uploadedModels, searchQuery = '') {
+    const q = (searchQuery || '').trim().toLowerCase();
+
+    if (activeCatalogTab === 'library') {
+        const filtered = q
+            ? customItems.filter(it => (it.name || '').toLowerCase().includes(q) || (it.category || '').toLowerCase().includes(q))
+            : customItems;
+
+        if (filtered.length === 0) {
+            return `<div class="godEmptyMsg" style="grid-column:1 / -1;">${q ? 'Ningún modelo Three.js coincide con tu búsqueda.' : 'No hay objetos en la biblioteca aún. Puedes crearlos en la pestaña "Generador 3D".'}</div>`;
+        }
+
+        const nameCounts = new Map();
+        customItems.forEach(it => {
+            const key = (it.name || '').trim().toLowerCase();
+            nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+        });
+
+        return filtered.map(item => {
+            const nameKey = (item.name || '').trim().toLowerCase();
+            const isDup = (nameCounts.get(nameKey) || 0) > 1;
+            const metaText = item.updatedAt
+                ? `${isDup ? '🕒 ' : ''}${formatShortItemDate(item.updatedAt)}`
+                : (item.category || 'Preset');
+            return `
+                <button class="godCatalogGridCard godItemCard ${selectedCatalogItem?.sourceId === item.id ? 'active' : ''}" data-source="custom" data-id="${item.id}" title="${escapeHtml(item.name)} · ID: ${escapeHtml(item.id)} (${formatShortItemDate(item.updatedAt)})">
+                    <span class="godItemIcon">${item.icon || '📦'}</span>
+                    <span class="godCatalogCardBody">
+                        <span class="godCatalogCardTitle godItemLabel">${escapeHtml(item.name)}</span>
+                        <span class="godCatalogCardMeta" style="${isDup ? 'color:#fbbf24;font-weight:700;' : ''}">${escapeHtml(metaText)}</span>
                     </span>
-                    <span style="color:#94a3b8;font-size:0.7rem;">Haz clic en 🎯 para enfocar cámara o en 📍 para traerlo frente a ti</span>
-                </div>
-                ${locatableEntities.map(ent => {
-                    const posX = ent.pos?.x !== undefined ? ent.pos.x : (ent.savedPos?.x || 0);
-                    const posZ = ent.pos?.z !== undefined ? ent.pos.z : (ent.savedPos?.z || 0);
-                    const isSelected = selectedWorldObject && (
-                        (selectedWorldObject.type === ent.type && (selectedWorldObject.data?.name?.includes(ent.name) || selectedWorldObject.id === ent.id)) ||
-                        selectedWorldObject.mesh === ent.mesh
-                    );
+                </button>
+            `;
+        }).join('');
+    }
 
-                    return `
-                        <div style="display:flex;align-items:center;justify-content:space-between;background:${isSelected ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.05)'};border:${isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)'};padding:5px 8px;border-radius:6px;font-size:0.75rem;">
-                            <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;" class="godLocatorSelectRow" data-ent-id="${ent.id}">
-                                <span style="font-size:1.05rem;">${ent.icon}</span>
-                                <div style="display:flex;flex-direction:column;">
-                                    <strong style="color:${isSelected ? '#38bdf8' : '#fff'};">${escapeHtml(ent.name)}</strong>
-                                    <span style="color:#94a3b8;font-size:0.68rem;font-family:monospace;">
-                                        Pos: (X: ${posX.toFixed(1)}, Z: ${posZ.toFixed(1)})
-                                        ${ent.savedPos ? `&bull; Guardado: (${ent.savedPos.x.toFixed(1)}, ${ent.savedPos.z.toFixed(1)})` : ''}
-                                    </span>
-                                </div>
-                            </div>
-                            <div style="display:flex;gap:4px;align-items:center;">
-                                <button class="godLocatorFocusBtn" data-ent-id="${ent.id}" style="background:#0284c7;border:1px solid #38bdf8;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.72rem;font-weight:700;" title="Volar la cámara hacia este modelo">
-                                    🎯 Enfocar
-                                </button>
-                                <button class="godLocatorTeleportBtn" data-ent-id="${ent.id}" style="background:#059669;border:1px solid #34d399;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.72rem;font-weight:700;" title="Traer este modelo y situarlo en el suelo frente a la cámara">
-                                    📍 Traer al Frente
-                                </button>
-                                ${ent.savedPos ? `
-                                    <button class="godLocatorResetBtn" data-ent-id="${ent.id}" style="background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.72rem;font-weight:700;" title="Restablecer este modelo a su posición guardada original">
-                                        🔄 Reset Guardado
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        ` : ''}
+    if (activeCatalogTab === 'system') {
+        const filtered = q
+            ? SYSTEM_CATALOG_ITEMS.filter(it => it.name.toLowerCase().includes(q) || it.tag.toLowerCase().includes(q))
+            : SYSTEM_CATALOG_ITEMS;
 
-        <!-- LISTA DESPLEGABLE DE OBJETOS EN ESCENARIO -->
-        ${showObjectsListDrawer ? `
-            <div class="godObjectsDrawer styledScrollbar" style="max-height:120px;overflow-y:auto;background:rgba(0,0,0,0.65);border:1px solid rgba(212,175,55,0.35);border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:4px;">
-                <div style="font-size:0.72rem;color:#ffd54f;font-weight:700;display:flex;justify-content:space-between;margin-bottom:2px;">
-                    <span>Objetos Plantados en el Escenario (${activeMeshes.length}):</span>
-                    <span style="color:#94a3b8;font-size:0.68rem;">Haz clic para seleccionar o en 📑 para duplicar</span>
-                </div>
-                ${activeMeshes.length === 0 ? '<div style="font-size:0.7rem;color:#94a3b8;padding:4px;">No hay ningún objeto colocado en el mapa aún.</div>' : ''}
-                ${activeMeshes.map(m => `
-                    <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.06);padding:4px 8px;border-radius:4px;font-size:0.73rem;">
-                        <span class="godDrawerSelectObj" data-id="${m.id}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex:1;" title="Haz clic para seleccionar este objeto">
-                            ${m.data?.icon || '📦'} <strong>${escapeHtml(m.data?.name || 'Objeto')}</strong>
-                            <span style="color:#94a3b8;font-size:0.68rem;margin-left:6px;">(X: ${m.data?.position?.x?.toFixed(1) || 0}, Z: ${m.data?.position?.z?.toFixed(1) || 0})</span>
-                            ${m.data?.logicType && m.data.logicType !== 'default' ? `<span style="background:#0f766e;color:#5eead4;padding:1px 5px;border-radius:3px;font-size:0.64rem;margin-left:5px;font-weight:700;">${escapeHtml(m.data.logicType)}</span>` : ''}
+        if (filtered.length === 0) {
+            return `<div class="godEmptyMsg" style="grid-column:1 / -1;">Ningún elemento del sistema coincide con tu búsqueda.</div>`;
+        }
+
+        return filtered.map(item => `
+            <button class="godCatalogGridCard godItemCard ${selectedCatalogItem?.sourceId === item.id ? 'active' : ''}" data-source="system" data-id="${item.id}" title="${escapeHtml(item.name)} (${item.tag})">
+                <span class="godItemIcon">${item.icon}</span>
+                <span class="godCatalogCardBody">
+                    <span class="godCatalogCardTitle godItemLabel">${escapeHtml(item.name)}</span>
+                    <span class="godCatalogCardMeta">${escapeHtml(item.tag)}</span>
+                </span>
+            </button>
+        `).join('');
+    }
+
+    if (activeCatalogTab === 'customGlb') {
+        const filtered = q
+            ? uploadedModels.filter(it => ((it.name || it.filename || '')).toLowerCase().includes(q))
+            : uploadedModels;
+
+        if (filtered.length === 0) {
+            return `<div class="godEmptyMsg" style="grid-column:1 / -1;">${q ? 'Ningún modelo .GLB coincide con tu búsqueda.' : 'Aún no has subido modelos .GLB de tu PC. Usa el botón "Cargar .GLB del PC".'}</div>`;
+        }
+        return filtered.map(item => {
+            const normUrl = normalizeCustomModelUrl(item.url);
+            const status = modelAvailabilityMap.get(item.id) || modelAvailabilityMap.get(normUrl) || 'checking';
+            let statusBadge = '<span style="color:#94a3b8;">⏳ Comprobando</span>';
+            if (status === 'server') {
+                statusBadge = '<span style="color:#34d399;font-weight:700;" title="Disponible en servidor y listo para GitHub">🟢 Listo</span>';
+            } else if (status === 'cache') {
+                statusBadge = '<span style="color:#fbbf24;font-weight:700;" title="Disponible en caché local del navegador">🟡 Caché</span>';
+            } else if (status === 'missing') {
+                statusBadge = '<span style="color:#f87171;font-weight:800;" title="Falta el archivo físico .GLB. Haz clic para resubir desde tu PC">🔴 Resubir</span>';
+            }
+            return `
+                <div class="godItemCardWrap" style="position:relative;display:flex;">
+                    <button class="godCatalogGridCard godItemCard ${selectedCatalogItem?.sourceId === item.id ? 'active' : ''}" data-source="glb" data-id="${item.id}" data-url="${normUrl}" data-status="${status}" style="${status === 'missing' ? 'border-color:rgba(248,113,113,0.55);' : ''}" title="${escapeHtml(item.name || item.filename)}">
+                        <span class="godItemIcon">🎨</span>
+                        <span class="godCatalogCardBody">
+                            <span class="godCatalogCardTitle godItemLabel">${escapeHtml(item.name || item.filename)}</span>
+                            <span class="godCatalogCardMeta">${statusBadge}</span>
                         </span>
-                        <div style="display:flex;gap:4px;align-items:center;">
-                            <button class="godDrawerDuplicateBtn" data-id="${m.id}" style="background:#7c3aed;border:none;color:#fff;border-radius:3px;padding:2px 7px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Duplicar este objeto en el escenario">
-                                📑 Duplicar
-                            </button>
-                            <button class="godDrawerDeleteBtn" data-id="${m.id}" style="background:#b91c1c;border:none;color:#fff;border-radius:3px;padding:2px 8px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Eliminar este objeto del mapa">
-                                🗑️
-                            </button>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        ` : ''}
+                    </button>
+                    <button class="godDeleteUploadedCardBtn" data-id="${item.id}" title="Quitar tarjeta del catálogo" style="position:absolute;top:-5px;right:-5px;width:17px;height:17px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);background:#7f1d1d;color:#fecaca;font-size:10px;line-height:14px;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;">×</button>
+                </div>
+            `;
+        }).join('');
+    }
 
-        <!-- PESTAÑAS DE CATÁLOGO DE ELEMENTOS -->
+    return '';
+}
+
+function destroyCatalogWindow() {
+    if (catalogWindowPanel && catalogWindowPanel.parentNode) {
+        catalogWindowPanel.parentNode.removeChild(catalogWindowPanel);
+    }
+    catalogWindowPanel = null;
+}
+
+function createOrUpdateCatalogWindow() {
+    if (!isGodModeActive || !isCatalogOpen) {
+        destroyCatalogWindow();
+        return;
+    }
+    if (!catalogWindowPanel) {
+        catalogWindowPanel = document.createElement('div');
+        catalogWindowPanel.id = 'godCatalogFloatingPanel';
+        catalogWindowPanel.className = 'godCatalogWindow';
+        document.body.appendChild(catalogWindowPanel);
+        renderCatalogWindowContent();
+        applyWindowPosition(catalogWindowPanel, 'catalog', getDefaultCatalogWindowPos);
+        bringWindowToFront(catalogWindowPanel);
+    } else {
+        updateCatalogWindowHeaderAndTabs();
+        updateCatalogGridContent();
+        clampWindowToViewport(catalogWindowPanel, 'catalog', false);
+    }
+}
+
+function updateCatalogWindowHeaderAndTabs() {
+    if (!catalogWindowPanel) return;
+    const customItems = getCustomItems();
+    const uploadedModels = getUploadedModelsCatalog();
+    const totalCount = customItems.length + SYSTEM_CATALOG_ITEMS.length + uploadedModels.length;
+
+    const countEl = catalogWindowPanel.querySelector('#godCatalogTitleCount');
+    if (countEl) countEl.textContent = `(${totalCount})`;
+
+    const tabLib = catalogWindowPanel.querySelector('.godCatTabBtn[data-cattab="library"]');
+    if (tabLib) {
+        tabLib.textContent = `✨ Biblioteca Three.js (${customItems.length})`;
+        tabLib.classList.toggle('active', activeCatalogTab === 'library');
+    }
+    const tabSys = catalogWindowPanel.querySelector('.godCatTabBtn[data-cattab="system"]');
+    if (tabSys) {
+        tabSys.textContent = `📦 Sistema (${SYSTEM_CATALOG_ITEMS.length})`;
+        tabSys.classList.toggle('active', activeCatalogTab === 'system');
+    }
+    const tabGlb = catalogWindowPanel.querySelector('.godCatTabBtn[data-cattab="customGlb"]');
+    if (tabGlb) {
+        tabGlb.textContent = `📁 Modelos PC (${uploadedModels.length})`;
+        tabGlb.classList.toggle('active', activeCatalogTab === 'customGlb');
+    }
+}
+
+function updateCatalogGridContent() {
+    if (!catalogWindowPanel) return;
+    const gridEl = catalogWindowPanel.querySelector('#godCatalogGrid');
+    if (!gridEl) return;
+    const customItems = getCustomItems();
+    const uploadedModels = getUploadedModelsCatalog();
+    gridEl.innerHTML = renderCatalogItemsHTML(customItems, uploadedModels, catalogSearchQuery);
+    bindCatalogCardEvents();
+}
+
+function renderCatalogWindowContent() {
+    if (!catalogWindowPanel) return;
+
+    const customItems = getCustomItems();
+    const uploadedModels = getUploadedModelsCatalog();
+    const totalCount = customItems.length + SYSTEM_CATALOG_ITEMS.length + uploadedModels.length;
+
+    catalogWindowPanel.innerHTML = `
+        <div id="godCatalogDragHandle" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,175,55,0.3);padding-bottom:6px;gap:8px;" title="Arrastra para mover libremente · Doble clic para restablecer posición">
+            <span style="color:#ffd54f;font-weight:800;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
+                🎨 CATÁLOGO DE MODELOS 3D <span id="godCatalogTitleCount">(${totalCount})</span>
+            </span>
+            <div style="display:flex;align-items:center;gap:4px;">
+                <button id="godCatalogPinBtn" class="godWinIconBtn godCatalogPinBtn ${isCatalogPinned ? 'pinned' : ''}" title="${isCatalogPinned ? 'Ventana FIJA: permanece abierta al seleccionar modelos (clic para cambiar a Auto-ocultar)' : 'Modo AUTO-OCULTAR: se cerrará al elegir un modelo (clic para Fijar)'}">
+                    ${isCatalogPinned ? '📌 Fija' : '🔓 Auto-ocultar'}
+                </button>
+                <button id="godCatalogResetPosBtn" class="godWinIconBtn" title="Restablecer posición original">⟲</button>
+                <button id="godCatalogCloseWinBtn" class="godWinIconBtn" style="color:#fecaca;border-color:rgba(248,113,113,0.45);" title="Cerrar ventana de Catálogo">✕</button>
+            </div>
+        </div>
+
+        <div class="godCatalogSearchRow">
+            <div class="godCatalogSearchWrap">
+                <input type="text" id="godCatalogSearchInput" class="godCatalogSearchInput" value="${escapeHtml(catalogSearchQuery)}" placeholder="🔍 Buscar modelo por nombre..." autocomplete="off" />
+                ${catalogSearchQuery ? `<button id="godCatalogSearchClearBtn" class="godCatalogSearchClearBtn" title="Limpiar búsqueda">✕</button>` : ''}
+            </div>
+            <button id="godCatalogUploadGlbBtn" class="godUploadBtn" style="padding:5px 9px;font-size:0.72rem;white-space:nowrap;" title="Subir un modelo .glb / .gltf desde tu PC">
+                📁 + .GLB
+            </button>
+        </div>
+
         <div class="godCatalogTabs">
             <button class="godCatTabBtn ${activeCatalogTab === 'library' ? 'active' : ''}" data-cattab="library">
                 ✨ Biblioteca Three.js (${customItems.length})
             </button>
             <button class="godCatTabBtn ${activeCatalogTab === 'system' ? 'active' : ''}" data-cattab="system">
-                📦 Sistema (Juego)
+                📦 Sistema (${SYSTEM_CATALOG_ITEMS.length})
             </button>
             <button class="godCatTabBtn ${activeCatalogTab === 'customGlb' ? 'active' : ''}" data-cattab="customGlb">
                 📁 Modelos PC (${uploadedModels.length})
             </button>
         </div>
 
-        <!-- LISTA HORIZONTAL DESPLAZABLE DE ÍTEMS -->
-        <div class="godItemsScroll styledScrollbar" id="godItemsScroll">
-            ${renderCatalogItemsHTML(customItems, uploadedModels)}
-        </div>
-
-        <!-- PIE CON ATAJOS Y CONSEJOS -->
-        <div class="godBarFooter">
-            <span>🖱️ <b>Arrastrar Clic Izq / G:</b> Mover por el Suelo en Vivo &bull; <b>Clic Der:</b> Girar Cámara &bull; <b>WASD:</b> Volar &bull; <b>R/T:</b> Rotar &bull; <b>F1:</b> Guía de Controles</span>
+        <div id="godCatalogGrid" class="godCatalogGrid styledScrollbar">
+            ${renderCatalogItemsHTML(customItems, uploadedModels, catalogSearchQuery)}
         </div>
     `;
 
-    setupHUDEvents();
-}
+    const dragHandle = catalogWindowPanel.querySelector('#godCatalogDragHandle');
+    setupDraggableWindow(catalogWindowPanel, dragHandle, 'catalog', getDefaultCatalogWindowPos, 'Catálogo 3D');
 
-function renderCatalogItemsHTML(customItems, uploadedModels) {
-    if (activeCatalogTab === 'library') {
-        if (customItems.length === 0) {
-            return `<div class="godEmptyMsg">No hay objetos en la biblioteca aún. Puedes crearlos en la pestaña "Generador 3D".</div>`;
-        }
-        return customItems.map(item => `
-            <button class="godItemCard ${selectedCatalogItem?.sourceId === item.id ? 'active' : ''}" data-source="custom" data-id="${item.id}">
-                <span class="godItemIcon">${item.icon || '📦'}</span>
-                <span class="godItemLabel">${escapeHtml(item.name)}</span>
-            </button>
-        `).join('');
+    const pinBtn = catalogWindowPanel.querySelector('#godCatalogPinBtn');
+    if (pinBtn) {
+        pinBtn.onclick = (e) => {
+            e.stopPropagation();
+            isCatalogPinned = !isCatalogPinned;
+            pinBtn.classList.toggle('pinned', isCatalogPinned);
+            pinBtn.textContent = isCatalogPinned ? '📌 Fija' : '🔓 Auto-ocultar';
+            pinBtn.title = isCatalogPinned
+                ? 'Ventana FIJA: permanece abierta al seleccionar modelos (clic para cambiar a Auto-ocultar)'
+                : 'Modo AUTO-OCULTAR: se cerrará al elegir un modelo (clic para Fijar)';
+            showDevToast(isCatalogPinned
+                ? '📌 Catálogo fijado: permanecerá abierto al seleccionar modelos'
+                : '🔓 Auto-ocultar activo: la ventana se cerrará al elegir un modelo');
+        };
     }
 
-    if (activeCatalogTab === 'system') {
-        const systemItems = [
-            { id: 'flashlight', name: 'Linterna', icon: '🔦' },
-            { id: 'key', name: 'Llave Dorada', icon: '🔑' },
-            { id: 'notebook', name: 'Cuaderno', icon: '📓' },
-            { id: 'wrench', name: 'Llave Inglesa', icon: '🔧' },
-            { id: 'card', name: 'Carnet Oficial', icon: '🪪' },
-            { id: 'tree_1', name: 'Roble Ancestral', icon: '🌲' },
-            { id: 'tree_2', name: 'Pino Silvestre', icon: '🌲' },
-            { id: 'tree_3', name: 'Abedul Esbelto', icon: '🌳' },
-            { id: 'rock_dodec', name: 'Roca Dodecaédrica', icon: '🪨' },
-            { id: 'rock_icosa', name: 'Roca Icosaédrica', icon: '🪨' }
-        ];
-        return systemItems.map(item => `
-            <button class="godItemCard ${selectedCatalogItem?.sourceId === item.id ? 'active' : ''}" data-source="system" data-id="${item.id}">
-                <span class="godItemIcon">${item.icon}</span>
-                <span class="godItemLabel">${escapeHtml(item.name)}</span>
-            </button>
-        `).join('');
+    const resetBtn = catalogWindowPanel.querySelector('#godCatalogResetPosBtn');
+    if (resetBtn) {
+        resetBtn.onclick = (e) => {
+            e.stopPropagation();
+            resetWindowPosition(catalogWindowPanel, 'catalog', getDefaultCatalogWindowPos, 'Catálogo 3D');
+        };
     }
 
-    if (activeCatalogTab === 'customGlb') {
-        if (uploadedModels.length === 0) {
-            return `<div class="godEmptyMsg">Aún no has subido modelos .GLB de tu PC. Usa el botón "Cargar .GLB del PC" arriba.</div>`;
-        }
-        return uploadedModels.map(item => `
-            <button class="godItemCard ${selectedCatalogItem?.sourceId === item.id ? 'active' : ''}" data-source="glb" data-id="${item.id}" data-url="${item.url}">
-                <span class="godItemIcon">🎨</span>
-                <span class="godItemLabel">${escapeHtml(item.name || item.filename)}</span>
-            </button>
-        `).join('');
+    const closeBtn = catalogWindowPanel.querySelector('#godCatalogCloseWinBtn');
+    if (closeBtn) {
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            isCatalogOpen = false;
+            destroyCatalogWindow();
+            renderHUDContent();
+        };
     }
 
-    return '';
+    const searchInput = catalogWindowPanel.querySelector('#godCatalogSearchInput');
+    if (searchInput) {
+        searchInput.oninput = () => {
+            catalogSearchQuery = searchInput.value || '';
+            const clearBtn = catalogWindowPanel.querySelector('#godCatalogSearchClearBtn');
+            if (catalogSearchQuery && !clearBtn) {
+                const btn = document.createElement('button');
+                btn.id = 'godCatalogSearchClearBtn';
+                btn.className = 'godCatalogSearchClearBtn';
+                btn.title = 'Limpiar búsqueda';
+                btn.textContent = '✕';
+                btn.onclick = (ev) => {
+                    ev.stopPropagation();
+                    catalogSearchQuery = '';
+                    searchInput.value = '';
+                    btn.remove();
+                    updateCatalogGridContent();
+                    searchInput.focus();
+                };
+                searchInput.parentNode?.appendChild(btn);
+            } else if (!catalogSearchQuery && clearBtn) {
+                clearBtn.remove();
+            }
+            updateCatalogGridContent();
+        };
+        ['keydown', 'keyup', 'keypress'].forEach(evt => {
+            searchInput.addEventListener(evt, (ev) => ev.stopPropagation());
+        });
+    }
+
+    const clearSearchBtn = catalogWindowPanel.querySelector('#godCatalogSearchClearBtn');
+    if (clearSearchBtn) {
+        clearSearchBtn.onclick = (e) => {
+            e.stopPropagation();
+            catalogSearchQuery = '';
+            renderCatalogWindowContent();
+            catalogWindowPanel?.querySelector('#godCatalogSearchInput')?.focus();
+        };
+    }
+
+    const catUploadBtn = catalogWindowPanel.querySelector('#godCatalogUploadGlbBtn');
+    if (catUploadBtn) {
+        catUploadBtn.onclick = (e) => {
+            e.stopPropagation();
+            const fileInput = hudContainer?.querySelector('#godGlbFileInput');
+            if (fileInput) fileInput.click();
+        };
+    }
+
+    catalogWindowPanel.querySelectorAll('.godCatTabBtn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            activeCatalogTab = btn.getAttribute('data-cattab');
+            updateCatalogWindowHeaderAndTabs();
+            updateCatalogGridContent();
+            if (activeCatalogTab === 'customGlb') {
+                refreshUploadedModelsStatus();
+            }
+        };
+    });
+
+    bindCatalogCardEvents();
 }
 
 /**
- * Crea y actualiza la tarjeta permanente con los atajos y controles en pantalla.
+ * Crea y actualiza la tarjeta flotante arrastrable con los atajos y controles en pantalla.
  */
 function createGodModeControlsGuide() {
     if (controlsGuidePanel) {
@@ -1236,7 +1950,7 @@ function createGodModeControlsGuide() {
         left: 16px;
         width: 320px;
         max-width: 90vw;
-        background: rgba(10, 16, 12, 0.90);
+        background: rgba(10, 16, 12, 0.92);
         backdrop-filter: blur(8px);
         border: 1.5px solid rgba(212, 175, 55, 0.45);
         border-radius: 12px;
@@ -1246,11 +1960,11 @@ function createGodModeControlsGuide() {
         color: #fff8e7;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         user-select: none;
-        transition: all 0.25s ease;
     `;
 
-    renderControlsGuideContent();
     document.body.appendChild(controlsGuidePanel);
+    renderControlsGuideContent();
+    applyWindowPosition(controlsGuidePanel, 'guide', getDefaultGuideWindowPos);
 }
 
 function renderControlsGuideContent() {
@@ -1260,8 +1974,10 @@ function renderControlsGuideContent() {
         controlsGuidePanel.style.padding = '6px 12px';
         controlsGuidePanel.style.width = 'auto';
         controlsGuidePanel.innerHTML = `
-            <div style="display:flex;align-items:center;gap:10px;">
+            <div id="godGuideDragHandle" style="display:flex;align-items:center;gap:8px;" title="Arrastra para mover · Doble clic para restablecer posición">
+                <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
                 <span style="font-size:0.75rem;font-weight:700;color:#ffd54f;">⌨️ Controles (F1)</span>
+                <button id="godGuideResetPosBtn" class="godWinIconBtn" title="Restablecer posición original">⟲</button>
                 <button id="godGuideToggleMinBtn" style="background:rgba(212,175,55,0.18);border:1px solid rgba(212,175,55,0.45);color:#ffd54f;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.68rem;font-weight:700;">
                     ▾ Mostrar
                 </button>
@@ -1274,13 +1990,17 @@ function renderControlsGuideContent() {
         const objName = selectedWorldObject ? (selectedWorldObject.data?.name || 'Objeto') : null;
 
         controlsGuidePanel.innerHTML = `
-            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,175,55,0.3);padding-bottom:6px;margin-bottom:8px;">
+            <div id="godGuideDragHandle" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,175,55,0.3);padding-bottom:6px;margin-bottom:8px;" title="Arrastra para mover · Doble clic para restablecer posición">
                 <span style="font-size:0.8rem;font-weight:800;color:#ffd54f;display:flex;align-items:center;gap:6px;">
+                    <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
                     ⌨️ Controles Modo Dios
                 </span>
-                <button id="godGuideToggleMinBtn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#ffd54f;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:0.68rem;font-weight:700;" title="Minimizar panel (F1)">
-                    ▴ Ocultar
-                </button>
+                <div style="display:flex;align-items:center;gap:4px;">
+                    <button id="godGuideResetPosBtn" class="godWinIconBtn" title="Restablecer posición original (arriba izquierda)">⟲</button>
+                    <button id="godGuideToggleMinBtn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#ffd54f;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:0.68rem;font-weight:700;" title="Minimizar panel (F1)">
+                        ▴ Ocultar
+                    </button>
+                </div>
             </div>
 
             <div style="display:flex;flex-direction:column;gap:7px;font-size:0.72rem;line-height:1.35;">
@@ -1303,11 +2023,13 @@ function renderControlsGuideContent() {
                     </div>
                     <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:center;">
                         <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">Clic Izquierdo</span><span style="color:#cbd5e1;">Seleccionar / Colocar</span>
-                        <span style="background:rgba(2,132,199,0.3);border:1px solid #38bdf8;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#38bdf8;font-weight:700;">Arrastrar Clic</span><span style="color:#38bdf8;font-weight:700;">Mover en suelo en vivo</span>
-                        <span style="background:rgba(2,132,199,0.3);border:1px solid #38bdf8;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#38bdf8;font-weight:700;">Tecla G</span><span style="color:#e0f2fe;">Agarrar (seguir cursor)</span>
-                        <span style="background:rgba(124,58,237,0.3);border:1px solid #a78bfa;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#c4b5fd;font-weight:700;">Ctrl + D</span><span style="color:#c4b5fd;font-weight:700;">Duplicar seleccionado</span>
+                        <span style="background:rgba(2,132,199,0.3);border:1px solid #38bdf8;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#38bdf8;font-weight:700;">Arrastrar Clic</span><span style="color:#38bdf8;font-weight:700;">Mover en suelo (con Imán)</span>
+                        <span style="background:rgba(2,132,199,0.3);border:1px solid #38bdf8;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#38bdf8;font-weight:700;">Tecla G / M</span><span style="color:#e0f2fe;">Agarrar (G) / Imán bordes (M)</span>
+                        <span style="background:rgba(15,118,110,0.4);border:1px solid #2dd4bf;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#5eead4;font-weight:700;">Ctrl + Shift + D</span><span style="color:#5eead4;font-weight:700;">Clonar pegado borde-a-borde</span>
+                        <span style="background:rgba(124,58,237,0.3);border:1px solid #a78bfa;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#c4b5fd;font-weight:700;">Ctrl + D</span><span style="color:#c4b5fd;font-weight:700;">Duplicar desplazado</span>
+                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">Alt + Flechas</span><span style="color:#cbd5e1;">Micro-ajuste 5cm (Shift: 25cm)</span>
                         <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">R / T</span><span style="color:#cbd5e1;">Rotar ±15° (Shift: ±5°)</span>
-                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">+ / -</span><span style="color:#cbd5e1;">Escalar (o teclear en HUD)</span>
+                        <span style="background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.18);border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;">+ / - / 🔗🔓</span><span style="color:#cbd5e1;">Escala uniforme o por eje X/Y/Z</span>
                         <span style="background:rgba(185,28,28,0.25);border:1px solid #ef4444;border-radius:3px;padding:1px 4px;font-family:monospace;font-size:0.65rem;color:#fca5a5;">Supr / Backspace</span><span style="color:#fca5a5;">Eliminar elemento</span>
                     </div>
                 </div>
@@ -1327,13 +2049,408 @@ function renderControlsGuideContent() {
         `;
     }
 
+    const dragHandle = controlsGuidePanel.querySelector('#godGuideDragHandle');
+    setupDraggableWindow(controlsGuidePanel, dragHandle, 'guide', getDefaultGuideWindowPos, 'Guía de Controles');
+
+    const resetBtn = controlsGuidePanel.querySelector('#godGuideResetPosBtn');
+    if (resetBtn) {
+        resetBtn.onclick = (e) => {
+            e.stopPropagation();
+            resetWindowPosition(controlsGuidePanel, 'guide', getDefaultGuideWindowPos, 'Guía de Controles');
+        };
+    }
+
     const minBtn = controlsGuidePanel.querySelector('#godGuideToggleMinBtn');
     if (minBtn) {
         minBtn.onclick = () => {
             isGuideCollapsed = !isGuideCollapsed;
             renderControlsGuideContent();
+            clampWindowToViewport(controlsGuidePanel, 'guide', false);
         };
     }
+}
+
+/**
+ * VENTANA FLOTANTE INDEPENDIENTE: LOCALIZADOR UNIVERSAL DE MODELOS Y PERSONAJES
+ */
+function destroyLocatorWindow() {
+    if (locatorWindowPanel && locatorWindowPanel.parentNode) {
+        locatorWindowPanel.parentNode.removeChild(locatorWindowPanel);
+    }
+    locatorWindowPanel = null;
+}
+
+function createOrUpdateLocatorWindow() {
+    if (!isGodModeActive || !isLocatorOpen) {
+        destroyLocatorWindow();
+        return;
+    }
+    if (!locatorWindowPanel) {
+        locatorWindowPanel = document.createElement('div');
+        locatorWindowPanel.id = 'godLocatorFloatingPanel';
+        locatorWindowPanel.style.cssText = `
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            width: 470px;
+            max-width: 92vw;
+            max-height: 70vh;
+            background: rgba(10, 16, 24, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1.5px solid #38bdf8;
+            border-radius: 12px;
+            box-shadow: 0 16px 42px rgba(0, 0, 0, 0.85);
+            padding: 10px 12px;
+            z-index: 999993;
+            color: #fff8e7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            user-select: none;
+        `;
+        document.body.appendChild(locatorWindowPanel);
+        renderLocatorWindowContent();
+        applyWindowPosition(locatorWindowPanel, 'locator', getDefaultLocatorWindowPos);
+        bringWindowToFront(locatorWindowPanel);
+    } else {
+        renderLocatorWindowContent();
+        clampWindowToViewport(locatorWindowPanel, 'locator', false);
+    }
+}
+
+function renderLocatorWindowContent() {
+    if (!locatorWindowPanel) return;
+
+    const locatableEntities = getAllLocatableEntities();
+    const missingObjects = getMissingWorldObjects();
+
+    locatorWindowPanel.innerHTML = `
+        <div id="godLocatorDragHandle" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(56,189,248,0.3);padding-bottom:6px;gap:8px;" title="Arrastra para mover libremente · Doble clic para restablecer posición">
+            <span style="color:#38bdf8;font-weight:800;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
+                🧭 LOCALIZADOR UNIVERSAL (${locatableEntities.length})
+            </span>
+            <div style="display:flex;align-items:center;gap:4px;">
+                <button id="godLocatorResetPosBtn" class="godWinIconBtn" title="Restablecer posición original">⟲</button>
+                <button id="godLocatorCloseWinBtn" class="godWinIconBtn" style="color:#fecaca;border-color:rgba(248,113,113,0.45);" title="Cerrar ventana de Localizador">✕</button>
+            </div>
+        </div>
+        <div style="color:#94a3b8;font-size:0.7rem;padding:0 2px;">
+            Haz clic en 🎯 para enfocar cámara o en 📍 para traerlo frente a ti
+        </div>
+        <div class="godLocatorBody styledScrollbar" style="overflow-y:auto;max-height:calc(70vh - 82px);display:flex;flex-direction:column;gap:6px;padding-right:2px;">
+            ${locatableEntities.map(ent => {
+                const posX = ent.pos?.x !== undefined ? ent.pos.x : (ent.savedPos?.x || 0);
+                const posZ = ent.pos?.z !== undefined ? ent.pos.z : (ent.savedPos?.z || 0);
+                const isSelected = selectedWorldObject && (
+                    (selectedWorldObject.type === ent.type && (selectedWorldObject.data?.name?.includes(ent.name) || selectedWorldObject.id === ent.id)) ||
+                    selectedWorldObject.mesh === ent.mesh
+                );
+
+                return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;background:${isSelected ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.05)'};border:${isSelected ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)'};padding:5px 8px;border-radius:6px;font-size:0.75rem;gap:6px;">
+                        <div style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0;" class="godLocatorSelectRow" data-ent-id="${ent.id}">
+                            <span style="font-size:1.05rem;">${ent.icon}</span>
+                            <div style="display:flex;flex-direction:column;min-width:0;">
+                                <strong style="color:${isSelected ? '#38bdf8' : '#fff'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(ent.name)}</strong>
+                                <span style="color:#94a3b8;font-size:0.68rem;font-family:monospace;">
+                                    Pos: (X: ${posX.toFixed(1)}, Z: ${posZ.toFixed(1)})
+                                    ${ent.savedPos ? `&bull; Guardado: (${ent.savedPos.x.toFixed(1)}, ${ent.savedPos.z.toFixed(1)})` : ''}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                            <button class="godLocatorFocusBtn" data-ent-id="${ent.id}" style="background:#0284c7;border:1px solid #38bdf8;color:#fff;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Volar la cámara hacia este modelo">
+                                🎯 Enfocar
+                            </button>
+                            <button class="godLocatorTeleportBtn" data-ent-id="${ent.id}" style="background:#059669;border:1px solid #34d399;color:#fff;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Traer este modelo y situarlo en el suelo frente a la cámara">
+                                📍 Traer
+                            </button>
+                            ${ent.savedPos ? `
+                                <button class="godLocatorResetBtn" data-ent-id="${ent.id}" style="background:#b45309;border:1px solid #f59e0b;color:#fff;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Restablecer este modelo a su posición guardada original">
+                                    🔄
+                                </button>
+                            ` : ''}
+                            ${ent.type === 'custom' ? `
+                                <button class="godLocatorDeleteBtn" data-ent-id="${ent.id}" style="background:#b91c1c;border:1px solid #ef4444;color:#fff;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Eliminar este objeto del escenario">
+                                    🗑️
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+            ${missingObjects.length > 0 ? `
+                <div style="margin-top:4px;display:flex;align-items:center;justify-content:space-between;background:rgba(185,28,28,0.18);border:1px solid rgba(248,113,113,0.5);border-radius:6px;padding:5px 8px;font-size:0.72rem;color:#fecaca;gap:6px;">
+                    <span>⚠️ ${missingObjects.length} modelo(s) .GLB sin archivo binario</span>
+                    <button class="godPurgeMissingWorldBtn" style="background:#991b1b;border:1px solid #f87171;color:#fff;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:0.7rem;font-weight:700;white-space:nowrap;">🧹 Limpiar</button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    const dragHandle = locatorWindowPanel.querySelector('#godLocatorDragHandle');
+    setupDraggableWindow(locatorWindowPanel, dragHandle, 'locator', getDefaultLocatorWindowPos, 'Localizador');
+
+    const resetBtn = locatorWindowPanel.querySelector('#godLocatorResetPosBtn');
+    if (resetBtn) {
+        resetBtn.onclick = (e) => {
+            e.stopPropagation();
+            resetWindowPosition(locatorWindowPanel, 'locator', getDefaultLocatorWindowPos, 'Localizador');
+        };
+    }
+
+    const closeBtn = locatorWindowPanel.querySelector('#godLocatorCloseWinBtn');
+    if (closeBtn) {
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            isLocatorOpen = false;
+            destroyLocatorWindow();
+            renderHUDContent();
+        };
+    }
+
+    const bodyEl = locatorWindowPanel.querySelector('.godLocatorBody');
+    if (bodyEl) {
+        bodyEl.onclick = (e) => {
+            const currentEntities = getAllLocatableEntities();
+            const entitiesMap = new Map();
+            currentEntities.forEach(ent => entitiesMap.set(ent.id, ent));
+
+            const focusBtn = e.target.closest('.godLocatorFocusBtn');
+            if (focusBtn) {
+                e.stopPropagation();
+                const entId = focusBtn.getAttribute('data-ent-id');
+                const target = entitiesMap.get(entId);
+                if (target) focusCameraOnTarget(target);
+                else showDevToast(`⚠️ No se encontró la entidad "${entId}" en el mapa.`);
+                return;
+            }
+
+            const teleBtn = e.target.closest('.godLocatorTeleportBtn');
+            if (teleBtn) {
+                e.stopPropagation();
+                const entId = teleBtn.getAttribute('data-ent-id');
+                const target = entitiesMap.get(entId);
+                if (target) teleportEntityToFrontOfCamera(target);
+                else showDevToast(`⚠️ No se encontró la entidad "${entId}".`);
+                return;
+            }
+
+            const resetEntBtn = e.target.closest('.godLocatorResetBtn');
+            if (resetEntBtn) {
+                e.stopPropagation();
+                const entId = resetEntBtn.getAttribute('data-ent-id');
+                const target = entitiesMap.get(entId);
+                if (target) resetEntityToSavedPosition(target);
+                else showDevToast(`⚠️ No se encontró la entidad "${entId}".`);
+                return;
+            }
+
+            const delBtn = e.target.closest('.godLocatorDeleteBtn');
+            if (delBtn) {
+                e.stopPropagation();
+                const entId = delBtn.getAttribute('data-ent-id');
+                if (entId) {
+                    removePlacedObjectFromWorld(entId);
+                    if (selectedWorldObject?.id === entId) clearSelectionHelper();
+                    hasUnsavedChanges = true;
+                    pendingChangesCount++;
+                    showDevToast('🗑️ Objeto eliminado del escenario');
+                    renderHUDContent();
+                }
+                return;
+            }
+
+            if (e.target.closest('.godPurgeMissingWorldBtn')) {
+                e.stopPropagation();
+                clearMissingWorldObjects();
+                showDevToast('🧹 Referencias .GLB faltantes eliminadas de la persistencia');
+                renderHUDContent();
+                return;
+            }
+
+            const row = e.target.closest('.godLocatorSelectRow');
+            if (row) {
+                const entId = row.getAttribute('data-ent-id');
+                const target = entitiesMap.get(entId);
+                if (target) {
+                    selectEntityFromLocator(target);
+                    showDevToast(`📌 Seleccionado: ${target.icon || '📍'} ${target.name}`);
+                }
+            }
+        };
+    }
+}
+
+/**
+ * VENTANA FLOTANTE INDEPENDIENTE: OBJETOS EN ESCENA
+ */
+function destroyObjectsWindow() {
+    if (objectsWindowPanel && objectsWindowPanel.parentNode) {
+        objectsWindowPanel.parentNode.removeChild(objectsWindowPanel);
+    }
+    objectsWindowPanel = null;
+}
+
+function createOrUpdateObjectsWindow() {
+    if (!isGodModeActive || !showObjectsListDrawer) {
+        destroyObjectsWindow();
+        return;
+    }
+    if (!objectsWindowPanel) {
+        objectsWindowPanel = document.createElement('div');
+        objectsWindowPanel.id = 'godObjectsFloatingPanel';
+        objectsWindowPanel.style.cssText = `
+            position: fixed;
+            top: 84px;
+            right: 16px;
+            width: 440px;
+            max-width: 92vw;
+            max-height: 65vh;
+            background: rgba(12, 18, 14, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1.5px solid rgba(212, 175, 55, 0.55);
+            border-radius: 12px;
+            box-shadow: 0 16px 42px rgba(0, 0, 0, 0.85);
+            padding: 10px 12px;
+            z-index: 999994;
+            color: #fff8e7;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            user-select: none;
+        `;
+        document.body.appendChild(objectsWindowPanel);
+        renderObjectsWindowContent();
+        applyWindowPosition(objectsWindowPanel, 'objects', getDefaultObjectsWindowPos);
+        bringWindowToFront(objectsWindowPanel);
+    } else {
+        renderObjectsWindowContent();
+        clampWindowToViewport(objectsWindowPanel, 'objects', false);
+    }
+}
+
+function renderObjectsWindowContent() {
+    if (!objectsWindowPanel) return;
+
+    const activeMeshes = getActiveWorldMeshes();
+    const missingObjects = getMissingWorldObjects();
+
+    objectsWindowPanel.innerHTML = `
+        <div id="godObjectsDragHandle" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,175,55,0.3);padding-bottom:6px;gap:8px;" title="Arrastra para mover libremente · Doble clic para restablecer posición">
+            <span style="color:#ffd54f;font-weight:800;font-size:0.8rem;display:flex;align-items:center;gap:6px;">
+                <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
+                🗺️ OBJETOS EN ESCENA (${activeMeshes.length})
+            </span>
+            <div style="display:flex;align-items:center;gap:4px;">
+                <button id="godObjectsResetPosBtn" class="godWinIconBtn" title="Restablecer posición original">⟲</button>
+                <button id="godObjectsCloseWinBtn" class="godWinIconBtn" style="color:#fecaca;border-color:rgba(248,113,113,0.45);" title="Cerrar ventana En Escena">✕</button>
+            </div>
+        </div>
+        <div style="color:#94a3b8;font-size:0.7rem;padding:0 2px;">
+            Haz clic para seleccionar un objeto o en 📑 para duplicar
+        </div>
+        <div class="godObjectsBody styledScrollbar" style="overflow-y:auto;max-height:calc(65vh - 80px);display:flex;flex-direction:column;gap:5px;padding-right:2px;">
+            ${missingObjects.length > 0 ? `
+                <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(185,28,28,0.2);border:1px solid rgba(248,113,113,0.45);border-radius:5px;padding:4px 8px;font-size:0.7rem;color:#fecaca;gap:6px;">
+                    <span>⚠️ Omitidos ${missingObjects.length} modelo(s) sin .GLB (${missingObjects.map(m => escapeHtml(m.name)).join(', ')})</span>
+                    <button class="godPurgeMissingWorldBtn" style="background:#991b1b;border:1px solid #f87171;color:#fff;border-radius:4px;padding:2px 7px;cursor:pointer;font-size:0.68rem;font-weight:700;white-space:nowrap;">🧹 Limpiar</button>
+                </div>
+            ` : ''}
+            ${activeMeshes.length === 0 ? '<div style="font-size:0.74rem;color:#94a3b8;padding:6px 4px;">No hay ningún objeto colocado en el mapa aún.</div>' : ''}
+            ${activeMeshes.map(m => {
+                const isSel = selectedWorldObject?.id === m.id;
+                return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;background:${isSel ? 'rgba(212,175,55,0.18)' : 'rgba(255,255,255,0.06)'};border:${isSel ? '1px solid rgba(212,175,55,0.65)' : '1px solid transparent'};padding:5px 8px;border-radius:5px;font-size:0.74rem;gap:6px;">
+                        <span class="godDrawerSelectObj" data-id="${m.id}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;flex:1;" title="Haz clic para seleccionar este objeto">
+                            ${m.data?.icon || '📦'} <strong style="color:${isSel ? '#ffd54f' : '#fff'};">${escapeHtml(m.data?.name || 'Objeto')}</strong>
+                            <span style="color:#94a3b8;font-size:0.68rem;margin-left:6px;">(X: ${m.data?.position?.x?.toFixed(1) || 0}, Z: ${m.data?.position?.z?.toFixed(1) || 0})</span>
+                            ${m.data?.logicType && m.data.logicType !== 'default' ? `<span style="background:#0f766e;color:#5eead4;padding:1px 5px;border-radius:3px;font-size:0.64rem;margin-left:5px;font-weight:700;">${escapeHtml(m.data.logicType)}</span>` : ''}
+                        </span>
+                        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
+                            <button class="godDrawerDuplicateBtn" data-id="${m.id}" style="background:#7c3aed;border:none;color:#fff;border-radius:3px;padding:3px 7px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Duplicar este objeto en el escenario">
+                                📑 Duplicar
+                            </button>
+                            <button class="godDrawerDeleteBtn" data-id="${m.id}" style="background:#b91c1c;border:none;color:#fff;border-radius:3px;padding:3px 8px;cursor:pointer;font-size:0.7rem;font-weight:700;" title="Eliminar este objeto del mapa">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    const dragHandle = objectsWindowPanel.querySelector('#godObjectsDragHandle');
+    setupDraggableWindow(objectsWindowPanel, dragHandle, 'objects', getDefaultObjectsWindowPos, 'En Escena');
+
+    const resetBtn = objectsWindowPanel.querySelector('#godObjectsResetPosBtn');
+    if (resetBtn) {
+        resetBtn.onclick = (e) => {
+            e.stopPropagation();
+            resetWindowPosition(objectsWindowPanel, 'objects', getDefaultObjectsWindowPos, 'En Escena');
+        };
+    }
+
+    const closeBtn = objectsWindowPanel.querySelector('#godObjectsCloseWinBtn');
+    if (closeBtn) {
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            showObjectsListDrawer = false;
+            destroyObjectsWindow();
+            renderHUDContent();
+        };
+    }
+
+    objectsWindowPanel.querySelectorAll('.godDrawerDuplicateBtn').forEach(b => {
+        b.onclick = async (e) => {
+            e.stopPropagation();
+            const objId = b.getAttribute('data-id');
+            const cloned = await duplicateWorldObject(objId);
+            if (cloned && cloned.mesh) {
+                selectWorldObject(cloned);
+                showDevToast(`📑 ¡"${cloned.data?.name || 'Objeto'}" duplicado! Se ha seleccionado la copia para que puedas moverla`);
+                renderHUDContent();
+            }
+        };
+    });
+
+    objectsWindowPanel.querySelectorAll('.godDrawerSelectObj').forEach(el => {
+        el.onclick = (e) => {
+            e.stopPropagation();
+            const objId = el.getAttribute('data-id');
+            const meshes = getActiveWorldMeshes();
+            const target = meshes.find(m => m.id === objId);
+            if (target) {
+                selectWorldObject(target);
+            }
+        };
+    });
+
+    objectsWindowPanel.querySelectorAll('.godDrawerDeleteBtn').forEach(b => {
+        b.onclick = (e) => {
+            e.stopPropagation();
+            const objId = b.getAttribute('data-id');
+            removePlacedObjectFromWorld(objId);
+            if (selectedWorldObject?.id === objId) clearSelectionHelper();
+            hasUnsavedChanges = true;
+            pendingChangesCount++;
+            showDevToast('🗑️ Objeto eliminado del escenario');
+            renderHUDContent();
+        };
+    });
+
+    objectsWindowPanel.querySelectorAll('.godPurgeMissingWorldBtn').forEach(b => {
+        b.onclick = (e) => {
+            e.stopPropagation();
+            clearMissingWorldObjects();
+            showDevToast('🧹 Referencias .GLB faltantes limpiadas de la persistencia');
+            renderHUDContent();
+        };
+    });
 }
 
 function setupHUDEvents() {
@@ -1343,13 +2460,26 @@ function setupHUDEvents() {
     const exitBtn = hudContainer.querySelector('#godExitBtn');
     if (exitBtn) exitBtn.onclick = exitGodMode;
 
-    // Colapsar / Expandir HUD
+    // Configurar arrastre libre y botón de reseteo para el HUD principal
+    const hudDragHandle = hudContainer.querySelector('#godHudDragHandle');
+    setupDraggableWindow(hudContainer, hudDragHandle, 'hud', getDefaultHudWindowPos, 'HUD Modo Dios');
+
+    const hudResetPosBtn = hudContainer.querySelector('#godHudResetPosBtn');
+    if (hudResetPosBtn) {
+        hudResetPosBtn.onclick = (e) => {
+            e.stopPropagation();
+            resetWindowPosition(hudContainer, 'hud', getDefaultHudWindowPos, 'HUD Modo Dios');
+        };
+    }
+
+    // Colapsar / Expandir HUD en el sitio
     const collapseBtn = hudContainer.querySelector('#godCollapseBtn');
     if (collapseBtn) {
         collapseBtn.onclick = () => {
             hudContainer.classList.toggle('collapsed');
             const isCollapsed = hudContainer.classList.contains('collapsed');
-            collapseBtn.innerHTML = isCollapsed ? '▴ Mostrar HUD' : '▾ Ocultar HUD';
+            collapseBtn.innerHTML = isCollapsed ? '▴ Mostrar' : '▾ Ocultar';
+            clampWindowToViewport(hudContainer, 'hud', false);
         };
     }
 
@@ -1389,79 +2519,41 @@ function setupHUDEvents() {
         };
     }
 
-    // Alternar Localizador de Modelos
-    const locatorBtn = hudContainer.querySelector('#godLocatorBtn');
-    if (locatorBtn) {
-        locatorBtn.onclick = () => {
-            isLocatorOpen = !isLocatorOpen;
+    // Alternar Ventana Flotante Catálogo de Modelos 3D
+    const catalogBtn = hudContainer.querySelector('#godCatalogBtn');
+    if (catalogBtn) {
+        catalogBtn.onclick = () => {
+            isCatalogOpen = !isCatalogOpen;
+            if (isCatalogOpen) {
+                createOrUpdateCatalogWindow();
+            } else {
+                destroyCatalogWindow();
+            }
             renderHUDContent();
         };
     }
 
-    // Eventos dentro del panel Localizador de Modelos (Delegación Robusta con closest)
-    if (isLocatorOpen) {
-        const locatorPanel = hudContainer.querySelector('.godLocatorPanel');
-        if (locatorPanel) {
-            locatorPanel.onclick = (e) => {
-                // 1. Obtener lista de entidades fresca en el momento exacto del clic
-                const currentEntities = getAllLocatableEntities();
-                const entitiesMap = new Map();
-                currentEntities.forEach(ent => entitiesMap.set(ent.id, ent));
+    const quickOpenCatalogBtn = hudContainer.querySelector('#godQuickOpenCatalogBtn');
+    if (quickOpenCatalogBtn) {
+        quickOpenCatalogBtn.onclick = () => {
+            isCatalogOpen = true;
+            createOrUpdateCatalogWindow();
+            renderHUDContent();
+        };
+    }
 
-                // A. Botón 🎯 Enfocar
-                const focusBtn = e.target.closest('.godLocatorFocusBtn');
-                if (focusBtn) {
-                    e.stopPropagation();
-                    const entId = focusBtn.getAttribute('data-ent-id');
-                    const target = entitiesMap.get(entId);
-                    if (target) {
-                        focusCameraOnTarget(target);
-                    } else {
-                        showDevToast(`⚠️ No se encontró la entidad "${entId}" en el mapa.`);
-                    }
-                    return;
-                }
-
-                // B. Botón 📍 Traer al frente
-                const teleBtn = e.target.closest('.godLocatorTeleportBtn');
-                if (teleBtn) {
-                    e.stopPropagation();
-                    const entId = teleBtn.getAttribute('data-ent-id');
-                    const target = entitiesMap.get(entId);
-                    if (target) {
-                        teleportEntityToFrontOfCamera(target);
-                    } else {
-                        showDevToast(`⚠️ No se encontró la entidad "${entId}".`);
-                    }
-                    return;
-                }
-
-                // C. Botón 🔄 Reset a posición original
-                const resetBtn = e.target.closest('.godLocatorResetBtn');
-                if (resetBtn) {
-                    e.stopPropagation();
-                    const entId = resetBtn.getAttribute('data-ent-id');
-                    const target = entitiesMap.get(entId);
-                    if (target) {
-                        resetEntityToSavedPosition(target);
-                    } else {
-                        showDevToast(`⚠️ No se encontró la entidad "${entId}".`);
-                    }
-                    return;
-                }
-
-                // D. Clic en la fila para seleccionar
-                const row = e.target.closest('.godLocatorSelectRow');
-                if (row) {
-                    const entId = row.getAttribute('data-ent-id');
-                    const target = entitiesMap.get(entId);
-                    if (target) {
-                        selectEntityFromLocator(target);
-                        showDevToast(`📌 Seleccionado: ${target.icon || '📍'} ${target.name}`);
-                    }
-                }
-            };
-        }
+    // Alternar Ventana Flotante Localizador de Modelos
+    const locatorBtn = hudContainer.querySelector('#godLocatorBtn');
+    if (locatorBtn) {
+        locatorBtn.onclick = () => {
+            isLocatorOpen = !isLocatorOpen;
+            if (isLocatorOpen) {
+                createOrUpdateLocatorWindow();
+            } else {
+                destroyLocatorWindow();
+            }
+            renderHUDContent();
+        };
     }
 
     // Botón Unificado: Guardar y Hornear Escenario (Opción A)
@@ -1476,21 +2568,20 @@ function setupHUDEvents() {
                 // 1. Persistir cambios staged en memoria a LocalStorage y servidor
                 commitStagedWorldLayout();
                 commitStagedWorldObjects();
+                stagedInstancedBackups = [];
 
-                // 2. Crear versiones históricas de seguridad
-                saveSceneVersion('Guardado desde Modo Dios');
-                saveLayoutVersion('Guardado desde Modo Dios');
-
-                // 3. Hornear directamente en el código fuente de la app (.js) para GitHub
+                // 2. Hornear directamente en el código fuente (.js + .json) para GitHub
                 const bakeRes = await bakeCurrentWorldToCode();
 
                 hasUnsavedChanges = false;
                 pendingChangesCount = 0;
 
                 if (bakeRes.success) {
-                    showDevToast('✅ ¡Escenario guardado en LocalStorage y fijado con éxito en el código fuente para Git!', 5000);
+                    showDevToast('✅ ¡Escenario guardado en LocalStorage y horneado con éxito en código (.js + .json) para Git!', 5000);
                 } else {
-                    showDevToast(`💾 Cambios guardados en memoria y LocalStorage. (Aviso Git: ${bakeRes.error || bakeRes.message})`, 4500);
+                    saveSceneVersion('Guardado local (sin hornear)');
+                    saveLayoutVersion('Guardado local (sin hornear)');
+                    showDevToast(`⚠️ Guardado en este navegador, pero NO horneado en código (.js): ${bakeRes.error || bakeRes.message}`, 5500);
                 }
             } catch (err) {
                 console.error('[GodMode] Error guardando escenario:', err);
@@ -1518,6 +2609,7 @@ function setupHUDEvents() {
 
                     // 2. Recargar layout de entidades de fábrica / confirmado
                     const confirmedLayout = reloadWorldLayoutFromStorage();
+                    restoreStagedInstancedBackups();
 
                     // 3. Re-sincronizar mallas en vivo con las coordenadas confirmadas
                     if (runtimeState.player && confirmedLayout.playerSpawn) {
@@ -1656,6 +2748,29 @@ function setupHUDEvents() {
         };
     }
 
+    // Duplicar pegado al lado (Acople contiguo borde-a-borde)
+    const adjacentAutoBtn = hudContainer.querySelector('#godAdjacentAutoBtn');
+    if (adjacentAutoBtn) {
+        adjacentAutoBtn.onclick = () => {
+            executeAdjacentDuplicateSelectedObject('auto');
+        };
+    }
+    hudContainer.querySelectorAll('.godAdjacentDirBtn').forEach(btn => {
+        btn.onclick = () => {
+            const dir = btn.getAttribute('data-dir') || 'auto';
+            executeAdjacentDuplicateSelectedObject(dir);
+        };
+    });
+
+    // Micro-ajuste posicional desde botones HUD (5 cm)
+    hudContainer.querySelectorAll('.godNudgeBtn').forEach(btn => {
+        btn.onclick = (e) => {
+            const dir = btn.getAttribute('data-nudge');
+            const step = e.shiftKey ? 0.25 : 0.05;
+            nudgeSelectedObject(dir, step);
+        };
+    });
+
     // Configurar Comportamiento Lógico / Eventos
     const logicBtn = hudContainer.querySelector('#godLogicSelectedBtn');
     if (logicBtn && selectedWorldObject && selectedWorldObject.type === 'custom') {
@@ -1672,53 +2787,19 @@ function setupHUDEvents() {
         };
     }
 
-    // Toggle drawer de objetos en escena
+    // Toggle ventana flotante de objetos en escena
     const toggleObjectsListBtn = hudContainer.querySelector('#godToggleObjectsListBtn');
     if (toggleObjectsListBtn) {
         toggleObjectsListBtn.onclick = () => {
             showObjectsListDrawer = !showObjectsListDrawer;
+            if (showObjectsListDrawer) {
+                createOrUpdateObjectsWindow();
+            } else {
+                destroyObjectsWindow();
+            }
             renderHUDContent();
         };
     }
-
-    // Botones de duplicación dentro del drawer
-    hudContainer.querySelectorAll('.godDrawerDuplicateBtn').forEach(b => {
-        b.onclick = async (e) => {
-            e.stopPropagation();
-            const objId = b.getAttribute('data-id');
-            const cloned = await duplicateWorldObject(objId);
-            if (cloned && cloned.mesh) {
-                selectWorldObject(cloned);
-                showDevToast(`📑 ¡"${cloned.data?.name || 'Objeto'}" duplicado! Se ha seleccionado la copia para que puedas moverla`);
-                renderHUDContent();
-            }
-        };
-    });
-
-    // Clic en el nombre para seleccionar desde el drawer
-    hudContainer.querySelectorAll('.godDrawerSelectObj').forEach(el => {
-        el.onclick = (e) => {
-            e.stopPropagation();
-            const objId = el.getAttribute('data-id');
-            const meshes = getActiveWorldMeshes();
-            const target = meshes.find(m => m.id === objId);
-            if (target) {
-                selectWorldObject(target);
-            }
-        };
-    });
-
-    // Botones de eliminación dentro del drawer
-    hudContainer.querySelectorAll('.godDrawerDeleteBtn').forEach(b => {
-        b.onclick = (e) => {
-            e.stopPropagation();
-            const objId = b.getAttribute('data-id');
-            removePlacedObjectFromWorld(objId);
-            if (selectedWorldObject?.id === objId) clearSelectionHelper();
-            showDevToast('🗑️ Objeto eliminado del escenario');
-            renderHUDContent();
-        };
-    });
 
     // Velocidad de vuelo
     const speedBtn = hudContainer.querySelector('#godSpeedBtn');
@@ -1733,14 +2814,27 @@ function setupHUDEvents() {
     }
 
     // Selector de herramienta (Colocar / Selector Universal)
-    hudContainer.querySelectorAll('.godToolBtn').forEach(btn => {
+    hudContainer.querySelectorAll('.godToolBtn[data-tool]').forEach(btn => {
         btn.onclick = () => {
-            hudContainer.querySelectorAll('.godToolBtn').forEach(b => b.classList.remove('active'));
+            hudContainer.querySelectorAll('.godToolBtn[data-tool]').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentTool = btn.getAttribute('data-tool');
             if (currentTool !== 'select') clearSelectionHelper();
         };
     });
+
+    // Botón Toggle Imán de Bordes (M)
+    const edgeSnapBtn = hudContainer.querySelector('#godEdgeSnapToggleBtn');
+    if (edgeSnapBtn) {
+        edgeSnapBtn.onclick = () => {
+            isEdgeSnapEnabled = !isEdgeSnapEnabled;
+            lastSnapResult = null;
+            showDevToast(isEdgeSnapEnabled
+                ? '🧲 Imán de bordes ACTIVADO: pega caras y alinea a 90° automáticamente'
+                : '🧲 Imán de bordes DESACTIVADO: colocación 100% libre');
+            renderHUDContent();
+        };
+    }
 
     // Rotación Precisa (Botones ±15° y campo numérico)
     const rotPrev = hudContainer.querySelector('#godRotPrevBtn');
@@ -1772,7 +2866,18 @@ function setupHUDEvents() {
         };
     }
 
-    // Escala Libre (Botones +/- sin límite forzado y campo numérico editable)
+    // Escala Libre + Bloqueo / Desbloqueo independiente por eje X, Y, Z
+    const scaleLockBtn = hudContainer.querySelector('#godScaleLockBtn');
+    if (scaleLockBtn) {
+        scaleLockBtn.onclick = () => {
+            isScaleUnlocked = !isScaleUnlocked;
+            showDevToast(isScaleUnlocked
+                ? '🔓 Escala por ejes DESBLOQUEADA: ahora puedes estirar X (ancho), Y (alto) o Z (fondo) por separado'
+                : '🔗 Proporción de ejes BLOQUEADA: se mantendrá la proporción actual al escalar');
+            renderHUDContent();
+        };
+    }
+
     const scaleDown = hudContainer.querySelector('#godScaleDownBtn');
     const scaleUp = hudContainer.querySelector('#godScaleUpBtn');
     const scaleInput = hudContainer.querySelector('#godScaleInput');
@@ -1803,6 +2908,26 @@ function setupHUDEvents() {
         };
     }
 
+    // Inputs independientes X, Y, Z cuando está desbloqueado
+    ['x', 'y', 'z'].forEach(axis => {
+        const axInput = hudContainer.querySelector(`#godScale${axis.toUpperCase()}Input`);
+        if (!axInput) return;
+        const commitAxis = () => {
+            const val = parseFloat(axInput.value);
+            if (!isNaN(val) && val > 0) {
+                applyAxisScaleToSelected(axis, val);
+            }
+        };
+        axInput.onchange = commitAxis;
+        axInput.onkeydown = (e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') {
+                commitAxis();
+                axInput.blur();
+            }
+        };
+    });
+
     // Elevación Y (Enterrar / Elevar respecto al suelo)
     const elevDown = hudContainer.querySelector('#godElevDownBtn');
     const elevUp = hudContainer.querySelector('#godElevUpBtn');
@@ -1814,55 +2939,6 @@ function setupHUDEvents() {
             applyElevationOffsetToSelected(+0.15);
         };
     }
-
-    // Pestañas de catálogo
-    hudContainer.querySelectorAll('.godCatTabBtn').forEach(btn => {
-        btn.onclick = () => {
-            activeCatalogTab = btn.getAttribute('data-cattab');
-            renderHUDContent();
-        };
-    });
-
-    // Selección de ítem en la lista
-    hudContainer.querySelectorAll('.godItemCard').forEach(btn => {
-        btn.onclick = () => {
-            hudContainer.querySelectorAll('.godItemCard').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            const source = btn.getAttribute('data-source');
-            const id = btn.getAttribute('data-id');
-            const url = btn.getAttribute('data-url');
-            const name = btn.querySelector('.godItemLabel')?.textContent || 'Objeto';
-            const icon = btn.querySelector('.godItemIcon')?.textContent || '📦';
-
-            if (source === 'custom') {
-                const found = getCustomItemById(id);
-                setSelectedItem({
-                    source: 'custom',
-                    sourceId: id,
-                    name: found ? found.name : name,
-                    icon: found ? found.icon : icon,
-                    code: found ? found.code : null
-                });
-            } else if (source === 'system') {
-                if (id === 'tree_1') {
-                    setSelectedItem({ source: 'tree', sourceId: id, archetypeIndex: 0, name, icon });
-                } else if (id === 'tree_2') {
-                    setSelectedItem({ source: 'tree', sourceId: id, archetypeIndex: 1, name, icon });
-                } else if (id === 'tree_3') {
-                    setSelectedItem({ source: 'tree', sourceId: id, archetypeIndex: 2, name, icon });
-                } else if (id === 'rock_dodec') {
-                    setSelectedItem({ source: 'rock', sourceId: id, geoType: 0, name, icon });
-                } else if (id === 'rock_icosa') {
-                    setSelectedItem({ source: 'rock', sourceId: id, geoType: 1, name, icon });
-                } else {
-                    setSelectedItem({ source: 'system', sourceId: id, name, icon });
-                }
-            } else if (source === 'glb') {
-                setSelectedItem({ source: 'glb', sourceId: id, name, icon, url });
-            }
-        };
-    });
 
     // Subida de .GLB desde el ordenador
     const glbFileInput = hudContainer.querySelector('#godGlbFileInput');
@@ -1878,7 +2954,7 @@ function setupHUDEvents() {
             try {
                 // 1. Guardar permanentemente en el servidor
                 const serverRes = await uploadLocalModelToServer(file);
-                const modelUrl = serverRes.url;
+                const modelUrl = normalizeCustomModelUrl(serverRes.url);
 
                 // 2. Registrar en catálogo local
                 const newModelInfo = {
@@ -1889,17 +2965,21 @@ function setupHUDEvents() {
                     uploadedAt: Date.now()
                 };
                 registerUploadedModel(newModelInfo);
+                modelAvailabilityMap.set(newModelInfo.id, 'server');
+                modelAvailabilityMap.set(modelUrl, 'server');
 
                 // 3. Cambiar a pestaña de subidos y seleccionar
                 activeCatalogTab = 'customGlb';
-                renderHUDContent();
-                setSelectedItem({
+                isCatalogOpen = true;
+                currentTool = 'place';
+                await setSelectedItem({
                     source: 'glb',
                     sourceId: newModelInfo.id,
                     name: newModelInfo.name,
                     icon: '🎨',
                     url: modelUrl
                 });
+                renderHUDContent();
 
                 showDevToast(`✅ ¡Modelo "${file.name}" cargado y listo para colocar en el mapa!`);
             } catch (err) {
@@ -1914,29 +2994,136 @@ function setupHUDEvents() {
                     uploadedAt: Date.now()
                 };
                 registerUploadedModel(localModelInfo);
+                modelAvailabilityMap.set(localModelInfo.id, 'cache');
+                modelAvailabilityMap.set(blobUrl, 'cache');
 
                 activeCatalogTab = 'customGlb';
-                renderHUDContent();
-                setSelectedItem({
+                isCatalogOpen = true;
+                currentTool = 'place';
+                await setSelectedItem({
                     source: 'glb',
                     sourceId: localModelInfo.id,
                     name: localModelInfo.name,
                     icon: '🎨',
                     url: blobUrl
                 });
+                renderHUDContent();
 
                 showDevToast(`✅ Modelo "${file.name}" cargado localmente con éxito`);
+            } finally {
+                e.target.value = '';
             }
         };
     }
 }
 
-function updateHUDActiveItemBadge() {
-    if (!hudContainer || !selectedCatalogItem) return;
-    hudContainer.querySelectorAll('.godItemCard').forEach(btn => {
-        const id = btn.getAttribute('data-id');
-        btn.classList.toggle('active', id === selectedCatalogItem.sourceId);
+function bindCatalogCardEvents() {
+    if (!catalogWindowPanel) return;
+
+    catalogWindowPanel.querySelectorAll('.godDeleteUploadedCardBtn').forEach(delBtn => {
+        delBtn.onclick = (e) => {
+            e.stopPropagation();
+            const id = delBtn.getAttribute('data-id');
+            if (!id) return;
+            deleteUploadedModel(id);
+            if (selectedCatalogItem?.sourceId === id) {
+                setSelectedItem(null);
+            }
+            showDevToast('🗑️ Modelo eliminado de la lista de Modelos PC');
+            renderHUDContent();
+        };
     });
+
+    catalogWindowPanel.querySelectorAll('.godItemCard').forEach(btn => {
+        btn.onclick = async () => {
+            catalogWindowPanel.querySelectorAll('.godItemCard').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const source = btn.getAttribute('data-source');
+            const id = btn.getAttribute('data-id');
+            const url = btn.getAttribute('data-url');
+            const name = btn.querySelector('.godItemLabel')?.textContent || 'Objeto';
+            const icon = btn.querySelector('.godItemIcon')?.textContent || '📦';
+
+            currentTool = 'place';
+            clearSelectionHelper();
+
+            if (source === 'custom') {
+                const found = getCustomItemById(id);
+                await setSelectedItem({
+                    source: 'custom',
+                    sourceId: id,
+                    name: found ? found.name : name,
+                    icon: found ? found.icon : icon,
+                    code: found ? found.code : null
+                });
+            } else if (source === 'system') {
+                if (id === 'tree_1') {
+                    await setSelectedItem({ source: 'tree', sourceId: id, archetypeIndex: 0, name, icon });
+                } else if (id === 'tree_2') {
+                    await setSelectedItem({ source: 'tree', sourceId: id, archetypeIndex: 1, name, icon });
+                } else if (id === 'tree_3') {
+                    await setSelectedItem({ source: 'tree', sourceId: id, archetypeIndex: 2, name, icon });
+                } else if (id === 'rock_dodec') {
+                    await setSelectedItem({ source: 'rock', sourceId: id, geoType: 0, name, icon });
+                } else if (id === 'rock_icosa') {
+                    await setSelectedItem({ source: 'rock', sourceId: id, geoType: 1, name, icon });
+                } else {
+                    await setSelectedItem({ source: 'system', sourceId: id, name, icon });
+                }
+            } else if (source === 'glb') {
+                const check = await checkGlbAvailability(url, name);
+                modelAvailabilityMap.set(id, check.status);
+                if (check.url) modelAvailabilityMap.set(check.url, check.status);
+
+                if (check.status === 'missing') {
+                    btn.classList.remove('active');
+                    await setSelectedItem(null);
+                    showDevToast(`⚠️ No se encuentra el archivo "${name}.glb" en el servidor ni en caché. Selecciónalo de tu PC para restaurarlo.`, 5000);
+                    const fileInput = hudContainer?.querySelector('#godGlbFileInput');
+                    if (fileInput) fileInput.click();
+                    return;
+                }
+                await setSelectedItem({ source: 'glb', sourceId: id, name, icon, url: check.url || url });
+            }
+
+            if (!isCatalogPinned && selectedCatalogItem) {
+                isCatalogOpen = false;
+                destroyCatalogWindow();
+                showDevToast(`🎨 "${selectedCatalogItem.name}" listo para colocar (pulsa 🎨 Catálogo para cambiar)`);
+            }
+            renderHUDContent();
+        };
+    });
+}
+
+function updateHUDActiveItemBadge() {
+    if (!catalogWindowPanel) return;
+    catalogWindowPanel.querySelectorAll('.godItemCard').forEach(btn => {
+        const id = btn.getAttribute('data-id');
+        btn.classList.toggle('active', Boolean(selectedCatalogItem && id === selectedCatalogItem.sourceId));
+    });
+}
+
+async function onCustomItemsUpdatedInGodMode() {
+    if (!isGodModeActive) return;
+
+    if (selectedCatalogItem && selectedCatalogItem.source === 'custom' && selectedCatalogItem.sourceId) {
+        const latest = getCustomItemById(selectedCatalogItem.sourceId);
+        if (latest) {
+            const changed = latest.code !== selectedCatalogItem.code || latest.name !== selectedCatalogItem.name || latest.icon !== selectedCatalogItem.icon;
+            if (changed) {
+                await setSelectedItem({
+                    ...selectedCatalogItem,
+                    name: latest.name,
+                    icon: latest.icon,
+                    code: latest.code
+                });
+            }
+        }
+    }
+
+    renderHUDContent();
 }
 
 /**
@@ -1949,6 +3136,8 @@ function bindGodModeEvents() {
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     window.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('resize', onGodModeWindowResize);
+    window.addEventListener('customItemsUpdated', onCustomItemsUpdatedInGodMode);
 }
 
 function unbindGodModeEvents() {
@@ -1958,6 +3147,8 @@ function unbindGodModeEvents() {
     window.removeEventListener('mousedown', onMouseDown);
     window.removeEventListener('mouseup', onMouseUp);
     window.removeEventListener('contextmenu', onContextMenu);
+    window.removeEventListener('resize', onGodModeWindowResize);
+    window.removeEventListener('customItemsUpdated', onCustomItemsUpdatedInGodMode);
 }
 
 function onKeyDown(e) {
@@ -1967,11 +3158,29 @@ function onKeyDown(e) {
     const targetTag = e.target?.tagName ? e.target.tagName.toUpperCase() : '';
     if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT' || Boolean(e.target?.isContentEditable)) return;
 
+    // Atajo Ctrl+Shift+D: Clonar pegado borde-con-borde (Acople contiguo)
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.code === 'KeyD' || e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        e.stopPropagation();
+        executeAdjacentDuplicateSelectedObject('auto');
+        return;
+    }
+
     // Atajo universal Ctrl+D / Cmd+D: Duplicar elemento seleccionado
     if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyD' || e.key === 'd' || e.key === 'D')) {
         e.preventDefault();
         e.stopPropagation();
         executeDuplicateSelectedObject();
+        return;
+    }
+
+    // Micro-ajuste fino con Alt + Flechas (5 cm, o 25 cm con Shift)
+    if (e.altKey && selectedWorldObject && (e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const step = e.shiftKey ? 0.25 : 0.05;
+        const dirMap = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+        nudgeSelectedObject(dirMap[e.code], step);
         return;
     }
 
@@ -2003,6 +3212,14 @@ function onKeyDown(e) {
         case 'ShiftLeft':
         case 'ShiftRight':
             flyKeys.speedBoost = true;
+            break;
+        case 'KeyM':
+            isEdgeSnapEnabled = !isEdgeSnapEnabled;
+            lastSnapResult = null;
+            showDevToast(isEdgeSnapEnabled
+                ? '🧲 Imán de bordes ACTIVADO'
+                : '🧲 Imán de bordes DESACTIVADO');
+            renderHUDContent();
             break;
         case 'KeyR': {
             // Rotar a la derecha: 15° normal, 5° con Shift
@@ -2060,7 +3277,8 @@ function onKeyDown(e) {
                 hudContainer.classList.toggle('collapsed');
                 const isCollapsed = hudContainer.classList.contains('collapsed');
                 const btn = hudContainer.querySelector('#godCollapseBtn');
-                if (btn) btn.innerHTML = isCollapsed ? '▴ Mostrar HUD' : '▾ Ocultar HUD';
+                if (btn) btn.innerHTML = isCollapsed ? '▴ Mostrar' : '▾ Ocultar';
+                clampWindowToViewport(hudContainer, 'hud', false);
             }
             break;
         case 'KeyG':
@@ -2072,7 +3290,10 @@ function onKeyDown(e) {
                     showDevToast(`✋ Modo Agarrar activo: Mueve el ratón para desplazar "${selectedWorldObject.data?.name || 'Objeto'}". Clic Izq para fijar, Esc para cancelar.`);
                 } else {
                     if (hasValidGroundHit) {
-                        commitSelectedObjectMove(currentGroundHit);
+                        const commitTarget = (isEdgeSnapEnabled && lastSnapResult?.snapped && selectedWorldObject.type === 'custom')
+                            ? { x: lastSnapResult.x, y: getHeightAt(lastSnapResult.x, lastSnapResult.z), z: lastSnapResult.z, rotationY: lastSnapResult.rotationY }
+                            : currentGroundHit;
+                        commitSelectedObjectMove(commitTarget);
                         showDevToast(`📍 "${selectedWorldObject.data?.name || 'Objeto'}" fijado en el terreno`);
                     }
                 }
@@ -2086,8 +3307,14 @@ function onKeyDown(e) {
             e.preventDefault();
             isGuideCollapsed = !isGuideCollapsed;
             renderControlsGuideContent();
+            if (controlsGuidePanel) clampWindowToViewport(controlsGuidePanel, 'guide', false);
             break;
         case 'Escape':
+            if (logicWindowPanel && typeof activeLogicCloseFn === 'function') {
+                e.preventDefault();
+                activeLogicCloseFn();
+                return;
+            }
             if (isGrabModeActive || isDraggingSelectedObject) {
                 e.preventDefault();
                 if (dragInitialPos) {
@@ -2096,6 +3323,7 @@ function onKeyDown(e) {
                 }
                 isGrabModeActive = false;
                 isDraggingSelectedObject = false;
+                lastSnapResult = null;
                 return;
             }
             exitGodMode();
@@ -2186,9 +3414,13 @@ function onMouseMove(e) {
 function onMouseDown(e) {
     if (!isGodModeActive) return;
 
-    // Si el clic fue dentro de la barra HUD o del panel de guía de controles, no interactuar con el mundo 3D
+    // Si el clic fue dentro de cualquiera de las ventanas flotantes del Modo Dios, no interactuar con el mundo 3D
     if (hudContainer && hudContainer.contains(e.target)) return;
+    if (catalogWindowPanel && catalogWindowPanel.contains(e.target)) return;
     if (controlsGuidePanel && controlsGuidePanel.contains(e.target)) return;
+    if (locatorWindowPanel && locatorWindowPanel.contains(e.target)) return;
+    if (objectsWindowPanel && objectsWindowPanel.contains(e.target)) return;
+    if (logicWindowPanel && logicWindowPanel.contains(e.target)) return;
 
     // Clic derecho siempre activa la rotación de cámara
     if (e.button === 2) {
@@ -2203,10 +3435,15 @@ function onMouseDown(e) {
         // 1. Si está activo el modo "Agarrar" (tecla G): clic izquierdo fija el objeto en el suelo
         if (isGrabModeActive) {
             if (hasValidGroundHit && selectedWorldObject) {
-                commitSelectedObjectMove(currentGroundHit);
-                showDevToast(`📍 "${selectedWorldObject.data?.name || 'Objeto'}" fijado en (${currentGroundHit.x.toFixed(1)}, ${currentGroundHit.z.toFixed(1)})`);
+                const commitTarget = (isEdgeSnapEnabled && lastSnapResult?.snapped && selectedWorldObject.type === 'custom')
+                    ? { x: lastSnapResult.x, y: getHeightAt(lastSnapResult.x, lastSnapResult.z), z: lastSnapResult.z, rotationY: lastSnapResult.rotationY }
+                    : currentGroundHit;
+                commitSelectedObjectMove(commitTarget);
+                const snapTag = (isEdgeSnapEnabled && lastSnapResult?.snapped) ? ' 🧲 acoplado' : '';
+                showDevToast(`📍 "${selectedWorldObject.data?.name || 'Objeto'}" fijado${snapTag} en (${commitTarget.x.toFixed(1)}, ${commitTarget.z.toFixed(1)})`);
             }
             isGrabModeActive = false;
+            lastSnapResult = null;
             renderHUDContent();
             renderControlsGuideContent();
             return;
@@ -2228,6 +3465,7 @@ function onMouseDown(e) {
                 if (!h.object) return false;
                 if (placementCursor && (h.object === placementCursor || placementCursor.getObjectById(h.object.id))) return false;
                 if (ghostMesh && (h.object === ghostMesh || ghostMesh.getObjectById(h.object.id))) return false;
+                if (ghostHitboxHelper && (h.object === ghostHitboxHelper || ghostHitboxHelper.getObjectById(h.object.id))) return false;
                 if (selectionBoxHelper && (h.object === selectionBoxHelper || selectionBoxHelper.getObjectById(h.object.id))) return false;
                 return true;
             });
@@ -2262,11 +3500,16 @@ function onMouseUp(e) {
     if (e.button === 0) {
         if (isDraggingSelectedObject) {
             if (hasMovedSignificantly && hasValidGroundHit && selectedWorldObject) {
-                commitSelectedObjectMove(currentGroundHit);
-                showDevToast(`📍 "${selectedWorldObject.data?.name || 'Objeto'}" movido a (${currentGroundHit.x.toFixed(1)}, ${currentGroundHit.z.toFixed(1)})`);
+                const commitTarget = (isEdgeSnapEnabled && lastSnapResult?.snapped && selectedWorldObject.type === 'custom')
+                    ? { x: lastSnapResult.x, y: getHeightAt(lastSnapResult.x, lastSnapResult.z), z: lastSnapResult.z, rotationY: lastSnapResult.rotationY }
+                    : currentGroundHit;
+                const wasSnapped = Boolean(isEdgeSnapEnabled && lastSnapResult?.snapped);
+                commitSelectedObjectMove(commitTarget);
+                showDevToast(`📍 "${selectedWorldObject.data?.name || 'Objeto'}" movido${wasSnapped ? ' (🧲 acoplado)' : ''} a (${commitTarget.x.toFixed(1)}, ${commitTarget.z.toFixed(1)})`);
             }
             isDraggingSelectedObject = false;
             hasMovedSignificantly = false;
+            lastSnapResult = null;
         }
     }
 }
@@ -2283,14 +3526,46 @@ function onContextMenu(e) {
 async function handlePlaceObjectClick() {
     if (!hasValidGroundHit || !selectedCatalogItem) return;
 
-    const itemDesc = { ...selectedCatalogItem };
-    const pos = { x: currentGroundHit.x, z: currentGroundHit.z };
+    updateGhostTransform();
+    const useSnap = isEdgeSnapEnabled && lastSnapResult && lastSnapResult.snapped;
+    const pos = {
+        x: useSnap ? lastSnapResult.x : currentGroundHit.x,
+        z: useSnap ? lastSnapResult.z : currentGroundHit.z
+    };
+    const placeRotY = useSnap ? lastSnapResult.rotationY : currentRotationY;
+    let latestCatalogItem = selectedCatalogItem;
+    if (latestCatalogItem.source === 'custom' && latestCatalogItem.sourceId) {
+        const freshItem = getCustomItemById(latestCatalogItem.sourceId);
+        if (freshItem) {
+            latestCatalogItem = {
+                ...latestCatalogItem,
+                name: freshItem.name || latestCatalogItem.name,
+                icon: freshItem.icon || latestCatalogItem.icon,
+                code: freshItem.code || latestCatalogItem.code
+            };
+        }
+    }
 
-    const placed = await placeObjectInWorld(itemDesc, pos, currentRotationY, currentScale);
+    const itemDesc = {
+        ...latestCatalogItem,
+        scaleXYZ: { ...currentScaleXYZ }
+    };
+
+    const placed = await placeObjectInWorld(itemDesc, pos, placeRotY, { ...currentScaleXYZ }, itemDesc.isSolid !== false, false);
+    if (placed && placed.missingGlb) {
+        modelAvailabilityMap.set(itemDesc.sourceId || itemDesc.url, 'missing');
+        setSelectedItem(null);
+        renderHUDContent();
+        showDevToast(`❌ Falta el archivo .GLB de "${placed.name || itemDesc.name}". Selecciónalo de tu ordenador para volver a cargarlo.`, 5000);
+        const fileInput = hudContainer?.querySelector('#godGlbFileInput');
+        if (fileInput) fileInput.click();
+        return;
+    }
+
     if (placed) {
         hasUnsavedChanges = true;
         pendingChangesCount++;
-        showDevToast(`✅ Plantado "${placed.record.name}" en (${pos.x.toFixed(1)}, ${pos.z.toFixed(1)})`);
+        showDevToast(`✅ Plantado "${placed.record.name}"${useSnap ? ' (🧲 acoplado)' : ''} en (${pos.x.toFixed(1)}, ${pos.z.toFixed(1)})`);
 
         // Efecto sonoro visual o destello suave en el cursor
         if (placementCursor) {
@@ -2384,6 +3659,7 @@ function handleSelectObjectClick() {
         if (!h.object) return false;
         if (placementCursor && (h.object === placementCursor || placementCursor.getObjectById(h.object.id))) return false;
         if (ghostMesh && (h.object === ghostMesh || ghostMesh.getObjectById(h.object.id))) return false;
+        if (ghostHitboxHelper && (h.object === ghostHitboxHelper || ghostHitboxHelper.getObjectById(h.object.id))) return false;
         if (selectionBoxHelper && (h.object === selectionBoxHelper || selectionBoxHelper.getObjectById(h.object.id))) return false;
         return true;
     });
@@ -2403,11 +3679,13 @@ function resolveAndSelectObjectFromHit(hit) {
     if (!hit || !hit.object) return;
     const hitObj = hit.object;
 
-    // 1. ¿Es una malla instanciada (Árbol o Roca)?
+    // 1. ¿Es una malla instanciada (Árbol, Roca o cualquier elemento procedural)?
     if (hitObj.isInstancedMesh && typeof hit.instanceId === 'number' && hit.instanceId >= 0) {
         const isTree = Boolean(hitObj.userData?.isTree || hitObj.userData?.type === 'tree');
         const isRock = Boolean(hitObj.userData?.isRock || hitObj.userData?.type === 'rock');
-        const type = isTree ? 'tree' : (isRock ? 'rock' : 'instanced');
+        const type = isTree ? 'tree' : (isRock ? 'rock' : (hitObj.userData?.type || 'instanced'));
+        const proceduralCategory = hitObj.userData?.proceduralCategory || (isTree ? 'trees' : (isRock ? 'rocks' : 'procedural'));
+        const sourceType = hitObj.userData?.source || (isTree ? 'tree' : (isRock ? 'rock' : 'procedural'));
 
         const matrix = new THREE.Matrix4();
         hitObj.getMatrixAt(hit.instanceId, matrix);
@@ -2418,25 +3696,29 @@ function resolveAndSelectObjectFromHit(hit) {
         matrix.decompose(pos, quat, scale);
 
         const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
-        const name = isTree 
+        const name = isTree
             ? (hitObj.userData?.name || `Árbol #${hit.instanceId + 1}`)
-            : (hitObj.userData?.name || `Roca #${hit.instanceId + 1}`);
-        const icon = isTree ? '🌲' : '🪨';
+            : (isRock ? (hitObj.userData?.name || `Roca #${hit.instanceId + 1}`) : (hitObj.userData?.name || `Procedural #${hit.instanceId + 1}`));
+        const icon = hitObj.userData?.icon || (isTree ? '🌲' : (isRock ? '🪨' : '🌿'));
 
         selectWorldObject({
             type,
             category: 'instanced',
+            proceduralCategory,
+            source: sourceType,
             instancedMesh: hitObj,
             pairMesh: hitObj.userData?.pairMesh,
             instanceId: hit.instanceId,
-            matrix,
+            matrix: matrix.clone(),
             initialPos: pos.clone(),
             data: {
                 name,
                 icon,
                 position: { x: pos.x, y: pos.y, z: pos.z },
                 rotationY: euler.y,
-                scale: scale.x
+                rotationXYZ: { x: euler.x, y: euler.y, z: euler.z },
+                scale: Number(((scale.x + scale.y + scale.z) / 3).toFixed(4)),
+                scaleXYZ: { x: scale.x, y: scale.y, z: scale.z }
             }
         });
         return;
@@ -2580,7 +3862,7 @@ function getSelectedObjectPosition() {
     if (!selectedWorldObject) return null;
     if (selectedWorldObject.type === 'custom' || selectedWorldObject.type === 'player' || selectedWorldObject.type === 'npc' || selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
         const m = selectedWorldObject.mesh || runtimeState.player;
-        if (m) return { x: m.position.x, y: m.position.y, z: m.position.z };
+        if (m) return { x: m.position.x, y: m.position.y, z: m.position.z, rotationY: m.rotation.y };
     } else if (selectedWorldObject.category === 'instanced') {
         const mat = new THREE.Matrix4();
         selectedWorldObject.instancedMesh.getMatrixAt(selectedWorldObject.instanceId, mat);
@@ -2596,12 +3878,39 @@ function getSelectedObjectPosition() {
 /**
  * Aplica el movimiento continuo en tiempo real (60fps) sin sobrecargar almacenamiento.
  */
-function applyLiveMoveToSelectedObject(targetPos) {
+function applyLiveMoveToSelectedObject(targetPos, allowSnap = true) {
     if (!selectedWorldObject || !targetPos) return;
 
     if (selectedWorldObject.type === 'custom') {
         if (selectedWorldObject.mesh) {
-            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            let finalX = targetPos.x;
+            let finalZ = targetPos.z;
+            if (allowSnap && isEdgeSnapEnabled) {
+                const baseRot = typeof selectedWorldObject.data?.rotationY === 'number'
+                    ? selectedWorldObject.data.rotationY
+                    : currentRotationY;
+                const snap = computeSnapPositionForObject(
+                    selectedWorldObject.mesh,
+                    targetPos.x,
+                    targetPos.z,
+                    baseRot,
+                    { excludeId: selectedWorldObject.id }
+                );
+                lastSnapResult = snap;
+                if (snap && snap.snapped) {
+                    finalX = snap.x;
+                    finalZ = snap.z;
+                    selectedWorldObject.mesh.rotation.y = snap.rotationY;
+                } else {
+                    selectedWorldObject.mesh.rotation.y = baseRot;
+                }
+            } else {
+                lastSnapResult = null;
+                if (typeof targetPos.rotationY === 'number') {
+                    selectedWorldObject.mesh.rotation.y = targetPos.rotationY;
+                }
+            }
+            snapObjectToTerrain(selectedWorldObject.mesh, finalX, finalZ);
         }
     } else if (selectedWorldObject.type === 'player') {
         if (runtimeState.player) {
@@ -2634,119 +3943,247 @@ function applyLiveMoveToSelectedObject(targetPos) {
     }
 }
 
-/**
- * Promociona un árbol o roca instanciado (Opción A) a un objeto 3D individual
- * independiente gestionado por worldObjectsManager.
- * Oculta la instancia procedural original permanentemente en worldLayoutSystem
- * y crea un objeto idéntico con colisión física, manipulación total y persistencia.
- */
-async function detachInstancedObjectToCustom(instObj) {
-    if (!instObj || instObj.category !== 'instanced') return instObj;
+function hideAndBackupProceduralInstance(instMesh, pairMesh, instanceId, origPos, proceduralCategory, restoreMatOverride = null) {
+    if (!instMesh || typeof instanceId !== 'number' || instanceId < 0) return;
 
-    const isTree = instObj.type === 'tree';
-    const isRock = instObj.type === 'rock';
-    const instMesh = instObj.instancedMesh;
-    const pairMesh = instObj.pairMesh;
-    const instanceId = instObj.instanceId;
-
-    if (!instMesh) return instObj;
-
-    // 1. Extraer datos y colores originales
     const instances = instMesh.userData?.instances || [];
     const instData = instances[instanceId] || {};
-    const archIdx = instMesh.userData?.archetypeIndex ?? (instData.archIdx || 0);
-    const geoType = instMesh.userData?.geoType ?? (instData.geoType || 0);
+    const archIdx = instMesh.userData?.archetypeIndex ?? (instData.archIdx ?? 0);
+    const geoType = instMesh.userData?.geoType ?? (instData.geoType ?? 0);
 
-    const origPos = instObj.initialPos || { x: instData.x || 0, z: instData.z || 0 };
-
-    // 2. Ocultar la instancia procedural original en la GPU
-    deleteInstancedObject(instMesh, pairMesh, instanceId);
-
-    // Retirar colisión física procedural de collidables
-    if (instData.colRef) {
-        const colIdx = collidables.indexOf(instData.colRef);
-        if (colIdx >= 0) collidables.splice(colIdx, 1);
+    let backupMat = restoreMatOverride ? restoreMatOverride.clone() : new THREE.Matrix4();
+    if (!restoreMatOverride) {
+        instMesh.getMatrixAt(instanceId, backupMat);
     }
 
-    // 3. Registrar como oculto permanentemente en worldLayoutSystem
-    hideProceduralInstance(isTree ? 'trees' : 'rocks', {
+    const alreadyBackedUp = stagedInstancedBackups.some(
+        b => b.instMesh === instMesh && b.instanceId === instanceId
+    );
+    if (!alreadyBackedUp) {
+        stagedInstancedBackups.push({
+            instMesh,
+            pairMesh,
+            instanceId,
+            matrix: backupMat.clone(),
+            instData,
+            colRef: instData.colRef || null
+        });
+    }
+
+    deleteInstancedObject(instMesh, pairMesh, instanceId);
+    instData.isHidden = true;
+
+    if (instData.colRef) {
+        const colIdx = collidables.indexOf(instData.colRef);
+        if (colIdx >= 0) {
+            collidables.splice(colIdx, 1);
+            rebuildSpatialGrid(collidables);
+        }
+    }
+
+    hideProceduralInstance(proceduralCategory || 'procedural', {
         archIdx,
         geoType,
         instanceIdx: instanceId,
         x: origPos.x,
         z: origPos.z
-    });
+    }, false);
+}
 
-    // 4. Obtener matriz y transformación actual
-    const currentMat = new THREE.Matrix4();
-    instMesh.getMatrixAt(instanceId, currentMat);
+function restoreStagedInstancedBackups() {
+    if (!Array.isArray(stagedInstancedBackups) || stagedInstancedBackups.length === 0) return;
+    let restoredAnyCollision = false;
 
-    const sourceMat = (instObj.matrix && instObj.matrix.elements && instObj.matrix.elements[0] !== 0) ? instObj.matrix : currentMat;
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    const scaleVec = new THREE.Vector3();
-    sourceMat.decompose(pos, quat, scaleVec);
-
-    const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
-    const finalRotY = currentRotationY !== 0 ? currentRotationY : euler.y;
-    const finalScale = currentScale !== 1.0 ? currentScale : (scaleVec.x > 0.05 ? scaleVec.x : (instData.scale || 1.0));
-
-    // 5. Extraer colores
-    let trunkHex = 0x5a3e28;
-    let leafHex = 0x2e6f40;
-    if (instData.trunkColor) {
-        trunkHex = instData.trunkColor.getHex ? instData.trunkColor.getHex() : instData.trunkColor;
-    } else if (instMesh.getColorAt) {
-        const cTrunk = new THREE.Color();
-        instMesh.getColorAt(instanceId, cTrunk);
-        if (cTrunk.r !== 1 || cTrunk.g !== 1 || cTrunk.b !== 1) trunkHex = cTrunk.getHex();
-    }
-    if (instData.leafColor) {
-        leafHex = instData.leafColor.getHex ? instData.leafColor.getHex() : instData.leafColor;
-    } else if (pairMesh && pairMesh.getColorAt) {
-        const cLeaf = new THREE.Color();
-        pairMesh.getColorAt(instanceId, cLeaf);
-        if (cLeaf.r !== 1 || cLeaf.g !== 1 || cLeaf.b !== 1) leafHex = cLeaf.getHex();
+    for (const b of stagedInstancedBackups) {
+        if (!b.instMesh) continue;
+        b.instMesh.setMatrixAt(b.instanceId, b.matrix);
+        b.instMesh.instanceMatrix.needsUpdate = true;
+        if (b.pairMesh) {
+            b.pairMesh.setMatrixAt(b.instanceId, b.matrix);
+            b.pairMesh.instanceMatrix.needsUpdate = true;
+        }
+        if (b.instData) {
+            b.instData.isHidden = false;
+        }
+        if (b.colRef && !collidables.includes(b.colRef)) {
+            addCollidable(b.colRef);
+            restoredAnyCollision = true;
+        }
     }
 
-    const itemDesc = {
-        name: isTree ? `Árbol (Arquetipo ${archIdx + 1})` : `Roca (${geoType === 1 || geoType === 'icosaedro' ? 'Icosaédrica' : 'Dodecaédrica'})`,
-        icon: isTree ? '🌲' : '🪨',
-        source: isTree ? 'tree' : 'rock',
-        archetypeIndex: archIdx,
-        geoType: geoType,
-        trunkColor: trunkHex,
-        leafColor: leafHex,
-        rockColor: 0x666666,
-        isSolid: true
-    };
+    if (restoredAnyCollision) {
+        rebuildSpatialGrid(collidables);
+    }
+    stagedInstancedBackups = [];
+}
 
-    const origGroundY = getHeightAt(origPos.x, origPos.z);
-    const origRelativeOffset = isRock ? 0 : (isTree ? -0.35 : (pos.y - origGroundY));
+/**
+ * Promociona un elemento instanciado (Árbol, Roca o cualquier procedural futuro) a un objeto 3D individual
+ * independiente gestionado por worldObjectsManager.
+ * Primero crea el objeto individual y, solo si tiene éxito, oculta la instancia procedural en memoria staged.
+ */
+async function detachInstancedObjectToCustom(instObj, targetPos = null) {
+    if (!instObj || instObj.category !== 'instanced') return instObj;
+    if (instObj._isDetaching) return instObj._detachPromise || instObj;
 
-    const placedEntry = await placeObjectInWorld(
-        itemDesc,
-        { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-        finalRotY,
-        finalScale,
-        true
-    );
+    const runDetach = async () => {
+        const isTree = instObj.type === 'tree';
+        const isRock = instObj.type === 'rock';
+        const instMesh = instObj.instancedMesh;
+        const pairMesh = instObj.pairMesh;
+        const instanceId = instObj.instanceId;
 
-    if (placedEntry && placedEntry.mesh) {
-        placedEntry.mesh.userData.relativeGroundOffset = origRelativeOffset;
-        if (placedEntry.record) placedEntry.record.relativeGroundOffset = origRelativeOffset;
-        snapObjectToTerrain(placedEntry.mesh, targetPos.x, targetPos.z, origRelativeOffset);
+        if (!instMesh) return null;
+
+        const instances = instMesh.userData?.instances || [];
+        const instData = instances[instanceId] || {};
+        const archIdx = instMesh.userData?.archetypeIndex ?? (instData.archIdx ?? 0);
+        const geoType = instMesh.userData?.geoType ?? (instData.geoType ?? 0);
+        const proceduralCategory = instObj.proceduralCategory || instMesh.userData?.proceduralCategory || (isTree ? 'trees' : (isRock ? 'rocks' : 'procedural'));
+        const sourceType = instObj.source || instMesh.userData?.source || (isTree ? 'tree' : (isRock ? 'rock' : 'procedural'));
+
+        const origPos = instObj.initialPos || { x: instData.x || 0, y: instData.y || 0, z: instData.z || 0 };
+
+        // 1. Leer matriz y colores ANTES de ocultar la instancia original
+        const currentMat = new THREE.Matrix4();
+        instMesh.getMatrixAt(instanceId, currentMat);
+
+        const sourceMat = (instObj.matrix && instObj.matrix.elements && instObj.matrix.elements[0] !== 0)
+            ? instObj.matrix
+            : currentMat;
+
+        const pos = new THREE.Vector3();
+        const quat = new THREE.Quaternion();
+        const scaleVec = new THREE.Vector3();
+        sourceMat.decompose(pos, quat, scaleVec);
+
+        const euler = new THREE.Euler().setFromQuaternion(quat, 'YXZ');
+        const destX = (targetPos && typeof targetPos.x === 'number') ? targetPos.x : pos.x;
+        const destZ = (targetPos && typeof targetPos.z === 'number') ? targetPos.z : pos.z;
+        const destY = (targetPos && typeof targetPos.y === 'number') ? targetPos.y : getHeightAt(destX, destZ);
+
+        const finalRotY = (targetPos && typeof targetPos.rotationY === 'number')
+            ? targetPos.rotationY
+            : (Math.abs(currentRotationY - (instObj.data?.rotationY || 0)) > 0.0001 ? currentRotationY : euler.y);
+
+        const initScaleXYZ = instObj.data?.scaleXYZ;
+        const scaleWasEdited = initScaleXYZ && (
+            Math.abs(currentScaleXYZ.x - initScaleXYZ.x) > 0.001 ||
+            Math.abs(currentScaleXYZ.y - initScaleXYZ.y) > 0.001 ||
+            Math.abs(currentScaleXYZ.z - initScaleXYZ.z) > 0.001
+        );
+        const finalScaleXYZ = scaleWasEdited
+            ? { ...currentScaleXYZ }
+            : {
+                x: scaleVec.x > 0.02 ? scaleVec.x : (instData.scaleX || instData.scale || 1.0),
+                y: scaleVec.y > 0.02 ? scaleVec.y : (instData.scaleY || instData.scale || 1.0),
+                z: scaleVec.z > 0.02 ? scaleVec.z : (instData.scaleZ || instData.scale || 1.0)
+            };
+
+        const finalRotXYZ = (Math.abs(euler.x) > 0.001 || Math.abs(euler.z) > 0.001)
+            ? { x: euler.x, y: finalRotY, z: euler.z }
+            : undefined;
+
+        // 2. Extraer colores reales de la instancia
+        let trunkHex = 0x5a3e28;
+        let leafHex = 0x2e6f40;
+        let rockHex = 0x666666;
+        if (instData.trunkColor) {
+            trunkHex = instData.trunkColor.getHex ? instData.trunkColor.getHex() : instData.trunkColor;
+        } else if (isTree && instMesh.getColorAt) {
+            const cTrunk = new THREE.Color();
+            instMesh.getColorAt(instanceId, cTrunk);
+            if (cTrunk.r !== 1 || cTrunk.g !== 1 || cTrunk.b !== 1) trunkHex = cTrunk.getHex();
+        }
+        if (instData.leafColor) {
+            leafHex = instData.leafColor.getHex ? instData.leafColor.getHex() : instData.leafColor;
+        } else if (isTree && pairMesh && pairMesh.getColorAt) {
+            const cLeaf = new THREE.Color();
+            pairMesh.getColorAt(instanceId, cLeaf);
+            if (cLeaf.r !== 1 || cLeaf.g !== 1 || cLeaf.b !== 1) leafHex = cLeaf.getHex();
+        }
+        if (instData.rockColor) {
+            rockHex = instData.rockColor.getHex ? instData.rockColor.getHex() : instData.rockColor;
+        } else if (isRock && instMesh.getColorAt) {
+            const cRock = new THREE.Color();
+            instMesh.getColorAt(instanceId, cRock);
+            if (cRock.r !== 1 || cRock.g !== 1 || cRock.b !== 1) rockHex = cRock.getHex();
+        }
+
+        let itemDesc;
+        if (typeof instMesh.userData?.buildIndividualDesc === 'function') {
+            itemDesc = instMesh.userData.buildIndividualDesc(instData, instMesh.userData, instMesh, instanceId);
+        } else {
+            itemDesc = {
+                name: isTree
+                    ? `Árbol (Arquetipo ${archIdx + 1})`
+                    : (isRock ? `Roca (${geoType === 1 || geoType === 'icosaedro' ? 'Icosaédrica' : 'Dodecaédrica'})` : (instObj.data?.name || 'Elemento Procedural')),
+                icon: instObj.data?.icon || (isTree ? '🌲' : (isRock ? '🪨' : '🌿')),
+                source: sourceType,
+                archetypeIndex: archIdx,
+                geoType: geoType,
+                trunkColor: trunkHex,
+                leafColor: leafHex,
+                rockColor: rockHex,
+                proceduralParams: instData.proceduralParams ? { ...instData.proceduralParams } : undefined,
+                rotationXYZ: finalRotXYZ,
+                scaleXYZ: finalScaleXYZ,
+                defaultGroundOffset: typeof instMesh.userData?.defaultGroundOffset === 'number'
+                    ? instMesh.userData.defaultGroundOffset
+                    : (isRock ? 0 : (isTree ? -0.35 : undefined)),
+                isSolid: true
+            };
+        }
+
+        // 3. Crear primero el objeto individual en memoria staged (shouldPersist = false)
+        const placedEntry = await placeObjectInWorld(
+            itemDesc,
+            { x: destX, y: destY, z: destZ },
+            finalRotY,
+            finalScaleXYZ,
+            true,
+            false
+        );
+
+        if (!placedEntry || !placedEntry.mesh) {
+            showDevToast(`⚠️ No se pudo independizar "${itemDesc.name}". Se mantiene el original.`);
+            return null;
+        }
+
+        // 4. Solo tras crearse correctamente, fijar su altura natural y ocultar la instancia procedural en memoria staged
+        const origGroundY = getHeightAt(origPos.x, origPos.z);
+        const explicitOffset = typeof instMesh.userData?.defaultGroundOffset === 'number'
+            ? instMesh.userData.defaultGroundOffset
+            : (isRock ? 0 : (isTree ? -0.35 : (pos.y - origGroundY)));
+
+        placedEntry.mesh.userData.relativeGroundOffset = explicitOffset;
+        snapObjectToTerrain(placedEntry.mesh, destX, destZ, explicitOffset);
+        if (placedEntry.record) {
+            placedEntry.record.relativeGroundOffset = explicitOffset;
+            placedEntry.record.position = {
+                x: placedEntry.mesh.position.x,
+                y: placedEntry.mesh.position.y,
+                z: placedEntry.mesh.position.z
+            };
+        }
+
+        hideAndBackupProceduralInstance(instMesh, pairMesh, instanceId, origPos, proceduralCategory, sourceMat);
 
         const newSelected = {
             ...placedEntry,
             type: 'custom'
         };
         selectWorldObject(newSelected);
-        showDevToast(`✨ ${itemDesc.name} independizado (altura natural conservada)`);
+        showDevToast(`✨ ${itemDesc.name} independizado (sin hornear aún)`);
         return newSelected;
-    }
+    };
 
-    return instObj;
+    instObj._isDetaching = true;
+    instObj._detachPromise = runDetach().finally(() => {
+        instObj._isDetaching = false;
+        instObj._detachPromise = null;
+    });
+    return instObj._detachPromise;
 }
 
 /**
@@ -2757,10 +4194,18 @@ function commitSelectedObjectMove(targetPos) {
     if (!selectedWorldObject || !targetPos) return;
 
     if (selectedWorldObject.type === 'custom') {
-        updatePlacedObjectTransform(selectedWorldObject.id, { x: targetPos.x, z: targetPos.z }, false);
+        const patch = { x: targetPos.x, z: targetPos.z };
+        if (typeof targetPos.rotationY === 'number') {
+            patch.rotationY = targetPos.rotationY;
+            currentRotationY = targetPos.rotationY;
+        }
+        updatePlacedObjectTransform(selectedWorldObject.id, patch, false);
         if (selectedWorldObject.data?.position) {
             selectedWorldObject.data.position.x = targetPos.x;
             selectedWorldObject.data.position.z = targetPos.z;
+        }
+        if (typeof targetPos.rotationY === 'number' && selectedWorldObject.data) {
+            selectedWorldObject.data.rotationY = targetPos.rotationY;
         }
     } else if (selectedWorldObject.type === 'player') {
         if (runtimeState.player) {
@@ -2787,14 +4232,21 @@ function commitSelectedObjectMove(targetPos) {
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
-        detachInstancedObjectToCustom(instToDetach).then(newCustom => {
+        detachInstancedObjectToCustom(instToDetach, targetPos).then(newCustom => {
             if (newCustom && newCustom.mesh && targetPos) {
                 snapObjectToTerrain(newCustom.mesh, targetPos.x, targetPos.z);
                 updatePlacedObjectTransform(newCustom.id, { x: targetPos.x, z: targetPos.z }, false);
+                if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
+                    selectionBoxHelper.update();
+                }
             }
+        }).catch(err => {
+            console.error('[GodMode] Error desacoplando instancia procedural al mover:', err);
+            showDevToast(`❌ Error al mover elemento procedural: ${err?.message || err}`);
         });
     }
 
+    lastSnapResult = null;
     hasUnsavedChanges = true;
     pendingChangesCount++;
 
@@ -2810,16 +4262,19 @@ function commitSelectedObjectMove(targetPos) {
  */
 function revertSelectedObjectPosition(origPos) {
     if (!selectedWorldObject || !origPos) return;
-    applyLiveMoveToSelectedObject(origPos);
-    commitSelectedObjectMove(origPos);
+    applyLiveMoveToSelectedObject({ ...origPos, _rawY: true }, false);
+    if (selectedWorldObject.category !== 'instanced') {
+        commitSelectedObjectMove(origPos);
+    }
 }
 
 function selectWorldObject(objEntry) {
     selectedWorldObject = objEntry;
+    lastSnapResult = null;
 
     // Crear caja visual de selección
     if (selectionBoxHelper) {
-        scene.remove(selectionBoxHelper);
+        disposeHelperObject(selectionBoxHelper);
         selectionBoxHelper = null;
     }
 
@@ -2838,7 +4293,11 @@ function selectWorldObject(objEntry) {
                       objEntry.type === 'npc' ? 0x10b981 :
                       objEntry.type === 'furniture' ? 0xa855f7 : 0xf59e0b;
         try {
-            selectionBoxHelper = new THREE.BoxHelper(objEntry.mesh, color);
+            if (objEntry.type === 'custom' || objEntry.type === 'furniture') {
+                selectionBoxHelper = createOrientedBoxHelper(objEntry.mesh, color);
+            } else {
+                selectionBoxHelper = new THREE.BoxHelper(objEntry.mesh, color);
+            }
             scene.add(selectionBoxHelper);
         } catch (_) {}
     } else if (objEntry.data?.position) {
@@ -2853,7 +4312,16 @@ function selectWorldObject(objEntry) {
     }
 
     currentRotationY = objEntry.data?.rotationY || 0;
-    currentScale = objEntry.data?.scale || 1.0;
+    currentScaleXYZ = getObjectScaleXYZFromData(objEntry.data);
+    currentScale = Number(((currentScaleXYZ.x + currentScaleXYZ.y + currentScaleXYZ.z) / 3).toFixed(4));
+    const hasNonUniformAxes = (
+        Math.abs(currentScaleXYZ.x - currentScaleXYZ.y) > 0.005 ||
+        Math.abs(currentScaleXYZ.y - currentScaleXYZ.z) > 0.005 ||
+        Math.abs(currentScaleXYZ.x - currentScaleXYZ.z) > 0.005
+    );
+    if (hasNonUniformAxes) {
+        isScaleUnlocked = true;
+    }
 
     const rotVal = document.getElementById('godRotVal');
     if (rotVal) rotVal.textContent = `${Math.round(THREE.MathUtils.radToDeg(currentRotationY))}°`;
@@ -2872,8 +4340,9 @@ function clearSelectionHelper(rerender = true) {
     selectedWorldObject = null;
     isDraggingSelectedObject = false;
     isGrabModeActive = false;
+    lastSnapResult = null;
     if (selectionBoxHelper) {
-        scene.remove(selectionBoxHelper);
+        disposeHelperObject(selectionBoxHelper);
         selectionBoxHelper = null;
     }
     if (rerender && hadSelection && hudContainer) {
@@ -2920,9 +4389,77 @@ function applyRotationToSelected(newRotY) {
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
         detachInstancedObjectToCustom(instToDetach).then(newCustom => {
-            if (newCustom) {
+            if (newCustom && newCustom.id) {
                 updatePlacedObjectTransform(newCustom.id, { rotationY: currentRotationY }, false);
             }
+        }).catch(err => {
+            console.error('[GodMode] Error rotando elemento procedural:', err);
+        });
+    }
+
+    hasUnsavedChanges = true;
+    pendingChangesCount++;
+
+    if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
+        selectionBoxHelper.update();
+    }
+    updateGhostTransform();
+}
+
+function syncScaleInputsDOM() {
+    const sVal = document.getElementById('godScaleVal');
+    if (sVal) sVal.textContent = `${currentScale.toFixed(2)}x`;
+    const scaleInput = document.getElementById('godScaleInput');
+    if (scaleInput && document.activeElement !== scaleInput) {
+        scaleInput.value = parseFloat(currentScale.toFixed(2)).toString();
+    }
+    ['x', 'y', 'z'].forEach(axis => {
+        const axInput = document.getElementById(`godScale${axis.toUpperCase()}Input`);
+        if (axInput && document.activeElement !== axInput) {
+            axInput.value = parseFloat(currentScaleXYZ[axis].toFixed(2)).toString();
+        }
+    });
+}
+
+function applyScaleXYZInternal() {
+    if (!selectedWorldObject) {
+        updateGhostTransform();
+        return;
+    }
+
+    if (selectedWorldObject.type === 'custom') {
+        updatePlacedObjectTransform(selectedWorldObject.id, { scaleXYZ: currentScaleXYZ }, false);
+    } else if (selectedWorldObject.type === 'player') {
+        if (runtimeState.player) {
+            runtimeState.player.scale.set(
+                currentScaleXYZ.x * 1.4,
+                currentScaleXYZ.y * 1.4,
+                currentScaleXYZ.z * 1.4
+            );
+        }
+    } else if (selectedWorldObject.type === 'npc') {
+        if (selectedWorldObject.mesh) {
+            selectedWorldObject.mesh.scale.set(currentScaleXYZ.x, currentScaleXYZ.y, currentScaleXYZ.z);
+            snapObjectToTerrain(selectedWorldObject.mesh, selectedWorldObject.mesh.position.x, selectedWorldObject.mesh.position.z);
+            const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
+            if (npcName) {
+                updateEntityTransform('npcs', npcName, { scale: currentScale }, false);
+            }
+        }
+    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
+        if (selectedWorldObject.mesh) {
+            selectedWorldObject.mesh.scale.set(currentScaleXYZ.x, currentScaleXYZ.y, currentScaleXYZ.z);
+            snapObjectToTerrain(selectedWorldObject.mesh, selectedWorldObject.mesh.position.x, selectedWorldObject.mesh.position.z);
+            updateEntityTransform('furniture', 'mueble', { scale: currentScale }, false);
+        }
+    } else if (selectedWorldObject.category === 'instanced') {
+        const instToDetach = selectedWorldObject;
+        detachInstancedObjectToCustom(instToDetach).then(newCustom => {
+            if (newCustom && newCustom.id) {
+                updatePlacedObjectTransform(newCustom.id, { scaleXYZ: currentScaleXYZ }, false);
+            }
+        }).catch(err => {
+            console.error('[GodMode] Error escalando elemento procedural:', err);
         });
     }
 
@@ -2936,54 +4473,39 @@ function applyRotationToSelected(newRotY) {
 }
 
 function applyScaleToSelected(newScale) {
-    currentScale = Math.max(0.01, newScale);
-    const sVal = document.getElementById('godScaleVal');
-    if (sVal) sVal.textContent = `${currentScale.toFixed(2)}x`;
-    const scaleInput = document.getElementById('godScaleInput');
-    if (scaleInput && document.activeElement !== scaleInput) {
-        scaleInput.value = parseFloat(currentScale.toFixed(2)).toString();
+    const safeScale = Math.max(0.05, Number(newScale) || 0.05);
+    const prevAvg = (currentScaleXYZ.x + currentScaleXYZ.y + currentScaleXYZ.z) / 3;
+    const isUniform = (
+        Math.abs(currentScaleXYZ.x - currentScaleXYZ.y) < 0.005 &&
+        Math.abs(currentScaleXYZ.y - currentScaleXYZ.z) < 0.005
+    );
+
+    if (isUniform || prevAvg <= 0.001) {
+        currentScaleXYZ = { x: safeScale, y: safeScale, z: safeScale };
+    } else {
+        const ratio = safeScale / prevAvg;
+        currentScaleXYZ = {
+            x: Math.max(0.05, Number((currentScaleXYZ.x * ratio).toFixed(3))),
+            y: Math.max(0.05, Number((currentScaleXYZ.y * ratio).toFixed(3))),
+            z: Math.max(0.05, Number((currentScaleXYZ.z * ratio).toFixed(3)))
+        };
     }
 
-    if (!selectedWorldObject) {
-        updateGhostTransform();
-        return;
-    }
+    currentScale = Number(((currentScaleXYZ.x + currentScaleXYZ.y + currentScaleXYZ.z) / 3).toFixed(4));
+    syncScaleInputsDOM();
+    applyScaleXYZInternal();
+}
 
-    if (selectedWorldObject.type === 'custom') {
-        updatePlacedObjectTransform(selectedWorldObject.id, { scale: currentScale }, false);
-    } else if (selectedWorldObject.type === 'player') {
-        if (runtimeState.player) {
-            runtimeState.player.scale.set(currentScale * 1.4, currentScale * 1.4, currentScale * 1.4);
-        }
-    } else if (selectedWorldObject.type === 'npc') {
-        if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.scale.setScalar(currentScale);
-            const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
-            if (npcName) {
-                updateEntityTransform('npcs', npcName, { scale: currentScale }, false);
-            }
-        }
-    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
-        if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.scale.setScalar(currentScale);
-            updateEntityTransform('furniture', 'mueble', { scale: currentScale }, false);
-        }
-    } else if (selectedWorldObject.category === 'instanced') {
-        const instToDetach = selectedWorldObject;
-        detachInstancedObjectToCustom(instToDetach).then(newCustom => {
-            if (newCustom) {
-                updatePlacedObjectTransform(newCustom.id, { scale: currentScale }, false);
-            }
-        });
-    }
-
-    hasUnsavedChanges = true;
-    pendingChangesCount++;
-
-    if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
-        selectionBoxHelper.update();
-    }
-    updateGhostTransform();
+function applyAxisScaleToSelected(axis, newVal) {
+    if (!['x', 'y', 'z'].includes(axis)) return;
+    const safeVal = Math.max(0.05, Number(newVal) || 0.05);
+    currentScaleXYZ = {
+        ...currentScaleXYZ,
+        [axis]: Number(safeVal.toFixed(3))
+    };
+    currentScale = Number(((currentScaleXYZ.x + currentScaleXYZ.y + currentScaleXYZ.z) / 3).toFixed(4));
+    syncScaleInputsDOM();
+    applyScaleXYZInternal();
 }
 
 /**
@@ -3037,16 +4559,19 @@ async function executeMoveSelectedToCursor() {
     const targetPos = { x: currentGroundHit.x, y: currentGroundHit.y, z: currentGroundHit.z };
     if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
-        const newCustom = await detachInstancedObjectToCustom(instToDetach);
+        const newCustom = await detachInstancedObjectToCustom(instToDetach, targetPos);
         if (newCustom && newCustom.mesh) {
             snapObjectToTerrain(newCustom.mesh, targetPos.x, targetPos.z);
-            updatePlacedObjectTransform(newCustom.id, { x: targetPos.x, z: targetPos.z });
+            updatePlacedObjectTransform(newCustom.id, { x: targetPos.x, z: targetPos.z }, false);
+            hasUnsavedChanges = true;
+            pendingChangesCount++;
+            renderHUDContent();
         }
     } else {
         applyLiveMoveToSelectedObject(targetPos);
         commitSelectedObjectMove(targetPos);
     }
-    showDevToast(`📍 "${selectedWorldObject.data?.name || 'Objeto'}" trasladado a (${targetPos.x.toFixed(1)}, ${targetPos.z.toFixed(1)})`);
+    showDevToast(`📍 "${selectedWorldObject?.data?.name || 'Objeto'}" trasladado a (${targetPos.x.toFixed(1)}, ${targetPos.z.toFixed(1)})`);
 }
 
 /**
@@ -3085,8 +4610,10 @@ async function executeDuplicateSelectedObject() {
         return;
     }
 
-    const cloned = await duplicateWorldObject(targetId);
+    const cloned = await duplicateWorldObject(targetId, null, false);
     if (cloned && cloned.mesh) {
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
         selectWorldObject(cloned);
         showDevToast(`📑 ¡"${cloned.data?.name || 'Objeto'}" duplicado! Se ha seleccionado la copia para moverla`);
         renderHUDContent();
@@ -3096,13 +4623,105 @@ async function executeDuplicateSelectedObject() {
 }
 
 /**
- * Abre el panel modal para configurar el comportamiento lógico,
- * nombre, interacción y eventos del objeto seleccionado en Modo Dios.
+ * Clona el objeto seleccionado colocándolo exactamente pegado borde-con-borde
+ * según su rotación actual y su tamaño real en los 3 ejes (vallas, muros, módulos).
+ */
+async function executeAdjacentDuplicateSelectedObject(direction = 'auto') {
+    if (!selectedWorldObject) {
+        showDevToast('⚠️ Selecciona primero un objeto para clonarlo pegado al lado (Ctrl+Shift+D)');
+        return;
+    }
+
+    if (selectedWorldObject.type === 'player') {
+        showDevToast('🛡️ El Robot Player no puede duplicarse');
+        return;
+    }
+
+    if (selectedWorldObject.type === 'npc') {
+        showDevToast('⚠️ Los NPCs principales no pueden duplicarse');
+        return;
+    }
+
+    let targetId = selectedWorldObject.id;
+    if (selectedWorldObject.category === 'instanced') {
+        const detached = await detachInstancedObjectToCustom(selectedWorldObject);
+        if (detached && detached.id) {
+            targetId = detached.id;
+        } else {
+            showDevToast('⚠️ No se pudo independizar el elemento para clonarlo al lado');
+            return;
+        }
+    }
+
+    if (!targetId) {
+        showDevToast('⚠️ Selecciona un objeto del mundo válido');
+        return;
+    }
+
+    const cloned = await duplicateWorldObjectAdjacent(targetId, direction, false);
+    if (cloned && cloned.mesh) {
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
+        selectWorldObject(cloned);
+        const dirLabels = { right: 'derecha', left: 'izquierda', front: 'delante', back: 'detrás' };
+        const dirWord = dirLabels[cloned.directionUsed] || 'el lado';
+        showDevToast(`🧲 "${cloned.data?.name || 'Objeto'}" acoplado hacia ${dirWord}. Pulsa Ctrl+Shift+D para seguir encadenando.`);
+        renderHUDContent();
+    } else {
+        showDevToast('❌ Error al acoplar copia contigua');
+    }
+}
+
+/**
+ * Mueve el objeto seleccionado unos centímetros en la dirección horizontal de la cámara
+ * sin activar el imán (para ajustes finos manuales sobre terreno irregular).
+ */
+function nudgeSelectedObject(direction, stepMeters = 0.05) {
+    if (!selectedWorldObject) return;
+    const pos = getSelectedObjectPosition();
+    if (!pos) return;
+
+    const sinY = Math.sin(flyCam.yaw);
+    const cosY = Math.cos(flyCam.yaw);
+    let dx = 0;
+    let dz = 0;
+
+    if (direction === 'up') {
+        dx = -sinY * stepMeters;
+        dz = -cosY * stepMeters;
+    } else if (direction === 'down') {
+        dx = sinY * stepMeters;
+        dz = cosY * stepMeters;
+    } else if (direction === 'right') {
+        dx = cosY * stepMeters;
+        dz = -sinY * stepMeters;
+    } else if (direction === 'left') {
+        dx = -cosY * stepMeters;
+        dz = sinY * stepMeters;
+    }
+
+    const newX = pos.x + dx;
+    const newZ = pos.z + dz;
+    const newY = getHeightAt(newX, newZ);
+    const targetPos = { x: newX, y: newY, z: newZ };
+
+    applyLiveMoveToSelectedObject(targetPos, false);
+    commitSelectedObjectMove(targetPos);
+    showDevToast(`🎯 Ajuste fino (${Math.round(stepMeters * 100)} cm)`);
+}
+
+/**
+ * Abre la ventana flotante movible (sin oscurecer ni bloquear la vista 3D)
+ * para configurar el comportamiento lógico, nombre, interacción y eventos del objeto seleccionado.
  */
 function openObjectLogicModal(targetEntry) {
     if (!targetEntry || !targetEntry.id) return;
-    const existing = document.getElementById('godObjectLogicModalOverlay');
-    if (existing) existing.remove();
+    if (typeof activeLogicCloseFn === 'function') {
+        activeLogicCloseFn();
+    } else {
+        const existing = document.getElementById('godObjectLogicFloatingPanel');
+        if (existing) existing.remove();
+    }
 
     const data = targetEntry.data || {};
     const currentName = data.name || 'Elemento 3D';
@@ -3110,29 +4729,39 @@ function openObjectLogicModal(targetEntry) {
     const currentLogicType = data.logicType || 'default';
     const logicConfig = data.logicConfig || {};
 
-    const overlay = document.createElement('div');
-    overlay.id = 'godObjectLogicModalOverlay';
-    overlay.style.cssText = `
+    const panel = document.createElement('div');
+    panel.id = 'godObjectLogicFloatingPanel';
+    panel.style.cssText = `
         position: fixed;
-        inset: 0;
-        z-index: 9999999;
-        background: rgba(5, 10, 8, 0.85);
-        backdrop-filter: blur(8px);
+        top: 50%;
+        left: 50%;
+        width: 480px;
+        max-width: 92vw;
+        max-height: 84vh;
+        background: linear-gradient(145deg, #131f18 0%, #0a110d 100%);
+        backdrop-filter: blur(10px);
+        border: 1.5px solid rgba(212, 175, 55, 0.65);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 24px rgba(212, 175, 55, 0.22);
+        border-radius: 14px;
+        color: #fff8e7;
+        padding: 16px 20px;
         display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
+        flex-direction: column;
+        gap: 12px;
+        box-sizing: border-box;
+        z-index: 999995;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     `;
+    logicWindowPanel = panel;
 
     lockInput('objectLogicModal');
 
-    // Aislar eventos para que escribir en los campos de la ventana no afecte al juego
+    // Aislar eventos internos de la ventana sin bloquear el visor 3D alrededor
     ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(evt => {
-        overlay.addEventListener(evt, (e) => e.stopPropagation());
+        panel.addEventListener(evt, (e) => e.stopPropagation());
     });
     ['keydown', 'keyup', 'keypress'].forEach(evt => {
-        overlay.addEventListener(evt, (e) => {
+        panel.addEventListener(evt, (e) => {
             if (e.key === 'Escape') {
                 close();
                 return;
@@ -3141,96 +4770,98 @@ function openObjectLogicModal(targetEntry) {
         });
     });
 
-    overlay.innerHTML = `
-        <div style="
-            background: linear-gradient(145deg, #131f18 0%, #0a110d 100%);
-            border: 1.5px solid rgba(212, 175, 55, 0.55);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 24px rgba(212, 175, 55, 0.2);
-            border-radius: 14px;
-            width: 100%;
-            max-width: 490px;
-            color: #fff8e7;
-            padding: 20px 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            box-sizing: border-box;
-        ">
-            <!-- CABECERA -->
-            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,175,55,0.25);padding-bottom:10px;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span style="font-size:1.3rem;">⚙️</span>
-                    <div>
-                        <div style="font-size:1.05rem;font-weight:800;color:#ffd54f;">Configuración Lógica</div>
-                        <div style="font-size:0.72rem;color:#94a3b8;">ID: ${escapeHtml(targetEntry.id)}</div>
-                    </div>
+    panel.innerHTML = `
+        <!-- CABECERA ARRASTRABLE -->
+        <div id="godLogicDragHandle" style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(212,175,55,0.28);padding-bottom:8px;gap:8px;" title="Arrastra para mover libremente · Doble clic para centrar">
+            <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                <span class="godWinGrip" aria-hidden="true">⋮⋮</span>
+                <span style="font-size:1.2rem;">⚙️</span>
+                <div style="min-width:0;">
+                    <div style="font-size:0.98rem;font-weight:800;color:#ffd54f;">Configuración Lógica</div>
+                    <div style="font-size:0.7rem;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">ID: ${escapeHtml(targetEntry.id)}</div>
                 </div>
-                <button id="godLogicCloseBtn" style="background:transparent;border:none;color:#94a3b8;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                <button id="godLogicResetPosBtn" class="godWinIconBtn" title="Restablecer posición centrada">⟲</button>
+                <button id="godLogicCloseBtn" class="godWinIconBtn" style="color:#fecaca;border-color:rgba(248,113,113,0.45);" title="Cerrar ventana">✕</button>
+            </div>
+        </div>
+
+        <!-- FORMULARIO DESPLAZABLE -->
+        <div class="styledScrollbar" style="display:flex;flex-direction:column;gap:12px;font-size:0.82rem;overflow-y:auto;padding-right:4px;">
+            <!-- NOMBRE DEL OBJETO -->
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="color:#ffd54f;font-weight:700;">🏷️ Nombre / Etiqueta del Objeto:</label>
+                <input type="text" id="godLogicNameInput" value="${escapeHtml(currentName)}" style="
+                    background: rgba(0, 0, 0, 0.55);
+                    border: 1px solid rgba(212, 175, 55, 0.4);
+                    border-radius: 6px;
+                    color: #fff;
+                    padding: 7px 10px;
+                    font-size: 0.85rem;
+                    outline: none;
+                " placeholder="Ej: Laboratorio Este, Almacén Central..." />
             </div>
 
-            <!-- FORMULARIO -->
-            <div style="display:flex;flex-direction:column;gap:12px;font-size:0.82rem;">
-                <!-- NOMBRE DEL OBJETO -->
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="color:#ffd54f;font-weight:700;">🏷️ Nombre / Etiqueta del Objeto:</label>
-                    <input type="text" id="godLogicNameInput" value="${escapeHtml(currentName)}" style="
-                        background: rgba(0, 0, 0, 0.55);
-                        border: 1px solid rgba(212, 175, 55, 0.4);
-                        border-radius: 6px;
-                        color: #fff;
-                        padding: 7px 10px;
-                        font-size: 0.85rem;
-                        outline: none;
-                    " placeholder="Ej: Laboratorio Este, Almacén Central..." />
-                </div>
-
-                <!-- TIPO DE COMPORTAMIENTO LÓGICO -->
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                    <label style="color:#ffd54f;font-weight:700;">🧠 Comportamiento / Interacción:</label>
-                    <select id="godLogicTypeSelect" style="
-                        background: #0f1712;
-                        border: 1px solid rgba(212, 175, 55, 0.4);
-                        border-radius: 6px;
-                        color: #fff;
-                        padding: 7px 10px;
-                        font-size: 0.85rem;
-                        outline: none;
-                    ">
-                        <option value="default" ${currentLogicType === 'default' ? 'selected' : ''}>🌿 Decorativo / Sin Interacción Especial</option>
-                        <option value="dialogue" ${currentLogicType === 'dialogue' ? 'selected' : ''}>💬 Diálogo / Mensaje al acercarse [E]</option>
-                        <option value="locked_door" ${currentLogicType === 'locked_door' ? 'selected' : ''}>🔒 Puerta / Acceso Bloqueado (Requiere Llave)</option>
-                        <option value="mission_trigger" ${currentLogicType === 'mission_trigger' ? 'selected' : ''}>🎯 Disparador de Misión / Checkpoint</option>
-                        <option value="custom_event" ${currentLogicType === 'custom_event' ? 'selected' : ''}>⚡ Evento Personalizado de Juego</option>
-                    </select>
-                </div>
-
-                <!-- CAMPOS DINÁMICOS SEGÚN EL TIPO -->
-                <div id="godLogicDynamicFields" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;">
-                </div>
-
-                <!-- COLISIÓN FÍSICA -->
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px;">
-                    <input type="checkbox" id="godLogicSolidCheck" ${currentSolid ? 'checked' : ''} style="cursor:pointer;accent-color:#ffd54f;width:16px;height:16px;" />
-                    <span><strong>🧱 Física Sólida:</strong> El jugador y la cámara colisionan con este objeto</span>
-                </label>
+            <!-- TIPO DE COMPORTAMIENTO LÓGICO -->
+            <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="color:#ffd54f;font-weight:700;">🧠 Comportamiento / Interacción:</label>
+                <select id="godLogicTypeSelect" style="
+                    background: #0f1712;
+                    border: 1px solid rgba(212, 175, 55, 0.4);
+                    border-radius: 6px;
+                    color: #fff;
+                    padding: 7px 10px;
+                    font-size: 0.85rem;
+                    outline: none;
+                ">
+                    <option value="default" ${currentLogicType === 'default' ? 'selected' : ''}>🌿 Decorativo / Sin Interacción Especial</option>
+                    <option value="dialogue" ${currentLogicType === 'dialogue' ? 'selected' : ''}>💬 Diálogo / Mensaje al acercarse [E]</option>
+                    <option value="locked_door" ${currentLogicType === 'locked_door' ? 'selected' : ''}>🔒 Puerta / Acceso Bloqueado (Requiere Llave)</option>
+                    <option value="mission_trigger" ${currentLogicType === 'mission_trigger' ? 'selected' : ''}>🎯 Disparador de Misión / Checkpoint</option>
+                    <option value="custom_event" ${currentLogicType === 'custom_event' ? 'selected' : ''}>⚡ Evento Personalizado de Juego</option>
+                </select>
             </div>
 
-            <!-- BOTONES DE ACCIÓN -->
-            <div style="display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(212,175,55,0.2);padding-top:12px;margin-top:4px;">
-                <button id="godLogicCancelBtn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#cbd5e1;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:0.8rem;font-weight:700;">
-                    Cancelar
-                </button>
-                <button id="godLogicSaveBtn" style="background:#059669;border:1px solid #10b981;color:#fff;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:0.82rem;font-weight:800;box-shadow:0 4px 12px rgba(5,150,105,0.4);">
-                    💾 Guardar Lógica
-                </button>
+            <!-- CAMPOS DINÁMICOS SEGÚN EL TIPO -->
+            <div id="godLogicDynamicFields" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;">
             </div>
+
+            <!-- COLISIÓN FÍSICA -->
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:2px;">
+                <input type="checkbox" id="godLogicSolidCheck" ${currentSolid ? 'checked' : ''} style="cursor:pointer;accent-color:#ffd54f;width:16px;height:16px;" />
+                <span><strong>🧱 Física Sólida:</strong> El jugador y la cámara colisionan con este objeto</span>
+            </label>
+        </div>
+
+        <!-- BOTONES DE ACCIÓN -->
+        <div style="display:flex;justify-content:flex-end;gap:10px;border-top:1px solid rgba(212,175,55,0.2);padding-top:10px;">
+            <button id="godLogicCancelBtn" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);color:#cbd5e1;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:0.8rem;font-weight:700;">
+                Cancelar
+            </button>
+            <button id="godLogicSaveBtn" style="background:#059669;border:1px solid #10b981;color:#fff;border-radius:6px;padding:7px 18px;cursor:pointer;font-size:0.82rem;font-weight:800;box-shadow:0 4px 12px rgba(5,150,105,0.4);">
+                💾 Guardar Lógica
+            </button>
         </div>
     `;
 
-    document.body.appendChild(overlay);
+    document.body.appendChild(panel);
+    applyWindowPosition(panel, 'logic', getDefaultLogicWindowPos);
+    bringWindowToFront(panel);
 
-    const typeSelect = overlay.querySelector('#godLogicTypeSelect');
-    const dynamicFields = overlay.querySelector('#godLogicDynamicFields');
+    const dragHandle = panel.querySelector('#godLogicDragHandle');
+    setupDraggableWindow(panel, dragHandle, 'logic', getDefaultLogicWindowPos, 'Configuración Lógica');
+
+    const resetBtn = panel.querySelector('#godLogicResetPosBtn');
+    if (resetBtn) {
+        resetBtn.onclick = (e) => {
+            e.stopPropagation();
+            resetWindowPosition(panel, 'logic', getDefaultLogicWindowPos, 'Configuración Lógica');
+        };
+    }
+
+    const typeSelect = panel.querySelector('#godLogicTypeSelect');
+    const dynamicFields = panel.querySelector('#godLogicDynamicFields');
 
     function renderDynamicFields(type) {
         if (type === 'default') {
@@ -3291,34 +4922,41 @@ function openObjectLogicModal(targetEntry) {
     }
 
     renderDynamicFields(currentLogicType);
-    typeSelect.onchange = () => renderDynamicFields(typeSelect.value);
+    typeSelect.onchange = () => {
+        renderDynamicFields(typeSelect.value);
+        clampWindowToViewport(panel, 'logic', false);
+    };
 
     const close = () => {
         unlockInput('objectLogicModal');
-        overlay.remove();
+        if (panel.parentNode) panel.parentNode.removeChild(panel);
+        if (logicWindowPanel === panel) logicWindowPanel = null;
+        activeLogicCloseFn = null;
     };
-    overlay.querySelector('#godLogicCloseBtn').onclick = close;
-    overlay.querySelector('#godLogicCancelBtn').onclick = close;
+    activeLogicCloseFn = close;
 
-    overlay.querySelector('#godLogicSaveBtn').onclick = () => {
-        const newName = overlay.querySelector('#godLogicNameInput').value.trim() || currentName;
+    panel.querySelector('#godLogicCloseBtn').onclick = close;
+    panel.querySelector('#godLogicCancelBtn').onclick = close;
+
+    panel.querySelector('#godLogicSaveBtn').onclick = () => {
+        const newName = panel.querySelector('#godLogicNameInput').value.trim() || currentName;
         const newType = typeSelect.value;
-        const newSolid = overlay.querySelector('#godLogicSolidCheck').checked;
+        const newSolid = panel.querySelector('#godLogicSolidCheck').checked;
         const newConfig = {};
 
         if (newType === 'dialogue') {
-            newConfig.dialogueText = overlay.querySelector('#godLogicText')?.value || '';
-            newConfig.promptText = overlay.querySelector('#godLogicPrompt')?.value || 'Examinar';
+            newConfig.dialogueText = panel.querySelector('#godLogicText')?.value || '';
+            newConfig.promptText = panel.querySelector('#godLogicPrompt')?.value || 'Examinar';
         } else if (newType === 'locked_door') {
-            newConfig.requiredItem = overlay.querySelector('#godLogicKeyItem')?.value || 'key';
-            newConfig.lockedMessage = overlay.querySelector('#godLogicLockedMsg')?.value || '';
-            newConfig.unlockedMessage = overlay.querySelector('#godLogicUnlockMsg')?.value || '';
+            newConfig.requiredItem = panel.querySelector('#godLogicKeyItem')?.value || 'key';
+            newConfig.lockedMessage = panel.querySelector('#godLogicLockedMsg')?.value || '';
+            newConfig.unlockedMessage = panel.querySelector('#godLogicUnlockMsg')?.value || '';
         } else if (newType === 'mission_trigger') {
-            newConfig.missionId = overlay.querySelector('#godLogicMissionId')?.value || '';
-            newConfig.missionMessage = overlay.querySelector('#godLogicMissionMsg')?.value || '';
+            newConfig.missionId = panel.querySelector('#godLogicMissionId')?.value || '';
+            newConfig.missionMessage = panel.querySelector('#godLogicMissionMsg')?.value || '';
         } else if (newType === 'custom_event') {
-            newConfig.eventName = overlay.querySelector('#godLogicEventName')?.value || '';
-            newConfig.eventParam = overlay.querySelector('#godLogicEventParam')?.value || '';
+            newConfig.eventName = panel.querySelector('#godLogicEventName')?.value || '';
+            newConfig.eventParam = panel.querySelector('#godLogicEventParam')?.value || '';
         }
 
         updateWorldObjectLogic(targetEntry.id, {
@@ -3350,58 +4988,32 @@ function executeDeleteSelectedObject() {
     }
 
     if (selectedWorldObject.type === 'custom') {
-        removePlacedObjectFromWorld(selectedWorldObject.id);
+        removePlacedObjectFromWorld(selectedWorldObject.id, false);
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
         clearSelectionHelper();
-        showDevToast('🗑️ Objeto eliminado del escenario');
+        showDevToast('🗑️ Objeto eliminado (sin hornear aún)');
         renderHUDContent();
-    } else if (selectedWorldObject.type === 'tree') {
+    } else if (selectedWorldObject.category === 'instanced') {
         const instMesh = selectedWorldObject.instancedMesh;
         const pairMesh = selectedWorldObject.pairMesh;
         const instanceId = selectedWorldObject.instanceId;
         const instances = instMesh?.userData?.instances || [];
         const instData = instances[instanceId] || {};
         const origPos = selectedWorldObject.initialPos || { x: instData.x || 0, z: instData.z || 0 };
+        const proceduralCategory = selectedWorldObject.proceduralCategory || instMesh?.userData?.proceduralCategory || (selectedWorldObject.type === 'tree' ? 'trees' : (selectedWorldObject.type === 'rock' ? 'rocks' : 'procedural'));
 
-        deleteInstancedObject(instMesh, pairMesh, instanceId);
+        hideAndBackupProceduralInstance(instMesh, pairMesh, instanceId, origPos, proceduralCategory);
 
-        if (instData.colRef) {
-            const colIdx = collidables.indexOf(instData.colRef);
-            if (colIdx >= 0) collidables.splice(colIdx, 1);
-        }
-
-        hideProceduralInstance('trees', {
-            archIdx: instMesh?.userData?.archetypeIndex ?? 0,
-            instanceIdx: instanceId,
-            x: origPos.x,
-            z: origPos.z
-        });
-
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
         clearSelectionHelper();
-        showDevToast('🪓 Árbol talado y eliminado de forma permanente');
-        renderHUDContent();
-    } else if (selectedWorldObject.type === 'rock') {
-        const instMesh = selectedWorldObject.instancedMesh;
-        const instanceId = selectedWorldObject.instanceId;
-        const instances = instMesh?.userData?.instances || [];
-        const instData = instances[instanceId] || {};
-        const origPos = selectedWorldObject.initialPos || { x: instData.x || 0, z: instData.z || 0 };
-
-        deleteInstancedObject(instMesh, null, instanceId);
-
-        if (instData.colRef) {
-            const colIdx = collidables.indexOf(instData.colRef);
-            if (colIdx >= 0) collidables.splice(colIdx, 1);
-        }
-
-        hideProceduralInstance('rocks', {
-            geoType: instMesh?.userData?.geoType ?? 0,
-            instanceIdx: instanceId,
-            x: origPos.x,
-            z: origPos.z
-        });
-
-        clearSelectionHelper();
-        showDevToast('🔨 Roca destruida y retirada de forma permanente');
+        const delMsg = selectedWorldObject.type === 'tree'
+            ? '🪓 Árbol talado (se fijará al pulsar Guardar y Hornear)'
+            : (selectedWorldObject.type === 'rock'
+                ? '🔨 Roca retirada (se fijará al pulsar Guardar y Hornear)'
+                : '🗑️ Elemento procedural retirado (se fijará al pulsar Guardar y Hornear)');
+        showDevToast(delMsg);
         renderHUDContent();
     } else if (selectedWorldObject.type === 'npc') {
         showDevModalDialog({
@@ -3483,11 +5095,18 @@ function moveInstancedObject(instancedMesh, pairMesh, instanceId, newPos) {
     const sc = new THREE.Vector3();
     mat.decompose(pos, quat, sc);
 
-    mat.compose(new THREE.Vector3(newPos.x, newPos.y, newPos.z), quat, sc);
+    const offset = typeof instancedMesh.userData?.defaultGroundOffset === 'number'
+        ? instancedMesh.userData.defaultGroundOffset
+        : (instancedMesh.userData?.isTree ? -0.35 : 0);
+    const destY = newPos._rawY ? newPos.y : (getHeightAt(newPos.x, newPos.z) + offset);
+
+    mat.compose(new THREE.Vector3(newPos.x, destY, newPos.z), quat, sc);
+    instancedMesh.frustumCulled = false;
     instancedMesh.setMatrixAt(instanceId, mat);
     instancedMesh.instanceMatrix.needsUpdate = true;
 
     if (pairMesh) {
+        pairMesh.frustumCulled = false;
         pairMesh.setMatrixAt(instanceId, mat);
         pairMesh.instanceMatrix.needsUpdate = true;
     }

@@ -6,433 +6,209 @@
    ====================================================== */
 
 import * as THREE from 'three';
+import { DEV_CONFIG } from '../config/devConfig.js';
 
 const STORAGE_KEY = 'monteserin_custom_3d_items_v1';
+const STORAGE_UPDATED_KEY = 'monteserin_custom_3d_items_updated_v1';
+let staticOfficialCustomItems = null;
 
 /**
  * Plantillas predeterminadas de alta calidad en Three.js
- * listas para usarse o editarse.
+ * listas para usarse o editarse (sincronizadas al hornear en Modo Dios).
  */
+// BAKE_DEFAULT_3D_PRESETS_START
+export const DEFAULT_3D_PRESETS_UPDATED_AT = 1795085050000;
+
 export const DEFAULT_3D_PRESETS = [
     {
-        id: 'item_1793605622735',
-        name: 'Mesa con Portátil',
-        icon: '💻',
-        socket: 'rightHand',
-        category: 'Personalizados',
-        scale: 1.0,
-        updatedAt: 1793609999000,
-        prompt: 'Mesa de oficina de madera noble con portátil abierto y patas de plata cromada brillante',
-        code: `const desk = new THREE.Group();
-
-// Materiales
-const woodMaterial = new THREE.MeshStandardMaterial({
-  color: 0x5a341a,
-  roughness: 0.6,
-  metalness: 0.05
-});
-
-// Patas de Cromo / Plata Brillante Pulida
-const silverMaterial = new THREE.MeshStandardMaterial({
-  color: 0xf8fafc,
-  metalness: 0.78,
-  roughness: 0.06,
-  emissive: 0x334455,
-  emissiveIntensity: 0.20
-});
-
-const laptopBodyMaterial = new THREE.MeshStandardMaterial({
-  color: 0x2b2d31,
-  metalness: 0.7,
-  roughness: 0.3
-});
-
-const keyboardMaterial = new THREE.MeshStandardMaterial({
-  color: 0x161719,
-  metalness: 0.2,
-  roughness: 0.8
-});
-
-const greenScreenMaterial = new THREE.MeshStandardMaterial({
-  color: 0x052e16,
-  emissive: 0x22c55e,
-  emissiveIntensity: 0.85,
-  roughness: 0.2,
-  metalness: 0.1
-});
-
-// Tablero de madera (0.50m de ancho x 0.32m de fondo x 0.025m grosor)
-const topGeo = new THREE.BoxGeometry(0.50, 0.025, 0.32);
-const tableTop = new THREE.Mesh(topGeo, woodMaterial);
-tableTop.position.y = 0.30;
-desk.add(tableTop);
-
-// Bastidor de refuerzo inferior
-const frameGeo = new THREE.BoxGeometry(0.42, 0.015, 0.24);
-const tableFrame = new THREE.Mesh(frameGeo, woodMaterial);
-tableFrame.position.y = 0.28;
-desk.add(tableFrame);
-
-// 4 Patas anchas de cromo/plata brillante (0.045m x 0.045m x 0.30m)
-const legGeo = new THREE.BoxGeometry(0.045, 0.30, 0.045);
-const legPositions = [
-  [-0.21, 0.15, -0.12],
-  [0.21, 0.15, -0.12],
-  [-0.21, 0.15, 0.12],
-  [0.21, 0.15, 0.12]
-];
-
-legPositions.forEach(pos => {
-  const leg = new THREE.Mesh(legGeo, silverMaterial);
-  leg.position.set(pos[0], pos[1], pos[2]);
-  desk.add(leg);
-  
-  // Base/tapa de cada pata
-  const footGeo = new THREE.BoxGeometry(0.048, 0.008, 0.048);
-  const foot = new THREE.Mesh(footGeo, silverMaterial);
-  foot.position.set(pos[0], 0.004, pos[2]);
-  desk.add(foot);
-});
-
-// --- Portátil ---
-const laptopGroup = new THREE.Group();
-laptopGroup.position.set(0, 0.3125, 0.02);
-
-// Base del portátil
-const lapBaseGeo = new THREE.BoxGeometry(0.14, 0.006, 0.10);
-const laptopBase = new THREE.Mesh(lapBaseGeo, laptopBodyMaterial);
-laptopBase.position.y = 0.003;
-laptopGroup.add(laptopBase);
-
-// Teclado incrustado
-const kbGeo = new THREE.BoxGeometry(0.12, 0.001, 0.045);
-const keyboard = new THREE.Mesh(kbGeo, keyboardMaterial);
-keyboard.position.set(0, 0.0065, -0.015);
-laptopGroup.add(keyboard);
-
-// Touchpad
-const padGeo = new THREE.BoxGeometry(0.04, 0.001, 0.025);
-const touchpad = new THREE.Mesh(padGeo, laptopBodyMaterial);
-touchpad.position.set(0, 0.0065, 0.025);
-laptopGroup.add(touchpad);
-
-// Pantalla / Tapa inclinada abierta
-const screenGroup = new THREE.Group();
-screenGroup.position.set(0, 0.006, -0.05);
-screenGroup.rotation.x = -Math.PI * 0.18;
-
-// Marco de la tapa
-const lidGeo = new THREE.BoxGeometry(0.14, 0.09, 0.005);
-const lid = new THREE.Mesh(lidGeo, laptopBodyMaterial);
-lid.position.set(0, 0.045, 0);
-screenGroup.add(lid);
-
-// Pantalla brillante verdosa
-const displayGeo = new THREE.BoxGeometry(0.128, 0.078, 0.002);
-const display = new THREE.Mesh(displayGeo, greenScreenMaterial);
-display.position.set(0, 0.045, 0.0026);
-screenGroup.add(display);
-
-laptopGroup.add(screenGroup);
-desk.add(laptopGroup);
-
-// Ajuste de pivote al centro de agarre del socket
-desk.position.set(0, -0.20, 0);
-
-return desk;`
+        "id": "item_1794984046286",
+        "name": "Escritorio con Portátil",
+        "icon": "🪑",
+        "socket": "rightHand",
+        "category": "Personalizados",
+        "scale": 1,
+        "transform": null,
+        "prompt": "",
+        "code": "// Mesa / Escritorio Modular\nconst group = new THREE.Group();\ngroup.name = \"MesaEscritorio\";\n\n// Materiales\nconst topMat = new THREE.MeshStandardMaterial({ \n    color: 0x1e293b, \n    roughness: 0.6, \n    metalness: 0.1,\n    transparent: false,\n    opacity: 1.0\n});\nconst legMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.2 });\n\n// 1. Tablero principal\nconst topGeo = new THREE.BoxGeometry(1.20, 0.05, 0.65);\nconst top = new THREE.Mesh(topGeo, topMat);\ntop.position.set(0, 0.72, 0);\ngroup.add(top);\n\n// 2. Cuatro patas metálicas resistentes\nconst legGeo = new THREE.CylinderGeometry(0.024, 0.022, 0.70, 16);\nconst offsets = [\n    [-0.52, 0.35, -0.26],\n    [0.52, 0.35, -0.26],\n    [-0.52, 0.35, 0.26],\n    [0.52, 0.35, 0.26]\n];\noffsets.forEach(([x, y, z]) => {\n    const leg = new THREE.Mesh(legGeo, legMat);\n    leg.position.set(x, y, z);\n    group.add(leg);\n    // Taco de goma en la base\n    const footGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.02, 12);\n    const foot = new THREE.Mesh(footGeo, new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 }));\n    foot.position.set(x, 0.01, z);\n    group.add(foot);\n});\n\n// 3. Portátil integrado ampliado sobre el escritorio\nconst lapChassisMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.15 });\nconst lapKeyboardMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85, metalness: 0.1 });\nconst lapScreenMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 1.2 });\n\n// Base del portátil ampliada (0.60m x 0.40m sobre tablero de 1.20m x 0.65m)\nconst lapBase = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.024, 0.40), lapChassisMat);\nlapBase.position.set(0, 0.757, 0.05);\ngroup.add(lapBase);\n\n// Teclado integrado\nconst lapKeyboard = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.004, 0.17), lapKeyboardMat);\nlapKeyboard.position.set(0, 0.771, 0.00);\ngroup.add(lapKeyboard);\n\n// Tapa y pantalla abierta ampliada\nconst lapLidGroup = new THREE.Group();\nlapLidGroup.position.set(0, 0.769, -0.15);\nlapLidGroup.rotation.x = -1.90;\n\nconst lapLid = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.016, 0.40), lapChassisMat);\nlapLid.position.set(0, 0, 0.20);\nlapLidGroup.add(lapLid);\n\nconst lapScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.34), lapScreenMat);\nlapScreen.position.set(0, 0.009, 0.20);\nlapScreen.rotation.x = -Math.PI / 2;\nlapLidGroup.add(lapScreen);\n\nconst lapScreenInner = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.34), lapScreenMat);\nlapScreenInner.position.set(0, -0.009, 0.20);\nlapScreenInner.rotation.x = Math.PI / 2;\nlapLidGroup.add(lapScreenInner);\n\ngroup.add(lapLidGroup);\n\n// Luz del portátil iluminando el escritorio\nconst lapLight = new THREE.PointLight(0x38bdf8, 1.15, 2.2);\nlapLight.position.set(0, 0.98, 0.02);\ngroup.add(lapLight);\n\nreturn group;",
+        "updatedAt": 1795085050000
     },
     {
-        id: 'preset_energy_sword',
-        name: 'Espada de Energía',
-        icon: '⚔️',
-        socket: 'rightHand',
-        category: 'Armas',
-        scale: 1.0,
-        prompt: 'Espada de energía futurista con empuñadura táctica dorada y hoja de plasma cian resplandeciente',
-        code: `// Espada de Energía Monteserín
-const group = new THREE.Group();
-group.name = "EspadaEnergia";
-
-// Empuñadura ergonómica
-const hiltGeo = new THREE.CylinderGeometry(0.024, 0.028, 0.22, 16);
-const hiltMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.85, roughness: 0.3 });
-const hilt = new THREE.Mesh(hiltGeo, hiltMat);
-hilt.position.y = -0.11;
-group.add(hilt);
-
-// Pomo dorado
-const pommelGeo = new THREE.SphereGeometry(0.035, 16, 16);
-const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });
-const pommel = new THREE.Mesh(pommelGeo, goldMat);
-pommel.position.y = -0.22;
-group.add(pommel);
-
-// Guarda transversal con alas
-const guardGeo = new THREE.BoxGeometry(0.18, 0.035, 0.05);
-const guard = new THREE.Mesh(guardGeo, goldMat);
-guard.position.y = 0.0;
-group.add(guard);
-
-// Hoja de energía de plasma cian (resplandeciente)
-const bladeGeo = new THREE.BoxGeometry(0.045, 0.72, 0.015);
-const bladeMat = new THREE.MeshStandardMaterial({
-    color: 0x38bdf8,
-    emissive: 0x0284c7,
-    emissiveIntensity: 1.5,
-    roughness: 0.1,
-    metalness: 0.2,
-    transparent: true,
-    opacity: 0.92
-});
-const blade = new THREE.Mesh(bladeGeo, bladeMat);
-blade.position.y = 0.36;
-group.add(blade);
-
-// Luz puntual emitida por la hoja
-const light = new THREE.PointLight(0x38bdf8, 1.4, 4.0);
-light.position.y = 0.45;
-group.add(light);
-
-return group;`
+        "id": "item_1793626331832",
+        "name": "Detector de Metales",
+        "icon": "📡",
+        "socket": "rightHand",
+        "category": "Personalizados",
+        "scale": 0.6,
+        "transform": {
+            "position": {
+                "x": -0.16,
+                "y": 0.37,
+                "z": 0.09
+            },
+            "rotation": {
+                "x": -120,
+                "y": -135,
+                "z": 20
+            },
+            "scale": 0.6
+        },
+        "prompt": "",
+        "code": "// Detector de Metales Ergonómico\nconst group = new THREE.Group();\ngroup.name = \"DetectorDeMetales\";\n\n// Materiales de alta fidelidad con soporte de colores personalizados\nconst shaftMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, metalness: 0.85, roughness: 0.25 });\nconst rubberMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85 });\nconst accentMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.4, roughness: 0.3 });\nconst screenMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x2563eb, emissiveIntensity: 1.2, roughness: 0.1 });\nconst coilMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, metalness: 0.65, roughness: 0.3, emissive: 0xdc2626, emissiveIntensity: 0.25 });\n\n// 1. Mástil telescópico central con inclinación ergonómica\nconst shaftGeo = new THREE.CylinderGeometry(0.016, 0.018, 0.95, 16);\nconst shaft = new THREE.Mesh(shaftGeo, shaftMat);\nshaft.position.set(0, 0.15, -0.15);\nshaft.rotation.x = 0.28; // Inclinación hacia adelante\ngroup.add(shaft);\n\n// 2. Empuñadura ergonómica de goma\nconst gripGeo = new THREE.CylinderGeometry(0.024, 0.024, 0.18, 16);\nconst grip = new THREE.Mesh(gripGeo, rubberMat);\ngrip.position.set(0, 0.32, -0.09);\ngrip.rotation.x = 0.28;\ngroup.add(grip);\n\n// 3. Apoyabrazos en 'U' (codo / antebrazo)\nconst cuffGeo = new THREE.TorusGeometry(0.065, 0.014, 12, 24, Math.PI);\nconst cuff = new THREE.Mesh(cuffGeo, shaftMat);\ncuff.position.set(0, 0.46, -0.04);\ncuff.rotation.x = Math.PI / 2 + 0.28;\ngroup.add(cuff);\n\n// 4. Caja de control con pantalla y botonera\nconst boxGeo = new THREE.BoxGeometry(0.09, 0.12, 0.07);\nconst controlBox = new THREE.Mesh(boxGeo, accentMat);\ncontrolBox.position.set(0, 0.24, -0.14);\ncontrolBox.rotation.x = 0.28;\ngroup.add(controlBox);\n\n// Pantalla LCD digital emisiva\nconst screenGeo = new THREE.PlaneGeometry(0.065, 0.05);\nconst screen = new THREE.Mesh(screenGeo, screenMat);\nscreen.position.set(0, 0.25, -0.10);\nscreen.rotation.x = 0.28;\ngroup.add(screen);\n\n// Diales de ajuste\nconst dialGeo = new THREE.CylinderGeometry(0.009, 0.009, 0.01, 12);\nconst dial1 = new THREE.Mesh(dialGeo, rubberMat);\ndial1.position.set(-0.025, 0.20, -0.11);\ndial1.rotation.x = Math.PI / 2 + 0.28;\ngroup.add(dial1);\nconst dial2 = new THREE.Mesh(dialGeo, rubberMat);\ndial2.position.set(0.025, 0.20, -0.11);\ndial2.rotation.x = Math.PI / 2 + 0.28;\ngroup.add(dial2);\n\n// 5. Rótula inferior y Bobina / Plato sensor de búsqueda\nconst jointGeo = new THREE.SphereGeometry(0.024, 12, 12);\nconst joint = new THREE.Mesh(jointGeo, rubberMat);\njoint.position.set(0, -0.28, -0.29);\ngroup.add(joint);\n\n// Bobina de búsqueda circular (Search Coil)\nconst coilRingGeo = new THREE.TorusGeometry(0.14, 0.018, 16, 32);\nconst coilRing = new THREE.Mesh(coilRingGeo, coilMat);\ncoilRing.position.set(0, -0.30, -0.29);\ncoilRing.rotation.x = Math.PI / 2; // Paralelo al suelo\ngroup.add(coilRing);\n\n// Rayos o brazos del plato sensor\nconst crossGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.26, 8);\nconst crossX = new THREE.Mesh(crossGeo, coilMat);\ncrossX.position.set(0, -0.30, -0.29);\ncrossX.rotation.z = Math.PI / 2;\ngroup.add(crossX);\nconst crossZ = new THREE.Mesh(crossGeo, coilMat);\ncrossZ.position.set(0, -0.30, -0.29);\ncrossZ.rotation.x = Math.PI / 2;\ngroup.add(crossZ);\n\nreturn group;",
+        "updatedAt": 1794344296634
     },
     {
-        id: 'preset_runic_shield',
-        name: 'Escudo Rúnico',
-        icon: '🛡️',
-        socket: 'leftHand',
-        category: 'Defensa',
-        scale: 1.0,
-        prompt: 'Escudo defensivo circular con emblema rúnico esmeralda y borde dorado reforzado',
-        code: `// Escudo Rúnico Monteserín
-const group = new THREE.Group();
-group.name = "EscudoRunico";
-
-// Cuerpo principal del escudo
-const shieldGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.025, 32);
-const shieldMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.5, roughness: 0.4 });
-const shield = new THREE.Mesh(shieldGeo, shieldMat);
-shield.rotation.x = Math.PI / 2;
-group.add(shield);
-
-// Borde exterior dorado reforzado
-const rimGeo = new THREE.TorusGeometry(0.265, 0.02, 16, 32);
-const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.25 });
-const rim = new THREE.Mesh(rimGeo, goldMat);
-group.add(rim);
-
-// Umbo central saliente
-const bossGeo = new THREE.SphereGeometry(0.08, 18, 18);
-const boss = new THREE.Mesh(bossGeo, goldMat);
-boss.position.z = 0.02;
-group.add(boss);
-
-// Gema rúnica central brillante
-const gemGeo = new THREE.OctahedronGeometry(0.045);
-const gemMat = new THREE.MeshStandardMaterial({
-    color: 0x34d399,
-    emissive: 0x10b981,
-    emissiveIntensity: 1.3,
-    roughness: 0.1
-});
-const gem = new THREE.Mesh(gemGeo, gemMat);
-gem.position.z = 0.08;
-group.add(gem);
-
-// Manija de agarre posterior
-const handleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.22, 12);
-const handleMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.7 });
-const handle = new THREE.Mesh(handleGeo, handleMat);
-handle.position.z = -0.05;
-group.add(handle);
-
-return group;`
+        "id": "item_1793626690019",
+        "name": "Escritorio con Portátil (Original)",
+        "icon": "🪑",
+        "socket": "rightHand",
+        "category": "Personalizados",
+        "scale": 1,
+        "transform": null,
+        "prompt": "",
+        "code": "// Mesa / Escritorio Modular\nconst group = new THREE.Group();\ngroup.name = \"MesaEscritorio\";\n\n// Materiales\nconst topMat = new THREE.MeshStandardMaterial({ \n    color: 0x422a16, \n    roughness: 0.6, \n    metalness: 0.1,\n    transparent: false,\n    opacity: 1.0\n});\nconst legMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.2 });\n\n// 1. Tablero principal\nconst topGeo = new THREE.BoxGeometry(1.20, 0.05, 0.65);\nconst top = new THREE.Mesh(topGeo, topMat);\ntop.position.set(0, 0.72, 0);\ngroup.add(top);\n\n// 2. Cuatro patas metálicas resistentes\nconst legGeo = new THREE.CylinderGeometry(0.024, 0.022, 0.70, 16);\nconst offsets = [\n    [-0.52, 0.35, -0.26],\n    [0.52, 0.35, -0.26],\n    [-0.52, 0.35, 0.26],\n    [0.52, 0.35, 0.26]\n];\noffsets.forEach(([x, y, z]) => {\n    const leg = new THREE.Mesh(legGeo, legMat);\n    leg.position.set(x, y, z);\n    group.add(leg);\n    // Taco de goma en la base\n    const footGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.02, 12);\n    const foot = new THREE.Mesh(footGeo, new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 }));\n    foot.position.set(x, 0.01, z);\n    group.add(foot);\n});\n\n// 3. Portátil integrado sobre el escritorio\nconst lapChassisMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.15 });\nconst lapScreenMat = new THREE.MeshStandardMaterial({ color: 0xa16207, emissive: 0x6e4726, emissiveIntensity: 1.2 });\n\n// Base del portátil\nconst lapBase = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.015, 0.22), lapChassisMat);\nlapBase.position.set(0, 0.75, 0.05);\ngroup.add(lapBase);\n\n// Tapa y pantalla abierta\nconst lapLidGroup = new THREE.Group();\nlapLidGroup.position.set(0, 0.755, -0.06);\nlapLidGroup.rotation.x = -1.90;\n\nconst lapLid = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.010, 0.22), lapChassisMat);\nlapLid.position.set(0, 0, 0.11);\nlapLidGroup.add(lapLid);\n\nconst lapScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.18), lapScreenMat);\nlapScreen.position.set(0, 0.006, 0.11);\nlapScreen.rotation.x = -Math.PI / 2;\nlapLidGroup.add(lapScreen);\n\ngroup.add(lapLidGroup);\n\n// Luz del portátil iluminando el escritorio\nconst lapLight = new THREE.PointLight(0xa16207, 0.9, 1.8);\nlapLight.position.set(0, 0.88, 0.02);\ngroup.add(lapLight);\n\nreturn group;",
+        "updatedAt": 1793626690020
     },
     {
-        id: 'preset_crystal_staff',
-        name: 'Cetro de Cristal',
-        icon: '🔮',
-        socket: 'rightHand',
-        category: 'Magia',
-        scale: 1.0,
-        prompt: 'Báculo arcano estilizado con orbe de cristal violeta levitante y filigrana dorada',
-        code: `// Cetro Arcano de Cristal
-const group = new THREE.Group();
-group.name = "CetroCristal";
-
-// Vara o mástil de madera oscura noble
-const staffGeo = new THREE.CylinderGeometry(0.022, 0.028, 1.10, 16);
-const staffMat = new THREE.MeshStandardMaterial({ color: 0x271911, roughness: 0.65, metalness: 0.1 });
-const staff = new THREE.Mesh(staffGeo, staffMat);
-staff.position.y = 0.10;
-group.add(staff);
-
-// Anillos dorados de fijación
-const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.92, roughness: 0.2 });
-[-0.2, 0.1, 0.4, 0.6].forEach(y => {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.007, 8, 20), goldMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = y;
-    group.add(ring);
-});
-
-// Soporte o corona superior para el cristal
-const crownGeo = new THREE.CylinderGeometry(0.075, 0.03, 0.12, 6);
-const crown = new THREE.Mesh(crownGeo, goldMat);
-crown.position.y = 0.66;
-group.add(crown);
-
-// Orbe de cristal violeta resplandeciente
-const crystalGeo = new THREE.DodecahedronGeometry(0.085);
-const crystalMat = new THREE.MeshStandardMaterial({
-    color: 0xc084fc,
-    emissive: 0x9333ea,
-    emissiveIntensity: 1.6,
-    roughness: 0.08,
-    metalness: 0.3,
-    transparent: true,
-    opacity: 0.90
-});
-const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-crystal.position.y = 0.76;
-group.add(crystal);
-
-// Luz arcana envolvente
-const staffLight = new THREE.PointLight(0xa855f7, 1.5, 4.5);
-staffLight.position.y = 0.78;
-group.add(staffLight);
-
-return group;`
+        "id": "item_1793605622735",
+        "name": "Mesa con Portátil",
+        "icon": "💻",
+        "socket": "rightHand",
+        "category": "Personalizados",
+        "scale": 1,
+        "transform": null,
+        "prompt": "Mesa de oficina de madera noble con portátil abierto y patas de plata cromada brillante",
+        "code": "const desk = new THREE.Group();\n\n// Materiales\nconst woodMaterial = new THREE.MeshStandardMaterial({\n  color: 0x5a341a,\n  roughness: 0.6,\n  metalness: 0.05\n});\n\n// Patas de Cromo / Plata Brillante Pulida\nconst silverMaterial = new THREE.MeshStandardMaterial({\n  color: 0xf8fafc,\n  metalness: 0.78,\n  roughness: 0.06,\n  emissive: 0x334455,\n  emissiveIntensity: 0.20\n});\n\nconst laptopBodyMaterial = new THREE.MeshStandardMaterial({\n  color: 0x2b2d31,\n  metalness: 0.7,\n  roughness: 0.3\n});\n\nconst keyboardMaterial = new THREE.MeshStandardMaterial({\n  color: 0x161719,\n  metalness: 0.2,\n  roughness: 0.8\n});\n\nconst greenScreenMaterial = new THREE.MeshStandardMaterial({\n  color: 0x052e16,\n  emissive: 0x22c55e,\n  emissiveIntensity: 0.85,\n  roughness: 0.2,\n  metalness: 0.1\n});\n\n// Tablero de madera (0.50m de ancho x 0.32m de fondo x 0.025m grosor)\nconst topGeo = new THREE.BoxGeometry(0.50, 0.025, 0.32);\nconst tableTop = new THREE.Mesh(topGeo, woodMaterial);\ntableTop.position.y = 0.30;\ndesk.add(tableTop);\n\n// Bastidor de refuerzo inferior\nconst frameGeo = new THREE.BoxGeometry(0.42, 0.015, 0.24);\nconst tableFrame = new THREE.Mesh(frameGeo, woodMaterial);\ntableFrame.position.y = 0.28;\ndesk.add(tableFrame);\n\n// 4 Patas anchas de cromo/plata brillante (0.045m x 0.045m x 0.30m)\nconst legGeo = new THREE.BoxGeometry(0.045, 0.30, 0.045);\nconst legPositions = [\n  [-0.21, 0.15, -0.12],\n  [0.21, 0.15, -0.12],\n  [-0.21, 0.15, 0.12],\n  [0.21, 0.15, 0.12]\n];\n\nlegPositions.forEach(pos => {\n  const leg = new THREE.Mesh(legGeo, silverMaterial);\n  leg.position.set(pos[0], pos[1], pos[2]);\n  desk.add(leg);\n  \n  // Base/tapa de cada pata\n  const footGeo = new THREE.BoxGeometry(0.048, 0.008, 0.048);\n  const foot = new THREE.Mesh(footGeo, silverMaterial);\n  foot.position.set(pos[0], 0.004, pos[2]);\n  desk.add(foot);\n});\n\n// --- Portátil ---\nconst laptopGroup = new THREE.Group();\nlaptopGroup.position.set(0, 0.3125, 0.02);\n\n// Base del portátil\nconst lapBaseGeo = new THREE.BoxGeometry(0.14, 0.006, 0.10);\nconst laptopBase = new THREE.Mesh(lapBaseGeo, laptopBodyMaterial);\nlaptopBase.position.y = 0.003;\nlaptopGroup.add(laptopBase);\n\n// Teclado incrustado\nconst kbGeo = new THREE.BoxGeometry(0.12, 0.001, 0.045);\nconst keyboard = new THREE.Mesh(kbGeo, keyboardMaterial);\nkeyboard.position.set(0, 0.0065, -0.015);\nlaptopGroup.add(keyboard);\n\n// Touchpad\nconst padGeo = new THREE.BoxGeometry(0.04, 0.001, 0.025);\nconst touchpad = new THREE.Mesh(padGeo, laptopBodyMaterial);\ntouchpad.position.set(0, 0.0065, 0.025);\nlaptopGroup.add(touchpad);\n\n// Pantalla / Tapa inclinada abierta\nconst screenGroup = new THREE.Group();\nscreenGroup.position.set(0, 0.006, -0.05);\nscreenGroup.rotation.x = -Math.PI * 0.18; // Inclinación unos 115° respecto a la base\n\n// Marco de la tapa\nconst lidGeo = new THREE.BoxGeometry(0.14, 0.09, 0.005);\nconst lid = new THREE.Mesh(lidGeo, laptopBodyMaterial);\nlid.position.set(0, 0.045, 0);\nscreenGroup.add(lid);\n\n// Pantalla brillante verdosa (Matrix / Terminal green glow)\nconst displayGeo = new THREE.BoxGeometry(0.128, 0.078, 0.002);\nconst display = new THREE.Mesh(displayGeo, greenScreenMaterial);\ndisplay.position.set(0, 0.045, 0.0026);\nscreenGroup.add(display);\n\nlaptopGroup.add(screenGroup);\ndesk.add(laptopGroup);\n\n// Ajuste de pivote al centro de agarre del socket\ndesk.position.set(0, -0.20, 0);\n\nreturn desk;",
+        "updatedAt": 1793609999000
     },
     {
-        id: 'preset_tactical_radio',
-        name: 'Radio Comunicador',
-        icon: '📻',
-        socket: 'back',
-        category: 'Tecnología',
-        scale: 1.0,
-        prompt: 'Transmisor de comunicaciones militar con antena flexible y pantalla LCD',
-        code: `// Radio Comunicador Táctico
-const group = new THREE.Group();
-group.name = "RadioTactico";
-
-// Chasis principal de polímero negro
-const bodyGeo = new THREE.BoxGeometry(0.14, 0.22, 0.07);
-const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.4 });
-const body = new THREE.Mesh(bodyGeo, bodyMat);
-group.add(body);
-
-// Pantalla LCD verdosa
-const screenGeo = new THREE.PlaneGeometry(0.09, 0.055);
-const screenMat = new THREE.MeshStandardMaterial({
-    color: 0x86efac,
-    emissive: 0x22c55e,
-    emissiveIntensity: 0.8,
-    roughness: 0.2
-});
-const screen = new THREE.Mesh(screenGeo, screenMat);
-screen.position.set(0, 0.045, 0.036);
-group.add(screen);
-
-// Rejilla de altavoz
-const speakerGeo = new THREE.BoxGeometry(0.08, 0.04, 0.005);
-const speakerMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });
-const speaker = new THREE.Mesh(speakerGeo, speakerMat);
-speaker.position.set(0, -0.045, 0.036);
-group.add(speaker);
-
-// Antena de alta frecuencia
-const antennaGeo = new THREE.CylinderGeometry(0.006, 0.009, 0.38, 10);
-const antennaMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.3 });
-const antenna = new THREE.Mesh(antennaGeo, antennaMat);
-antenna.position.set(0.045, 0.28, 0);
-group.add(antenna);
-
-// Dial rotativo dorado de frecuencia
-const dialGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.025, 16);
-const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });
-const dial = new THREE.Mesh(dialGeo, goldMat);
-dial.position.set(-0.035, 0.12, 0);
-group.add(dial);
-
-return group;`
+        "id": "item_1792214064397",
+        "name": "Detector & Mochila Táctica",
+        "icon": "🎒",
+        "socket": "rightHand",
+        "category": "Personalizados",
+        "scale": 1,
+        "prompt": "",
+        "code": "const group = new THREE.Group();\n\nconst matBlackShiny = new THREE.MeshStandardMaterial({\n  color: 0x111116,\n  metalness: 0.88,\n  roughness: 0.18\n});\n\nconst matGreenMetal = new THREE.MeshStandardMaterial({\n  color: 0x1b5936,\n  metalness: 0.85,\n  roughness: 0.26\n});\n\nconst matDarkGreen = new THREE.MeshStandardMaterial({\n  color: 0x0d331e,\n  metalness: 0.75,\n  roughness: 0.35\n});\n\nconst matRedCircle = new THREE.MeshStandardMaterial({\n  color: 0xd61a2b,\n  metalness: 0.5,\n  roughness: 0.2,\n  emissive: 0x550a12,\n  emissiveIntensity: 0.35\n});\n\nconst matRedGlow = new THREE.MeshStandardMaterial({\n  color: 0xff2438,\n  emissive: 0xff1e2e,\n  emissiveIntensity: 0.85,\n  roughness: 0.2\n});\n\nconst matScreen = new THREE.MeshStandardMaterial({\n  color: 0x04180d,\n  emissive: 0x005024,\n  emissiveIntensity: 0.4,\n  roughness: 0.15\n});\n\nconst detector = new THREE.Group();\n\nconst gripGeom = new THREE.CylinderGeometry(0.016, 0.016, 0.13, 16);\nconst grip = new THREE.Mesh(gripGeom, matBlackShiny);\ngrip.position.set(0, 0, 0);\ngrip.rotation.x = Math.PI / 8;\ndetector.add(grip);\n\nconst braceGeom = new THREE.TorusGeometry(0.048, 0.012, 12, 24, Math.PI * 1.1);\nconst armBrace = new THREE.Mesh(braceGeom, matGreenMetal);\narmBrace.position.set(0, 0.07, -0.16);\narmBrace.rotation.x = -Math.PI / 2.3;\ndetector.add(armBrace);\n\nconst braceStemGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.17, 12);\nconst braceStem = new THREE.Mesh(braceStemGeom, matBlackShiny);\nbraceStem.position.set(0, 0.035, -0.09);\nbraceStem.rotation.x = Math.PI / 3.4;\ndetector.add(braceStem);\n\nconst upperShaftGeom = new THREE.CylinderGeometry(0.013, 0.013, 0.24, 16);\nconst upperShaft = new THREE.Mesh(upperShaftGeom, matGreenMetal);\nupperShaft.position.set(0, -0.06, 0.07);\nupperShaft.rotation.x = Math.PI / 3.4;\ndetector.add(upperShaft);\n\nconst lowerShaftGeom = new THREE.CylinderGeometry(0.01, 0.01, 0.38, 16);\nconst lowerShaft = new THREE.Mesh(lowerShaftGeom, matBlackShiny);\nlowerShaft.position.set(0, -0.26, 0.24);\nlowerShaft.rotation.x = Math.PI / 3.4;\ndetector.add(lowerShaft);\n\nconst collarGeom = new THREE.CylinderGeometry(0.016, 0.016, 0.03, 16);\nconst collar = new THREE.Mesh(collarGeom, matGreenMetal);\ncollar.position.set(0, -0.135, 0.135);\ncollar.rotation.x = Math.PI / 3.4;\ndetector.add(collar);\n\nconst boxHousingGeom = new THREE.BoxGeometry(0.08, 0.05, 0.09);\nconst boxHousing = new THREE.Mesh(boxHousingGeom, matBlackShiny);\nboxHousing.position.set(0, 0.07, 0.03);\nboxHousing.rotation.x = Math.PI / 4.8;\ndetector.add(boxHousing);\n\nconst boxBezelGeom = new THREE.BoxGeometry(0.084, 0.012, 0.094);\nconst boxBezel = new THREE.Mesh(boxBezelGeom, matGreenMetal);\nboxHousing.add(boxBezel);\n\nconst screenGeom = new THREE.PlaneGeometry(0.062, 0.055);\nconst screen = new THREE.Mesh(screenGeom, matScreen);\nscreen.position.set(0, 0.026, 0);\nscreen.rotation.x = -Math.PI / 2;\nboxHousing.add(screen);\n\nconst diodeGeom = new THREE.SphereGeometry(0.005, 8, 8);\nconst diode = new THREE.Mesh(diodeGeom, matRedGlow);\ndiode.position.set(0.028, 0.027, -0.032);\nboxHousing.add(diode);\n\nconst searchHead = new THREE.Group();\nsearchHead.position.set(0, -0.42, 0.38);\nsearchHead.rotation.x = 0.08;\n\nconst clevisGeom = new THREE.BoxGeometry(0.028, 0.035, 0.035);\nconst clevis = new THREE.Mesh(clevisGeom, matBlackShiny);\nclevis.position.set(0, 0.02, 0);\nsearchHead.add(clevis);\n\nconst outerCircleGeom = new THREE.TorusGeometry(0.12, 0.013, 16, 36);\nconst outerCircle = new THREE.Mesh(outerCircleGeom, matRedCircle);\nouterCircle.rotation.x = Math.PI / 2;\nsearchHead.add(outerCircle);\n\nconst innerCircleGeom = new THREE.TorusGeometry(0.055, 0.009, 14, 28);\nconst innerCircle = new THREE.Mesh(innerCircleGeom, matRedCircle);\ninnerCircle.rotation.x = Math.PI / 2;\nsearchHead.add(innerCircle);\n\nconst spokeGeom = new THREE.BoxGeometry(0.016, 0.01, 0.22);\nconst spokeZ = new THREE.Mesh(spokeGeom, matBlackShiny);\nsearchHead.add(spokeZ);\n\nconst spokeXGeom = new THREE.BoxGeometry(0.22, 0.01, 0.016);\nconst spokeX = new THREE.Mesh(spokeXGeom, matBlackShiny);\nsearchHead.add(spokeX);\n\nconst centerCoreGeom = new THREE.CylinderGeometry(0.032, 0.032, 0.016, 20);\nconst centerCore = new THREE.Mesh(centerCoreGeom, matGreenMetal);\nsearchHead.add(centerCore);\n\ndetector.add(searchHead);\ngroup.add(detector);\n\nconst backpack = new THREE.Group();\nbackpack.position.set(-0.16, 0.25, -0.32);\nbackpack.rotation.y = -0.15;\n\nconst packBodyGeom = new THREE.BoxGeometry(0.18, 0.26, 0.09);\nconst packBody = new THREE.Mesh(packBodyGeom, matBlackShiny);\nbackpack.add(packBody);\n\nconst packShieldGeom = new THREE.BoxGeometry(0.16, 0.22, 0.02);\nconst packShield = new THREE.Mesh(packShieldGeom, matGreenMetal);\npackShield.position.set(0, 0, -0.05);\nbackpack.add(packShield);\n\nconst topCapGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.16, 16);\nconst topCap = new THREE.Mesh(topCapGeom, matDarkGreen);\ntopCap.rotation.z = Math.PI / 2;\ntopCap.position.set(0, 0.13, 0);\nbackpack.add(topCap);\n\nconst canLGeom = new THREE.CylinderGeometry(0.024, 0.024, 0.2, 16);\nconst canL = new THREE.Mesh(canLGeom, matGreenMetal);\ncanL.position.set(-0.105, -0.01, 0);\nbackpack.add(canL);\n\nconst ringLGeom = new THREE.TorusGeometry(0.026, 0.005, 10, 20);\nconst ringL = new THREE.Mesh(ringLGeom, matRedGlow);\nringL.rotation.x = Math.PI / 2;\nringL.position.set(-0.105, 0.04, 0);\nbackpack.add(ringL);\n\nconst canR = canL.clone();\ncanR.position.x = 0.105;\nbackpack.add(canR);\n\nconst ringR = ringL.clone();\nringR.position.x = 0.105;\nbackpack.add(ringR);\n\nconst strapGeom = new THREE.TorusGeometry(0.13, 0.008, 8, 24, Math.PI * 1.15);\nconst strapR = new THREE.Mesh(strapGeom, matDarkGreen);\nstrapR.position.set(0.06, 0.03, 0.08);\nstrapR.rotation.y = Math.PI / 2;\nstrapR.rotation.x = 0.2;\nbackpack.add(strapR);\n\ngroup.add(backpack);\n\nconst cableCurve = new THREE.CatmullRomCurve3([\n  new THREE.Vector3(-0.08, 0.14, -0.3),\n  new THREE.Vector3(-0.06, -0.02, -0.18),\n  new THREE.Vector3(-0.02, 0.02, -0.02),\n  new THREE.Vector3(0, 0.05, 0.02)\n]);\nconst cableGeom = new THREE.TubeGeometry(cableCurve, 20, 0.007, 8, false);\nconst cable = new THREE.Mesh(cableGeom, matBlackShiny);\ngroup.add(cable);\n\nreturn group;",
+        "updatedAt": 1792214064398
     },
     {
-        id: 'preset_explorer_pack',
-        name: 'Mochila de Explorador',
-        icon: '🎒',
-        socket: 'back',
-        category: 'Accesorios',
-        scale: 1.0,
-        prompt: 'Mochila de supervivencia de lona reforzada con correas doradas y esterilla enrollada',
-        code: `// Mochila de Supervivencia Monteserín
-const group = new THREE.Group();
-group.name = "MochilaExplorador";
-
-// Compartimento principal
-const packGeo = new THREE.BoxGeometry(0.32, 0.40, 0.18);
-const canvasMat = new THREE.MeshStandardMaterial({ color: 0x2d3a33, roughness: 0.85, metalness: 0.05 });
-const pack = new THREE.Mesh(packGeo, canvasMat);
-group.add(pack);
-
-// Bolsillo frontal
-const pocketGeo = new THREE.BoxGeometry(0.24, 0.20, 0.08);
-const pocket = new THREE.Mesh(pocketGeo, canvasMat);
-pocket.position.set(0, -0.06, 0.12);
-group.add(pocket);
-
-// Correas y hebillas doradas
-const strapMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.3 });
-[-0.08, 0.08].forEach(x => {
-    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.41, 0.19), strapMat);
-    strap.position.x = x;
-    group.add(strap);
-});
-
-// Esterilla enrollada superior
-const rollGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.36, 18);
-rollGeo.rotateZ(Math.PI / 2);
-const rollMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.7 });
-const roll = new THREE.Mesh(rollGeo, rollMat);
-roll.position.set(0, 0.24, 0.02);
-group.add(roll);
-
-return group;`
+        "id": "item_1792180576343",
+        "name": "Detector & Mochila",
+        "icon": "🎒",
+        "socket": "rightHand",
+        "category": "Personalizados",
+        "scale": 1,
+        "prompt": "",
+        "code": "const group = new THREE.Group();\n\n// --- MATERIALES ---\nconst matPlasticDark = new THREE.MeshStandardMaterial({ color: 0x1f2326, roughness: 0.5, metalness: 0.2 });\nconst matShaft = new THREE.MeshStandardMaterial({ color: 0x8a939e, roughness: 0.3, metalness: 0.8 });\nconst matYellow = new THREE.MeshStandardMaterial({ color: 0xeb9800, roughness: 0.4, metalness: 0.1 });\nconst matScreen = new THREE.MeshStandardMaterial({ color: 0x0a1c1a, emissive: 0x00ffaa, emissiveIntensity: 0.6, roughness: 0.2 });\nconst matCable = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.1 });\nconst matCoil = new THREE.MeshStandardMaterial({ color: 0x151618, roughness: 0.6, metalness: 0.3 });\nconst matBackpack = new THREE.MeshStandardMaterial({ color: 0x2b332b, roughness: 0.7, metalness: 0.15 });\nconst matBattery = new THREE.MeshStandardMaterial({ color: 0x3d6647, roughness: 0.4, metalness: 0.5 });\nconst matLedRed = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff2222, emissiveIntensity: 0.8 });\n\n// --- MANGO Y DETECTOR (MANO DERECHA EN 0,0,0) ---\n// Mango de agarre\nconst handleGeo = new THREE.CylinderGeometry(0.016, 0.018, 0.13, 16);\nhandleGeo.rotateZ(Math.PI / 12);\nconst handle = new THREE.Mesh(handleGeo, matPlasticDark);\nhandle.position.set(0, 0, 0);\ngroup.add(handle);\n\n// Apoyabrazos trasero (cuff)\nconst cuffGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.08, 16, 1, true, 0, Math.PI);\ncuffGeo.rotateX(Math.PI / 2);\nconst cuff = new THREE.Mesh(cuffGeo, matYellow);\ncuff.position.set(0, 0.04, -0.16);\ngroup.add(cuff);\n\nconst cuffBarGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.12, 12);\ncuffBarGeo.rotateX(Math.PI / 2);\nconst cuffBar = new THREE.Mesh(cuffBarGeo, matShaft);\ncuffBar.position.set(0, 0, -0.1);\ngroup.add(cuffBar);\n\n// Unidad de control / pantalla digital (sobre el mango)\nconst controlBoxGeo = new THREE.BoxGeometry(0.07, 0.06, 0.09);\nconst controlBox = new THREE.Mesh(controlBoxGeo, matYellow);\ncontrolBox.position.set(0, 0.07, 0.04);\ncontrolBox.rotation.x = -Math.PI / 6;\ngroup.add(controlBox);\n\nconst screenGeo = new THREE.PlaneGeometry(0.05, 0.04);\nconst screen = new THREE.Mesh(screenGeo, matScreen);\nscreen.position.set(0, 0.1, 0.04);\nscreen.rotation.x = -Math.PI / 3;\ngroup.add(screen);\n\n// Mástil telescópico que baja hacia el suelo\nconst shaftGroup = new THREE.Group();\nconst upperShaftGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.35, 12);\nupperShaftGeo.rotateX(Math.PI / 4);\nconst upperShaft = new THREE.Mesh(upperShaftGeo, matShaft);\nupperShaft.position.set(0, -0.12, 0.15);\nshaftGroup.add(upperShaft);\n\nconst lowerShaftGeo = new THREE.CylinderGeometry(0.009, 0.009, 0.35, 12);\nlowerShaftGeo.rotateX(Math.PI / 4);\nconst lowerShaft = new THREE.Mesh(lowerShaftGeo, matShaft);\nlowerShaft.position.set(0, -0.32, 0.35);\nshaftGroup.add(lowerShaft);\n\nconst jointGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.03, 12);\njointGeo.rotateX(Math.PI / 4);\nconst joint = new THREE.Mesh(jointGeo, matPlasticDark);\njoint.position.set(0, -0.22, 0.25);\nshaftGroup.add(joint);\ngroup.add(shaftGroup);\n\n// Bobina / Plato circular de detección en el extremo inferior\nconst coilGroup = new THREE.Group();\ncoilGroup.position.set(0, -0.45, 0.48);\ncoilGroup.rotation.x = 0.15;\n\n// Aro exterior\nconst outerRingGeo = new THREE.TorusGeometry(0.12, 0.012, 12, 32);\nouterRingGeo.rotateX(Math.PI / 2);\nconst outerRing = new THREE.Mesh(outerRingGeo, matCoil);\ncoilGroup.add(outerRing);\n\n// Disco central y varillas de soporte\nconst centerHubGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.02, 16);\nconst centerHub = new THREE.Mesh(centerHubGeo, matCoil);\ncoilGroup.add(centerHub);\n\nconst spokeGeo = new THREE.BoxGeometry(0.22, 0.01, 0.02);\nconst spoke = new THREE.Mesh(spokeGeo, matCoil);\ncoilGroup.add(spoke);\n\ngroup.add(coilGroup);\n\n// --- MOCHILA DE ALIMENTACIÓN / PROCESAMIENTO (ESPALDA) ---\n// Se posiciona respecto a la mano en el eje de la espalda del jugador\nconst backpackGroup = new THREE.Group();\nbackpackGroup.position.set(-0.24, 0.22, -0.32);\nbackpackGroup.rotation.y = -0.1;\n\n// Cuerpo principal de la mochila\nconst packGeo = new THREE.BoxGeometry(0.22, 0.3, 0.12);\nconst packMesh = new THREE.Mesh(packGeo, matBackpack);\nbackpackGroup.add(packMesh);\n\n// Tapa y compartimento frontal\nconst frontPocketGeo = new THREE.BoxGeometry(0.18, 0.18, 0.05);\nconst frontPocket = new THREE.Mesh(frontPocketGeo, matPlasticDark);\nfrontPocket.position.set(0, -0.03, -0.08);\nbackpackGroup.add(frontPocket);\n\n// Batería lateral externa\nconst battGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.24, 16);\nconst battery = new THREE.Mesh(battGeo, matBattery);\nbattery.position.set(0.13, 0, 0);\nbackpackGroup.add(battery);\n\n// Antena / Módulo transmisor\nconst antennaBaseGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.04, 8);\nconst antennaBase = new THREE.Mesh(antennaBaseGeo, matPlasticDark);\nantennaBase.position.set(-0.07, 0.16, 0);\nconst antennaRodGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.16, 8);\nconst antennaRod = new THREE.Mesh(antennaRodGeo, matShaft);\nantennaRod.position.set(-0.07, 0.25, 0);\nbackpackGroup.add(antennaBase);\nbackpackGroup.add(antennaRod);\n\n// Luces de estado en la mochila\nconst ledGeo = new THREE.SphereGeometry(0.008, 8, 8);\nconst led = new THREE.Mesh(ledGeo, matLedRed);\nled.position.set(0.05, 0.12, -0.06);\nbackpackGroup.add(led);\n\ngroup.add(backpackGroup);\n\n// --- CABLES DE CONEXIÓN ENTRE DETECTOR Y MOCHILA ---\nconst cableCurve = new THREE.CatmullRomCurve3([\n  new THREE.Vector3(0, 0.05, 0.02),           // Conector en caja de control\n  new THREE.Vector3(0.02, 0.02, -0.08),        // Pasa bajo el brazo\n  new THREE.Vector3(-0.06, 0.08, -0.18),       // Curva holgada subiendo\n  new THREE.Vector3(-0.16, 0.16, -0.25),       // Llegando hacia el costado\n  new THREE.Vector3(-0.22, 0.18, -0.32)        // Entrada a la mochila\n]);\n\nconst cableGeo = new THREE.TubeGeometry(cableCurve, 24, 0.006, 8, false);\nconst cable = new THREE.Mesh(cableGeo, matCable);\ngroup.add(cable);\n\n// Cable espiral que baja de la caja al plato\nconst lowerCableCurve = new THREE.CatmullRomCurve3([\n  new THREE.Vector3(0, 0.04, 0.06),\n  new THREE.Vector3(0.015, -0.1, 0.14),\n  new THREE.Vector3(-0.015, -0.22, 0.26),\n  new THREE.Vector3(0.012, -0.34, 0.38),\n  new THREE.Vector3(0, -0.44, 0.46)\n]);\nconst lowerCableGeo = new THREE.TubeGeometry(lowerCableCurve, 20, 0.004, 6, false);\nconst lowerCable = new THREE.Mesh(lowerCableGeo, matCable);\ngroup.add(lowerCable);\n\nreturn group;",
+        "updatedAt": 1792180893935
+    },
+    {
+        "id": "preset_energy_sword",
+        "name": "Espada de Energía",
+        "icon": "⚔️",
+        "socket": "rightHand",
+        "category": "Armas",
+        "scale": 1,
+        "prompt": "Espada de energía futurista con empuñadura táctica dorada y hoja de plasma cian resplandeciente",
+        "code": "// Espada de Energía Monteserín\nconst group = new THREE.Group();\ngroup.name = \"EspadaEnergia\";\n\n// Empuñadura ergonómica\nconst hiltGeo = new THREE.CylinderGeometry(0.024, 0.028, 0.22, 16);\nconst hiltMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.85, roughness: 0.3 });\nconst hilt = new THREE.Mesh(hiltGeo, hiltMat);\nhilt.position.y = -0.11;\ngroup.add(hilt);\n\n// Pomo dorado\nconst pommelGeo = new THREE.SphereGeometry(0.035, 16, 16);\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.95, roughness: 0.2 });\nconst pommel = new THREE.Mesh(pommelGeo, goldMat);\npommel.position.y = -0.22;\ngroup.add(pommel);\n\n// Guarda transversal con alas\nconst guardGeo = new THREE.BoxGeometry(0.18, 0.035, 0.05);\nconst guard = new THREE.Mesh(guardGeo, goldMat);\nguard.position.y = 0.0;\ngroup.add(guard);\n\n// Hoja de energía de plasma cian (resplandeciente)\nconst bladeGeo = new THREE.BoxGeometry(0.045, 0.72, 0.015);\nconst bladeMat = new THREE.MeshStandardMaterial({\n    color: 0x38bdf8,\n    emissive: 0x0284c7,\n    emissiveIntensity: 1.5,\n    roughness: 0.1,\n    metalness: 0.2,\n    transparent: true,\n    opacity: 0.92\n});\nconst blade = new THREE.Mesh(bladeGeo, bladeMat);\nblade.position.y = 0.36;\ngroup.add(blade);\n\n// Luz puntual emitida por la hoja\nconst light = new THREE.PointLight(0x38bdf8, 1.4, 4.0);\nlight.position.y = 0.45;\ngroup.add(light);\n\nreturn group;"
+    },
+    {
+        "id": "preset_runic_shield",
+        "name": "Escudo Rúnico",
+        "icon": "🛡️",
+        "socket": "leftHand",
+        "category": "Defensa",
+        "scale": 1,
+        "prompt": "Escudo defensivo circular con emblema rúnico esmeralda y borde dorado reforzado",
+        "code": "// Escudo Rúnico Monteserín\nconst group = new THREE.Group();\ngroup.name = \"EscudoRunico\";\n\n// Cuerpo principal del escudo\nconst shieldGeo = new THREE.CylinderGeometry(0.26, 0.26, 0.025, 32);\nconst shieldMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, metalness: 0.5, roughness: 0.4 });\nconst shield = new THREE.Mesh(shieldGeo, shieldMat);\nshield.rotation.x = Math.PI / 2;\ngroup.add(shield);\n\n// Borde exterior dorado reforzado\nconst rimGeo = new THREE.TorusGeometry(0.265, 0.02, 16, 32);\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.25 });\nconst rim = new THREE.Mesh(rimGeo, goldMat);\ngroup.add(rim);\n\n// Umbo central saliente\nconst bossGeo = new THREE.SphereGeometry(0.08, 18, 18);\nconst boss = new THREE.Mesh(bossGeo, goldMat);\nboss.position.z = 0.02;\ngroup.add(boss);\n\n// Gema rúnica central brillante\nconst gemGeo = new THREE.OctahedronGeometry(0.045);\nconst gemMat = new THREE.MeshStandardMaterial({\n    color: 0x34d399,\n    emissive: 0x10b981,\n    emissiveIntensity: 1.3,\n    roughness: 0.1\n});\nconst gem = new THREE.Mesh(gemGeo, gemMat);\ngem.position.z = 0.08;\ngroup.add(gem);\n\n// Manija de agarre posterior\nconst handleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.22, 12);\nconst handleMat = new THREE.MeshStandardMaterial({ color: 0x374151, roughness: 0.7 });\nconst handle = new THREE.Mesh(handleGeo, handleMat);\nhandle.position.z = -0.05;\ngroup.add(handle);\n\nreturn group;"
+    },
+    {
+        "id": "preset_crystal_staff",
+        "name": "Cetro de Cristal",
+        "icon": "🔮",
+        "socket": "rightHand",
+        "category": "Magia",
+        "scale": 1,
+        "prompt": "Báculo arcano estilizado con orbe de cristal violeta levitante y filigrana dorada",
+        "code": "// Cetro Arcano de Cristal\nconst group = new THREE.Group();\ngroup.name = \"CetroCristal\";\n\n// Vara o mástil de madera oscura noble\nconst staffGeo = new THREE.CylinderGeometry(0.022, 0.028, 1.10, 16);\nconst staffMat = new THREE.MeshStandardMaterial({ color: 0x271911, roughness: 0.65, metalness: 0.1 });\nconst staff = new THREE.Mesh(staffGeo, staffMat);\nstaff.position.y = 0.10;\ngroup.add(staff);\n\n// Anillos dorados de fijación\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.92, roughness: 0.2 });\n[-0.2, 0.1, 0.4, 0.6].forEach(y => {\n    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.028, 0.007, 8, 20), goldMat);\n    ring.rotation.x = Math.PI / 2;\n    ring.position.y = y;\n    group.add(ring);\n});\n\n// Soporte o corona superior para el cristal\nconst crownGeo = new THREE.CylinderGeometry(0.075, 0.03, 0.12, 6);\nconst crown = new THREE.Mesh(crownGeo, goldMat);\ncrown.position.y = 0.66;\ngroup.add(crown);\n\n// Orbe de cristal violeta resplandeciente\nconst crystalGeo = new THREE.DodecahedronGeometry(0.085);\nconst crystalMat = new THREE.MeshStandardMaterial({\n    color: 0xc084fc,\n    emissive: 0x9333ea,\n    emissiveIntensity: 1.6,\n    roughness: 0.08,\n    metalness: 0.3,\n    transparent: true,\n    opacity: 0.90\n});\nconst crystal = new THREE.Mesh(crystalGeo, crystalMat);\ncrystal.position.y = 0.76;\ngroup.add(crystal);\n\n// Luz arcana envolvente\nconst staffLight = new THREE.PointLight(0xa855f7, 1.5, 4.5);\nstaffLight.position.y = 0.78;\ngroup.add(staffLight);\n\nreturn group;"
+    },
+    {
+        "id": "preset_tactical_radio",
+        "name": "Radio Comunicador",
+        "icon": "📻",
+        "socket": "back",
+        "category": "Tecnología",
+        "scale": 1,
+        "prompt": "Transmisor de comunicaciones militar con antena flexible y pantalla LCD",
+        "code": "// Radio Comunicador Táctico\nconst group = new THREE.Group();\ngroup.name = \"RadioTactico\";\n\n// Chasis principal de polímero negro\nconst bodyGeo = new THREE.BoxGeometry(0.14, 0.22, 0.07);\nconst bodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.4 });\nconst body = new THREE.Mesh(bodyGeo, bodyMat);\ngroup.add(body);\n\n// Pantalla LCD verdosa\nconst screenGeo = new THREE.PlaneGeometry(0.09, 0.055);\nconst screenMat = new THREE.MeshStandardMaterial({\n    color: 0x86efac,\n    emissive: 0x22c55e,\n    emissiveIntensity: 0.8,\n    roughness: 0.2\n});\nconst screen = new THREE.Mesh(screenGeo, screenMat);\nscreen.position.set(0, 0.045, 0.036);\ngroup.add(screen);\n\n// Rejilla de altavoz\nconst speakerGeo = new THREE.BoxGeometry(0.08, 0.04, 0.005);\nconst speakerMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.8 });\nconst speaker = new THREE.Mesh(speakerGeo, speakerMat);\nspeaker.position.set(0, -0.045, 0.036);\ngroup.add(speaker);\n\n// Antena de alta frecuencia\nconst antennaGeo = new THREE.CylinderGeometry(0.006, 0.009, 0.38, 10);\nconst antennaMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9, roughness: 0.3 });\nconst antenna = new THREE.Mesh(antennaGeo, antennaMat);\nantenna.position.set(0.045, 0.28, 0);\ngroup.add(antenna);\n\n// Dial rotativo dorado de frecuencia\nconst dialGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.025, 16);\nconst goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });\nconst dial = new THREE.Mesh(dialGeo, goldMat);\ndial.position.set(-0.035, 0.12, 0);\ngroup.add(dial);\n\nreturn group;"
+    },
+    {
+        "id": "preset_explorer_pack",
+        "name": "Mochila de Explorador",
+        "icon": "🎒",
+        "socket": "back",
+        "category": "Accesorios",
+        "scale": 1,
+        "prompt": "Mochila de supervivencia de lona reforzada con correas doradas y esterilla enrollada",
+        "code": "// Mochila de Supervivencia Monteserín\nconst group = new THREE.Group();\ngroup.name = \"MochilaExplorador\";\n\n// Compartimento principal\nconst packGeo = new THREE.BoxGeometry(0.32, 0.40, 0.18);\nconst canvasMat = new THREE.MeshStandardMaterial({ color: 0x2d3a33, roughness: 0.85, metalness: 0.05 });\nconst pack = new THREE.Mesh(packGeo, canvasMat);\ngroup.add(pack);\n\n// Bolsillo frontal\nconst pocketGeo = new THREE.BoxGeometry(0.24, 0.20, 0.08);\nconst pocket = new THREE.Mesh(pocketGeo, canvasMat);\npocket.position.set(0, -0.06, 0.12);\ngroup.add(pocket);\n\n// Correas y hebillas doradas\nconst strapMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.3 });\n[-0.08, 0.08].forEach(x => {\n    const strap = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.41, 0.19), strapMat);\n    strap.position.x = x;\n    group.add(strap);\n});\n\n// Esterilla enrollada superior\nconst rollGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.36, 18);\nrollGeo.rotateZ(Math.PI / 2);\nconst rollMat = new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.7 });\nconst roll = new THREE.Mesh(rollGeo, rollMat);\nroll.position.set(0, 0.24, 0.02);\ngroup.add(roll);\n\nreturn group;"
     }
 ];
+// BAKE_DEFAULT_3D_PRESETS_END
+
+function sortCustomItemsByRecency(list) {
+    if (!Array.isArray(list)) return [];
+    return [...list].sort((a, b) => (Number(b?.updatedAt) || 0) - (Number(a?.updatedAt) || 0));
+}
 
 /**
- * Obtiene todos los objetos de la biblioteca (combinando los predeterminados y guardados por el usuario).
+ * Obtiene todos los objetos de la biblioteca (combinando los predeterminados y guardados por el usuario),
+ * ordenados de más reciente a más antiguo.
  */
 export function getCustomItems() {
+    if (!DEV_CONFIG.enabled) {
+        return sortCustomItemsByRecency(staticOfficialCustomItems || DEFAULT_3D_PRESETS);
+    }
+
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
+        const localUpdatedAt = Number(localStorage.getItem(STORAGE_UPDATED_KEY) || 0);
         if (!raw) {
             // Inicializar con los presets base
             localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_3D_PRESETS));
-            return [...DEFAULT_3D_PRESETS];
+            localStorage.setItem(STORAGE_UPDATED_KEY, String(DEFAULT_3D_PRESETS_UPDATED_AT || Date.now()));
+            return sortCustomItemsByRecency(DEFAULT_3D_PRESETS);
         }
         let parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
             let updated = false;
+            const codeIsNewerThanCache = DEFAULT_3D_PRESETS_UPDATED_AT > localUpdatedAt;
+
             DEFAULT_3D_PRESETS.forEach(defItem => {
                 const existingIdx = parsed.findIndex(i => i.id === defItem.id);
                 if (existingIdx === -1) {
                     parsed.push(defItem);
                     updated = true;
-                } else if (defItem.updatedAt && (!parsed[existingIdx].updatedAt || parsed[existingIdx].updatedAt < defItem.updatedAt)) {
-                    parsed[existingIdx] = defItem;
-                    updated = true;
+                } else {
+                    const defTime = Number(defItem.updatedAt || 0);
+                    const localTime = Number(parsed[existingIdx].updatedAt || 0);
+                    if ((defTime && defTime > localTime) || codeIsNewerThanCache) {
+                        parsed[existingIdx] = defItem;
+                        updated = true;
+                    }
                 }
             });
-            if (updated) {
-                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch (_) {}
+            if (updated || codeIsNewerThanCache) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+                    localStorage.setItem(STORAGE_UPDATED_KEY, String(Math.max(localUpdatedAt, DEFAULT_3D_PRESETS_UPDATED_AT)));
+                } catch (_) {}
             }
-            return parsed;
+            return sortCustomItemsByRecency(parsed);
         }
-        return [...DEFAULT_3D_PRESETS];
+        return sortCustomItemsByRecency(DEFAULT_3D_PRESETS);
     } catch (err) {
         console.warn('[CustomItemStorage] Error leyendo de localStorage:', err);
-        return [...DEFAULT_3D_PRESETS];
+        return sortCustomItemsByRecency(DEFAULT_3D_PRESETS);
     }
 }
 
@@ -440,11 +216,12 @@ export function getCustomItems() {
  * Guarda o actualiza un objeto en la biblioteca persistente.
  */
 export function saveCustomItem(item) {
-    if (!item) return null;
+    if (!item || !DEV_CONFIG.enabled) return null;
     const items = getCustomItems();
 
+    const now = Date.now();
     const normalizedItem = {
-        id: item.id || `custom_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        id: item.id || `custom_${now}_${Math.random().toString(36).substr(2, 5)}`,
         name: item.name || 'Objeto 3D Personalizado',
         icon: item.icon || '📦',
         socket: item.socket || 'rightHand',
@@ -453,7 +230,7 @@ export function saveCustomItem(item) {
         transform: item.transform || null,
         prompt: item.prompt || '',
         code: item.code || '',
-        updatedAt: Date.now()
+        updatedAt: now
     };
 
     const existingIndex = items.findIndex(i => i.id === normalizedItem.id);
@@ -469,6 +246,7 @@ export function saveCustomItem(item) {
 
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        localStorage.setItem(STORAGE_UPDATED_KEY, String(now));
     } catch (e) {
         console.error('[CustomItemStorage] Error guardando en localStorage:', e);
     }
@@ -482,16 +260,18 @@ export function saveCustomItem(item) {
  * Actualiza el nombre de un objeto en la biblioteca persistente.
  */
 export function updateCustomItemName(id, newName) {
-    if (!id || !newName) return null;
+    if (!id || !newName || !DEV_CONFIG.enabled) return null;
     const items = getCustomItems();
     const item = items.find(i => i.id === id);
     if (!item) return null;
 
+    const now = Date.now();
     item.name = newName.trim();
-    item.updatedAt = Date.now();
+    item.updatedAt = now;
 
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        localStorage.setItem(STORAGE_UPDATED_KEY, String(now));
     } catch (e) {
         console.error('[CustomItemStorage] Error renombrando en localStorage:', e);
     }
@@ -505,7 +285,7 @@ export function updateCustomItemName(id, newName) {
  * Guarda o actualiza la calibración de acople (socket, posición, rotación, escala) de un objeto.
  */
 export function updateCustomItemTransform(id, transform) {
-    if (!id || !transform) return null;
+    if (!id || !transform || !DEV_CONFIG.enabled) return null;
     const items = getCustomItems();
     const item = items.find(i => i.id === id);
     if (!item) return null;
@@ -522,10 +302,12 @@ export function updateCustomItemTransform(id, transform) {
     if (typeof transform.scale === 'number') {
         item.scale = transform.scale;
     }
-    item.updatedAt = Date.now();
+    const now = Date.now();
+    item.updatedAt = now;
 
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        localStorage.setItem(STORAGE_UPDATED_KEY, String(now));
     } catch (e) {
         console.error('[CustomItemStorage] Error actualizando calibración en localStorage:', e);
     }
@@ -540,10 +322,12 @@ export function updateCustomItemTransform(id, transform) {
  */
 export function deleteCustomItem(id) {
     let items = getCustomItems();
+    if (!DEV_CONFIG.enabled) return items;
     items = items.filter(i => i.id !== id);
 
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+        localStorage.setItem(STORAGE_UPDATED_KEY, String(Date.now()));
     } catch (e) {
         console.error('[CustomItemStorage] Error eliminando en localStorage:', e);
     }
@@ -565,7 +349,9 @@ export function getCustomItemById(id) {
  * Restablece la biblioteca a los valores iniciales.
  */
 export function resetCustomLibrary() {
+    if (!DEV_CONFIG.enabled) return [...DEFAULT_3D_PRESETS];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_3D_PRESETS));
+    localStorage.setItem(STORAGE_UPDATED_KEY, String(DEFAULT_3D_PRESETS_UPDATED_AT || Date.now()));
     notifyStorageUpdate();
     sendServerSync({ action: 'sync-all', items: [...DEFAULT_3D_PRESETS] });
     return [...DEFAULT_3D_PRESETS];
@@ -583,10 +369,14 @@ export function exportItemsJSON() {
  * Importa objetos desde una cadena JSON.
  */
 export function importItemsJSON(jsonString) {
+    if (!DEV_CONFIG.enabled) {
+        return { success: false, error: 'Edición deshabilitada en modo jugador.' };
+    }
     try {
         const parsed = JSON.parse(jsonString);
         if (Array.isArray(parsed)) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+            localStorage.setItem(STORAGE_UPDATED_KEY, String(Date.now()));
             notifyStorageUpdate();
             return { success: true, count: parsed.length };
         }
@@ -682,7 +472,7 @@ export function buildThreeMeshFromCode(code) {
  * Envía las mutaciones de objetos al servidor para persistencia automática en disco.
  */
 function sendServerSync(payload) {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !DEV_CONFIG.enabled) return;
     try {
         fetch('/api/custom-items', {
             method: 'POST',
@@ -697,45 +487,75 @@ function sendServerSync(payload) {
 let isServerSyncInitialized = false;
 
 /**
- * Sincroniza al iniciar la aplicación los objetos del servidor y los del navegador.
- * Si el servidor tiene objetos guardados, los fusiona con los locales.
- * Si el navegador tiene objetos creados no presentes en el servidor, los sube automáticamente.
+ * Sincroniza al iniciar la aplicación los objetos del servidor (o manifiesto estático) y los del navegador.
  */
 export async function initServerSync() {
     if (typeof window === 'undefined' || isServerSyncInitialized) return;
     isServerSyncInitialized = true;
 
     try {
-        const res = await fetch('/api/custom-items');
-        if (res.ok) {
-            const data = await res.json();
-            const serverItems = data?.items;
-            const localItems = getCustomItems();
+        let serverItems = null;
+        let isDevApi = false;
 
-            if (Array.isArray(serverItems) && serverItems.length > 0) {
-                const mergedMap = new Map();
-                // 1. Añadir server items como base
-                serverItems.forEach(item => mergedMap.set(item.id, item));
-                // 2. Fusionar local items creados por el usuario que no estén aún en el servidor
-                localItems.forEach(localItem => {
-                    const existing = mergedMap.get(localItem.id);
-                    if (!existing && !localItem.id.startsWith('preset_')) {
-                        mergedMap.set(localItem.id, localItem);
-                    } else if (existing && localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt)) {
-                        mergedMap.set(localItem.id, localItem);
-                    }
-                });
-
-                const mergedList = Array.from(mergedMap.values());
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedList));
-                notifyStorageUpdate();
-
-                // Asegurar que el servidor tenga la lista completa sincronizada
-                sendServerSync({ action: 'sync-all', items: mergedList });
-            } else if (localItems.length > 0) {
-                // Si el servidor apenas está arrancando, subir la lista local actual
-                sendServerSync({ action: 'sync-all', items: localItems });
+        if (DEV_CONFIG.enabled) {
+            const res = await fetch('/api/custom-items', { cache: 'no-store' }).catch(() => null);
+            const contentType = (res?.headers?.get('content-type') || '').toLowerCase();
+            if (res && res.ok && contentType.includes('application/json')) {
+                const data = await res.json().catch(() => null);
+                if (Array.isArray(data?.items)) {
+                    serverItems = data.items;
+                    isDevApi = true;
+                }
             }
+        }
+
+        // Fallback estático oficial para GitHub Pages / versión final / pruebas móviles
+        if (!serverItems) {
+            const staticRes = await fetch('./assets/data/custom_3d_items.json', { cache: 'no-store' }).catch(() => null);
+            const staticType = (staticRes?.headers?.get('content-type') || '').toLowerCase();
+            if (staticRes && staticRes.ok && staticType.includes('application/json')) {
+                const parsedStatic = await staticRes.json().catch(() => null);
+                if (Array.isArray(parsedStatic)) {
+                    serverItems = parsedStatic;
+                }
+            }
+        }
+
+        if (!DEV_CONFIG.enabled) {
+            if (Array.isArray(serverItems) && serverItems.length > 0) {
+                staticOfficialCustomItems = sortCustomItemsByRecency(serverItems);
+                notifyStorageUpdate();
+            }
+            return;
+        }
+
+        const localItems = getCustomItems();
+
+        if (Array.isArray(serverItems) && serverItems.length > 0) {
+            const mergedMap = new Map();
+            // 1. Añadir server/static items como base
+            serverItems.forEach(item => mergedMap.set(item.id, item));
+            // 2. Fusionar local items creados o más recientes en caché dev
+            localItems.forEach(localItem => {
+                const existing = mergedMap.get(localItem.id);
+                if (!existing && !localItem.id.startsWith('preset_')) {
+                    mergedMap.set(localItem.id, localItem);
+                } else if (existing && localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt)) {
+                    mergedMap.set(localItem.id, localItem);
+                }
+            });
+
+            const mergedList = sortCustomItemsByRecency(Array.from(mergedMap.values()));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedList));
+            const maxTime = mergedList.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), DEFAULT_3D_PRESETS_UPDATED_AT);
+            localStorage.setItem(STORAGE_UPDATED_KEY, String(maxTime));
+            notifyStorageUpdate();
+
+            if (isDevApi) {
+                sendServerSync({ action: 'sync-all', items: mergedList });
+            }
+        } else if (isDevApi && localItems.length > 0) {
+            sendServerSync({ action: 'sync-all', items: localItems });
         }
     } catch (e) {
         console.warn('[CustomItemStorage] Servidor de persistencia no disponible:', e);

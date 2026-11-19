@@ -128,7 +128,7 @@ function buildRockInstancedMeshes() {
         const dodecMesh = new THREE.InstancedMesh(dodecGeo, rockMaterial, dodecList.length);
         dodecMesh.castShadow = true;
         dodecMesh.receiveShadow = true;
-        dodecMesh.userData = { isRock: true, type: 'rock', geoType: 'dodecaedro', name: 'Roca Dodecaédrica', instances: dodecList };
+        dodecMesh.userData = { isRock: true, type: 'rock', source: 'rock', proceduralCategory: 'rocks', defaultGroundOffset: 0, geoType: 'dodecaedro', name: 'Roca Dodecaédrica', instances: dodecList };
 
         dodecList.forEach((r, idx) => {
             const isHidden = isProceduralInstanceHidden('rocks', {
@@ -153,7 +153,9 @@ function buildRockInstancedMeshes() {
             dummy.updateMatrix();
 
             dodecMesh.setMatrixAt(idx, dummy.matrix);
-            tempColor.setHex(rockShades[idx % rockShades.length]);
+            const shadeHex = rockShades[idx % rockShades.length];
+            r.rockColor = shadeHex;
+            tempColor.setHex(shadeHex);
             dodecMesh.setColorAt(idx, tempColor);
 
             // Registro de colisión física para instancias visibles
@@ -177,7 +179,7 @@ function buildRockInstancedMeshes() {
         const icosaMesh = new THREE.InstancedMesh(icosaGeo, rockMaterial, icosaList.length);
         icosaMesh.castShadow = true;
         icosaMesh.receiveShadow = true;
-        icosaMesh.userData = { isRock: true, type: 'rock', geoType: 'icosaedro', name: 'Roca Icosaédrica', instances: icosaList };
+        icosaMesh.userData = { isRock: true, type: 'rock', source: 'rock', proceduralCategory: 'rocks', defaultGroundOffset: 0, geoType: 'icosaedro', name: 'Roca Icosaédrica', instances: icosaList };
 
         icosaList.forEach((r, idx) => {
             const isHidden = isProceduralInstanceHidden('rocks', {
@@ -202,7 +204,9 @@ function buildRockInstancedMeshes() {
             dummy.updateMatrix();
 
             icosaMesh.setMatrixAt(idx, dummy.matrix);
-            tempColor.setHex(rockShades[(idx + 2) % rockShades.length]);
+            const shadeHex = rockShades[(idx + 2) % rockShades.length];
+            r.rockColor = shadeHex;
+            tempColor.setHex(shadeHex);
             icosaMesh.setColorAt(idx, tempColor);
 
             // Registro de colisión física para instancias visibles

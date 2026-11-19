@@ -579,9 +579,8 @@ function loadPlayerModel(onSuccess, onError) {
         );
     };
 
-    tryLoad('assets/models/RobotAnimado.glb', [
-        '/assets/models/RobotAnimado.glb',
-        './assets/models/RobotAnimado.glb'
+    tryLoad('./assets/models/RobotAnimado.glb', [
+        'assets/models/RobotAnimado.glb'
     ]);
 }
 
@@ -754,6 +753,16 @@ function equipCurrentSelectedItem() {
     }
 
     if (!previewMesh) return;
+
+    if (previewMesh.name === "DetectorDeMetales" || previewMesh.name?.toLowerCase().includes("detector")) {
+        const lightsToRemove = [];
+        previewMesh.traverse((child) => {
+            if (child.isLight) lightsToRemove.push(child);
+        });
+        lightsToRemove.forEach((light) => {
+            if (light.parent) light.parent.remove(light);
+        });
+    }
 
     previewEquipped[currentSocket] = previewMesh;
     applyItemTransform(previewMesh);

@@ -1,49 +1,9 @@
 {
   "objects": [
     {
-      "id": "world_obj_1794142207979_c4043",
-      "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-      "icon": "\ud83c\udfa8",
-      "source": "glb",
-      "sourceId": "uploaded_1794142167447",
-      "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-      "code": null,
-      "isSolid": true,
-      "logicType": "default",
-      "logicConfig": {},
-      "position": {
-        "x": 220.08360280244636,
-        "y": 2.9010405461163664,
-        "z": -209.35019497190575
-      },
-      "rotationY": 1.249045772398254,
-      "scale": 0.6490665475579718,
-      "placedAt": 1794142208064
-    },
-    {
-      "id": "world_obj_1794142214064_1jw6a",
-      "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-      "icon": "\ud83c\udfa8",
-      "source": "glb",
-      "sourceId": "uploaded_1794142167447",
-      "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-      "code": null,
-      "isSolid": true,
-      "logicType": "default",
-      "logicConfig": {},
-      "position": {
-        "x": 218.83107728135,
-        "y": 2.8851614898198457,
-        "z": -212.32353707609374
-      },
-      "rotationY": 5.961434752782944,
-      "scale": 5,
-      "placedAt": 1794142214155
-    },
-    {
       "id": "world_obj_1794142734377_793x8",
-      "name": "Roca (Dodeca\u00e9drica)",
-      "icon": "\ud83e\udea8",
+      "name": "Roca (Dodecaédrica)",
+      "icon": "🪨",
       "source": "rock",
       "sourceId": null,
       "url": null,
@@ -58,286 +18,408 @@
       "logicConfig": {},
       "position": {
         "x": -87.8157103690462,
-        "y": 1.25,
+        "y": 3.0956722688935994,
         "z": -11.291604753808258
       },
       "rotationY": 1.4555140939313302,
       "scale": 3.163430966045028,
-      "placedAt": 1794142734385,
-      "relativeGroundOffset": 0.0
+      "placedAt": 1794142734385
+    },
+    {
+      "id": "world_obj_1794731832168_rl1rd",
+      "name": "Fantasy House by Quaternius - BH2XHWUNmF",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794731823046",
+      "url": "./assets/models/custom/Fantasy_House_by_Quaternius_-_BH2XHWUNmF.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 206.687191427205,
+        "y": 2.6235481169037853,
+        "z": -185.64764936995542
+      },
+      "relativeGroundOffset": 0.00010974394892727577,
+      "rotationY": 4.3906384259880475,
+      "scale": 3.6491,
+      "placedAt": 1794731832378,
+      "scaleXYZ": {
+        "x": 3.6491000000000002,
+        "y": 3.6491000000000002,
+        "z": 3.6491000000000002
+      }
+    },
+    {
+      "id": "world_obj_1794743652325_5ehg3",
+      "name": "Fence by Quaternius - U7g0Wxpt63",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 218.93542176391338,
+        "y": 2.628584938259203,
+        "z": -190.58084777957586
+      },
+      "relativeGroundOffset": 0.028487001033499937,
+      "rotationY": 1.249045772398254,
+      "scale": 0.9827,
+      "placedAt": 1794743652451,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      }
+    },
+    {
+      "id": "world_obj_1794896517533_k5p0s",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-1",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 216.9814079007827,
+        "y": 2.5930063718102097,
+        "z": -184.71880619018384
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 1.249045772398254,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896517652
+    },
+    {
+      "id": "world_obj_1794896533587_8lgm7",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-2",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 215.02739403765202,
+        "y": 2.6900424161605767,
+        "z": -178.85676460079182
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 1.249045772398254,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896533705
+    },
+    {
+      "id": "world_obj_1794896642284_kuj0t",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-3",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 211.0561207581873,
+        "y": 2.747022151043578,
+        "z": -177.02924184406788
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": -0.3217505543966426,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896642371
+    },
+    {
+      "id": "world_obj_1794896668638_9g1di",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-4",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 205.19407916879527,
+        "y": 2.7897433991322185,
+        "z": -178.98325570719857
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": -0.3217505543966426,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896668722
+    },
+    {
+      "id": "world_obj_1794896702233_l25b1",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-5",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 199.33203757940325,
+        "y": 2.8976631794959866,
+        "z": -180.93726957032925
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": -0.3217505543966426,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896702354
+    },
+    {
+      "id": "world_obj_1794896748434_o2ha7",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-6",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 197.5045148226793,
+        "y": 2.747100364167624,
+        "z": -184.90854284979397
+      },
+      "relativeGroundOffset": -0.14206099971197544,
+      "rotationY": 1.249045772398254,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896748524
+    },
+    {
+      "id": "world_obj_1794896790696_mt4f6",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-8",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 200.0787963044512,
+        "y": 2.650859278002803,
+        "z": -192.56648757723764
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 1.249045772398254,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794896790775
+    },
+    {
+      "id": "world_obj_1794983237663_bf3up",
+      "name": "Árbol (Arquetipo 7)",
+      "icon": "🌲",
+      "source": "tree",
+      "sourceId": null,
+      "url": null,
+      "code": null,
+      "archetypeIndex": 6,
+      "trunkColor": 6177317,
+      "leafColor": 5159772,
+      "geoType": 0,
+      "rockColor": 6710886,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 219.44820226457932,
+        "y": 2.2844936293431535,
+        "z": -193.55922265959836
+      },
+      "relativeGroundOffset": -0.35,
+      "rotationY": 0.8169966862779509,
+      "scale": 0.9614,
+      "scaleXYZ": {
+        "x": 0.9613571144777923,
+        "y": 0.9613571166992188,
+        "z": 0.9613571144777923
+      },
+      "placedAt": 1794983237673
+    },
+    {
+      "id": "world_obj_1794983288246_b00fp",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-7",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 202.03281016758189,
+        "y": 2.4564880406853473,
+        "z": -198.42852916662966
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 1.249045772398254,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794983288330
+    },
+    {
+      "id": "world_obj_1794983312086_kmre7",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-9",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 205.8809499760314,
+        "y": 2.413270313658345,
+        "z": -200.03847860624933
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 2.732575636593434,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794983312194
+    },
+    {
+      "id": "world_obj_1794983487080_x4sbb",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-10",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 211.55038119779664,
+        "y": 2.4707810392489233,
+        "z": -197.58098976705966
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 2.732575636593434,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794983487188
+    },
+    {
+      "id": "world_obj_1794983502262_6aagw",
+      "name": "Fence by Quaternius - U7g0Wxpt63 copia-11",
+      "icon": "🎨",
+      "source": "glb",
+      "sourceId": "uploaded_1794743619601",
+      "url": "./assets/models/custom/Fence_by_Quaternius_-_U7g0Wxpt63.glb",
+      "code": null,
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 217.2198124195619,
+        "y": 2.5804607117885987,
+        "z": -195.12350092787
+      },
+      "relativeGroundOffset": 0.007939000288024545,
+      "rotationY": 2.732575636593434,
+      "scale": 0.9827,
+      "scaleXYZ": {
+        "x": 1.049066547557972,
+        "y": 0.85,
+        "z": 1.049066547557972
+      },
+      "placedAt": 1794983502381
+    },
+    {
+      "id": "world_obj_1795079148446_jt59t",
+      "name": "Escritorio con Portátil",
+      "icon": "🪑",
+      "source": "custom",
+      "sourceId": "item_1794984046286",
+      "url": null,
+      "code": "// Mesa / Escritorio Modular\nconst group = new THREE.Group();\ngroup.name = \"MesaEscritorio\";\n\n// Materiales\nconst topMat = new THREE.MeshStandardMaterial({ \n    color: 0x1e293b, \n    roughness: 0.6, \n    metalness: 0.1,\n    transparent: false,\n    opacity: 1.0\n});\nconst legMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85, roughness: 0.2 });\n\n// 1. Tablero principal\nconst topGeo = new THREE.BoxGeometry(1.20, 0.05, 0.65);\nconst top = new THREE.Mesh(topGeo, topMat);\ntop.position.set(0, 0.72, 0);\ngroup.add(top);\n\n// 2. Cuatro patas metálicas resistentes\nconst legGeo = new THREE.CylinderGeometry(0.024, 0.022, 0.70, 16);\nconst offsets = [\n    [-0.52, 0.35, -0.26],\n    [0.52, 0.35, -0.26],\n    [-0.52, 0.35, 0.26],\n    [0.52, 0.35, 0.26]\n];\noffsets.forEach(([x, y, z]) => {\n    const leg = new THREE.Mesh(legGeo, legMat);\n    leg.position.set(x, y, z);\n    group.add(leg);\n    // Taco de goma en la base\n    const footGeo = new THREE.CylinderGeometry(0.028, 0.028, 0.02, 12);\n    const foot = new THREE.Mesh(footGeo, new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 }));\n    foot.position.set(x, 0.01, z);\n    group.add(foot);\n});\n\n// 3. Portátil integrado ampliado sobre el escritorio\nconst lapChassisMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85, roughness: 0.15 });\nconst lapKeyboardMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.85, metalness: 0.1 });\nconst lapScreenMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 1.2 });\n\n// Base del portátil ampliada (0.60m x 0.40m sobre tablero de 1.20m x 0.65m)\nconst lapBase = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.024, 0.40), lapChassisMat);\nlapBase.position.set(0, 0.757, 0.05);\ngroup.add(lapBase);\n\n// Teclado integrado\nconst lapKeyboard = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.004, 0.17), lapKeyboardMat);\nlapKeyboard.position.set(0, 0.771, 0.00);\ngroup.add(lapKeyboard);\n\n// Tapa y pantalla abierta ampliada\nconst lapLidGroup = new THREE.Group();\nlapLidGroup.position.set(0, 0.769, -0.15);\nlapLidGroup.rotation.x = -1.90;\n\nconst lapLid = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.016, 0.40), lapChassisMat);\nlapLid.position.set(0, 0, 0.20);\nlapLidGroup.add(lapLid);\n\nconst lapScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.34), lapScreenMat);\nlapScreen.position.set(0, 0.009, 0.20);\nlapScreen.rotation.x = -Math.PI / 2;\nlapLidGroup.add(lapScreen);\n\nconst lapScreenInner = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.34), lapScreenMat);\nlapScreenInner.position.set(0, -0.009, 0.20);\nlapScreenInner.rotation.x = Math.PI / 2;\nlapLidGroup.add(lapScreenInner);\n\ngroup.add(lapLidGroup);\n\n// Luz del portátil iluminando el escritorio\nconst lapLight = new THREE.PointLight(0x38bdf8, 1.15, 2.2);\nlapLight.position.set(0, 0.98, 0.02);\ngroup.add(lapLight);\n\nreturn group;",
+      "isSolid": true,
+      "logicType": "default",
+      "logicConfig": {},
+      "position": {
+        "x": 206.1285365337594,
+        "y": 2.448676004198016,
+        "z": -196.58959855154112
+      },
+      "relativeGroundOffset": -2.7939716339131504e-10,
+      "rotationY": 0.7853981633974483,
+      "scale": 1.25,
+      "scaleXYZ": {
+        "x": 1.25,
+        "y": 1.25,
+        "z": 1.25
+      },
+      "placedAt": 1795079148451
     }
   ],
-  "versions": [
-    {
-      "id": "ver_1794142765583",
-      "name": "Fijado en C\u00f3digo (Git)",
-      "timestamp": 1794142765583,
-      "dateStr": "8/11/2026 13:59:25",
-      "count": 3,
-      "objects": [
-        {
-          "id": "world_obj_1794142207979_c4043",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 220.08360280244636,
-            "y": 2.9010405461163664,
-            "z": -209.35019497190575
-          },
-          "rotationY": 1.249045772398254,
-          "scale": 0.6490665475579718,
-          "placedAt": 1794142208064
-        },
-        {
-          "id": "world_obj_1794142214064_1jw6a",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 218.83107728135,
-            "y": 2.8851614898198457,
-            "z": -212.32353707609374
-          },
-          "rotationY": 5.961434752782944,
-          "scale": 5,
-          "placedAt": 1794142214155
-        },
-        {
-          "id": "world_obj_1794142734377_793x8",
-          "name": "Roca (Dodeca\u00e9drica)",
-          "icon": "\ud83e\udea8",
-          "source": "rock",
-          "sourceId": null,
-          "url": null,
-          "code": null,
-          "archetypeIndex": 0,
-          "trunkColor": 8026746,
-          "leafColor": 3043136,
-          "geoType": "dodecaedro",
-          "rockColor": 6710886,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": -87.8157103690462,
-            "y": 3.0956722688935994,
-            "z": -11.291604753808258
-          },
-          "rotationY": 1.4555140939313302,
-          "scale": 3.163430966045028,
-          "placedAt": 1794142734385
-        }
-      ]
-    },
-    {
-      "id": "ver_1794142765580",
-      "name": "Guardado desde Modo Dios",
-      "timestamp": 1794142765580,
-      "dateStr": "8/11/2026 13:59:25",
-      "count": 3,
-      "objects": [
-        {
-          "id": "world_obj_1794142207979_c4043",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 220.08360280244636,
-            "y": 2.9010405461163664,
-            "z": -209.35019497190575
-          },
-          "rotationY": 1.249045772398254,
-          "scale": 0.6490665475579718,
-          "placedAt": 1794142208064
-        },
-        {
-          "id": "world_obj_1794142214064_1jw6a",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 218.83107728135,
-            "y": 2.8851614898198457,
-            "z": -212.32353707609374
-          },
-          "rotationY": 5.961434752782944,
-          "scale": 5,
-          "placedAt": 1794142214155
-        },
-        {
-          "id": "world_obj_1794142734377_793x8",
-          "name": "Roca (Dodeca\u00e9drica)",
-          "icon": "\ud83e\udea8",
-          "source": "rock",
-          "sourceId": null,
-          "url": null,
-          "code": null,
-          "archetypeIndex": 0,
-          "trunkColor": 8026746,
-          "leafColor": 3043136,
-          "geoType": "dodecaedro",
-          "rockColor": 6710886,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": -87.8157103690462,
-            "y": 3.0956722688935994,
-            "z": -11.291604753808258
-          },
-          "rotationY": 1.4555140939313302,
-          "scale": 3.163430966045028,
-          "placedAt": 1794142734385
-        }
-      ]
-    },
-    {
-      "id": "ver_1794142604856",
-      "name": "Fijado en C\u00f3digo (Git)",
-      "timestamp": 1794142604856,
-      "dateStr": "8/11/2026 13:56:44",
-      "count": 2,
-      "objects": [
-        {
-          "id": "world_obj_1794142207979_c4043",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 220.08360280244636,
-            "y": 2.9010405461163664,
-            "z": -209.35019497190575
-          },
-          "rotationY": 1.249045772398254,
-          "scale": 0.6490665475579718,
-          "placedAt": 1794142208064
-        },
-        {
-          "id": "world_obj_1794142214064_1jw6a",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 218.83107728135,
-            "y": 2.8851614898198457,
-            "z": -212.32353707609374
-          },
-          "rotationY": 5.961434752782944,
-          "scale": 5,
-          "placedAt": 1794142214155
-        }
-      ]
-    },
-    {
-      "id": "ver_1794142604825",
-      "name": "Guardado desde Modo Dios",
-      "timestamp": 1794142604825,
-      "dateStr": "8/11/2026 13:56:44",
-      "count": 2,
-      "objects": [
-        {
-          "id": "world_obj_1794142207979_c4043",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 220.08360280244636,
-            "y": 2.9010405461163664,
-            "z": -209.35019497190575
-          },
-          "rotationY": 1.249045772398254,
-          "scale": 0.6490665475579718,
-          "placedAt": 1794142208064
-        },
-        {
-          "id": "world_obj_1794142214064_1jw6a",
-          "name": "Fantasy Barracks by Quaternius - wTDbVozPAj",
-          "icon": "\ud83c\udfa8",
-          "source": "glb",
-          "sourceId": "uploaded_1794142167447",
-          "url": "assets/models/custom/Fantasy_Barracks_by_Quaternius_-_wTDbVozPAj.glb",
-          "code": null,
-          "isSolid": true,
-          "logicType": "default",
-          "logicConfig": {},
-          "position": {
-            "x": 218.83107728135,
-            "y": 2.8851614898198457,
-            "z": -212.32353707609374
-          },
-          "rotationY": 5.961434752782944,
-          "scale": 5,
-          "placedAt": 1794142214155
-        }
-      ]
-    },
-    {
-      "id": "ver_1794125411349",
-      "name": "Guardado desde Modo Dios",
-      "timestamp": 1794125411349,
-      "dateStr": "8/11/2026 9:10:11",
-      "count": 0,
-      "objects": []
-    },
-    {
-      "id": "ver_1793429991686",
-      "name": "Fijado en C\u00f3digo (Git)",
-      "timestamp": 1793429991686,
-      "dateStr": "31/10/2026 7:59:51",
-      "count": 0,
-      "objects": []
-    },
-    {
-      "id": "ver_1794125411413",
-      "name": "Fijado en C\u00f3digo (Git)",
-      "timestamp": 1794125411413,
-      "dateStr": "8/11/2026 9:10:11",
-      "count": 0,
-      "objects": []
-    }
-  ],
-  "updatedAt": 1794143764076
+  "updatedAt": 1795085050000
 }

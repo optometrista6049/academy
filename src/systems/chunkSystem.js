@@ -33,15 +33,49 @@ export function getChunkKeyFromPos(x, z) {
 // SPATIAL HASH GRID PARA FÍSICA Y COLISIONES
 // ======================================================
 /**
- * Registra un objeto colisionable en la celda espacial correspondiente.
+ * Registra un objeto colisionable en todas las celdas espaciales que cubre su caja OBB o radio.
  */
 export function registerCollidableInGrid(item) {
     if (!item || !item.position) return;
-    const key = getChunkKeyFromPos(item.position.x, item.position.z);
-    if (!spatialGrid.has(key)) {
-        spatialGrid.set(key, []);
+
+    let wx = item.position.x;
+    let wz = item.position.z;
+    let extentX = 0.5;
+    let extentZ = 0.5;
+
+    const obb = item.userData?.obbCollision;
+    if (obb && typeof obb.halfX === 'number' && typeof obb.halfZ === 'number') {
+        const ry = item.rotation ? item.rotation.y : 0;
+        const cosR = Math.cos(ry);
+        const sinR = Math.sin(ry);
+        const ox = obb.offsetX || 0;
+        const oz = obb.offsetZ || 0;
+        wx += ox * cosR + oz * sinR;
+        wz += -ox * sinR + oz * cosR;
+        extentX = obb.halfX * Math.abs(cosR) + obb.halfZ * Math.abs(sinR) + 0.5;
+        extentZ = obb.halfX * Math.abs(sinR) + obb.halfZ * Math.abs(cosR) + 0.5;
+    } else if (typeof item.userData?.radius === 'number' && item.userData.radius > 0) {
+        extentX = item.userData.radius;
+        extentZ = item.userData.radius;
     }
-    spatialGrid.get(key).push(item);
+
+    const minCx = getChunkCoord(wx - extentX);
+    const maxCx = getChunkCoord(wx + extentX);
+    const minCz = getChunkCoord(wz - extentZ);
+    const maxCz = getChunkCoord(wz + extentZ);
+
+    for (let cx = minCx; cx <= maxCx; cx++) {
+        for (let cz = minCz; cz <= maxCz; cz++) {
+            const key = getChunkKey(cx, cz);
+            if (!spatialGrid.has(key)) {
+                spatialGrid.set(key, []);
+            }
+            const bucket = spatialGrid.get(key);
+            if (!bucket.includes(item)) {
+                bucket.push(item);
+            }
+        }
+    }
 }
 
 /**
@@ -54,8 +88,9 @@ export function rebuildSpatialGrid(collidablesList) {
     }
 }
 
-// Buffer preasignado reutilizable para consultas espaciales (Zero-Allocation)
+// Buffer y Set preasignados reutilizables para consultas espaciales (Zero-Allocation)
 const nearbyBuffer = [];
+const nearbySeenSet = new Set();
 
 /**
  * Obtiene solo los colisionables situados en la celda del jugador y las 8 celdas adyacentes (3x3).
@@ -64,6 +99,7 @@ export function getNearbyCollidables(px, pz) {
     const centerCx = getChunkCoord(px);
     const centerCz = getChunkCoord(pz);
     nearbyBuffer.length = 0;
+    nearbySeenSet.clear();
 
     for (let dx = -1; dx <= 1; dx++) {
         for (let dz = -1; dz <= 1; dz++) {
@@ -71,7 +107,11 @@ export function getNearbyCollidables(px, pz) {
             const bucket = spatialGrid.get(key);
             if (bucket && bucket.length > 0) {
                 for (let i = 0; i < bucket.length; i++) {
-                    nearbyBuffer.push(bucket[i]);
+                    const obj = bucket[i];
+                    if (!nearbySeenSet.has(obj)) {
+                        nearbySeenSet.add(obj);
+                        nearbyBuffer.push(obj);
+                    }
                 }
             }
         }
@@ -128,6 +168,19 @@ export function updateChunkSystem() {
     const now = performance.now();
     if (now - lastChunkUpdate < 150) return; // Ejecutar cada 150ms para máxima eficiencia de CPU
     lastChunkUpdate = now;
+
+    if (runtimeState.isGodMode) {
+        visualChunks.forEach(chunk => {
+            if (!chunk.visible) {
+                chunk.visible = true;
+                for (let i = 0; i < chunk.objects.length; i++) {
+                    const obj = chunk.objects[i];
+                    if (obj) obj.visible = true;
+                }
+            }
+        });
+        return;
+    }
 
     if (!runtimeState.player) return;
 
