@@ -7,7 +7,8 @@ Registro
 
 import {
     lockInput,
-    unlockInput
+    unlockInput,
+    hasOtherInputLocks
 } from "../../systems/inputLockSystem.js";
 
 import {
@@ -599,6 +600,43 @@ export function isRegistryUnlocked(){
 
 }
 
+export function syncRegistryButtonVisibility(){
+
+    const unlocked = Boolean(gameState.flags?.registryUnlocked);
+
+    if(registryBase){
+
+        registryBase.style.display = unlocked ? "" : "none";
+
+        if(!unlocked){
+            registryBase.classList.remove("registry-unlocked-reveal", "registry-spotlight");
+        }
+
+    }
+
+    if(registryButton){
+
+        registryButton.style.display = unlocked ? "" : "none";
+
+        if(!unlocked){
+            registryButton.classList.remove("registry-unlocked-reveal", "registry-attention-pulse", "registry-spotlight");
+        }
+
+    }
+
+    if(!unlocked){
+
+        dismissRegistrySpotlight();
+        dismissRegistryAttentionPulse();
+
+        if(isOpen){
+            closeRegistry();
+        }
+
+    }
+
+}
+
 //======================================================
 // ACTUALIZAR PESTAÑAS
 //======================================================
@@ -728,9 +766,27 @@ function registerEvents(){
 // TECLADO
 //======================================================
 
+function isTypingInField(target){
+    if(!target) return false;
+    const tag = target.tagName ? target.tagName.toUpperCase() : "";
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || Boolean(target.isContentEditable);
+}
+
 function onKeyDown(event){
 
     if(event.repeat){
+
+        return;
+
+    }
+
+    if(isTypingInField(event.target)){
+
+        return;
+
+    }
+
+    if(hasOtherInputLocks("registry")){
 
         return;
 

@@ -10,6 +10,9 @@ from '../systems/inputLockSystem.js';
 import { saveGame, saveMissionCheckpoint }
 from '../systems/saveSystem.js';
 
+import { getHeightAt }
+from '../terrain/terrainHeight.js';
+
 import {
 
     showInteraction,
@@ -62,6 +65,7 @@ import {
 from '../entities/objects/muebleObject.js';
 
 let interactionTarget = null;
+let itemBannerTimer = null;
 
 import { dialogueState }
 from '../dialogue/dialogueState.js';
@@ -72,20 +76,29 @@ from '../ui/pandaReminder.js';
 import {
     pandaIntroDialogue,
     montyWaitingDialogue,
-    montyTurnInDialogue
+    montyTurnInDialogue,
+    montyMission2WaitingDialogue
 } from '../dialogue/dialogues/pandaIntro.js';
+
+import {
+    altoMission2IntroDialogue,
+    altoMission2WaitingDialogue,
+    altoMission2TurnInDialogue
+} from '../dialogue/dialogues/altoMission2.js';
 
 import { getNextNeutralDialogue }
 from '../dialogue/neutralDialogues.js';
 
 import {
     hasInventoryItem,
+    getInventoryItemCount,
     addInventoryItem,
     removeInventoryItem
 } from '../ui/registry/modules/inventoryModuleV2.js';
 
 import { archiveItem } from '../ui/registry/modules/archiveModule.js';
 import { showItemObtainedBanner } from '../ui/itemObtainedNotification.js';
+import { unlockBatterySystem } from '../systems/sessionBatterySystem.js';
 
 import {
     startMissionFromData,
@@ -103,8 +116,13 @@ import {
 import { updateDiaryContent }
 from '../ui/registry/modules/diaryModule.js';
 
-import { mission001 }
+import { mission001, mission002 }
 from '../systems/missions/missionData.js';
+
+import {
+    getNearbyMicrochipTarget,
+    collectActiveMicrochip
+} from '../systems/microchipHuntSystem.js';
 
 
 // =====================================
@@ -227,7 +245,7 @@ export function updateInteractionSystem(){
     // PANDA
     // ==========================
 
-    if(panda){
+    if(panda && !panda.userData?.hiddenByLayout){
 
         const distance =
 
@@ -258,7 +276,7 @@ export function updateInteractionSystem(){
     // ALTO
     // ==========================
 
-    if(alto){
+    if(alto && !alto.userData?.hiddenByLayout){
 
         const distance =
 
@@ -289,7 +307,7 @@ export function updateInteractionSystem(){
     // TELERIN
     // ==========================
 
-    if(telerin){
+    if(telerin && !telerin.userData?.hiddenByLayout){
 
         const distance =
 
@@ -320,7 +338,7 @@ export function updateInteractionSystem(){
     // TELERON
     // ==========================
 
-    if(teleron){
+    if(teleron && !teleron.userData?.hiddenByLayout){
 
         const distance =
 
@@ -353,7 +371,7 @@ export function updateInteractionSystem(){
 
     const mueble = getMuebleObject();
 
-    if(mueble){
+    if(mueble && !mueble.userData?.hiddenByLayout){
 
         const distance =
 
@@ -363,7 +381,11 @@ export function updateInteractionSystem(){
 
             );
 
-        if(distance < 2.8){
+        const muebleScale = mueble.userData?.logicalScale;
+        const maxEdge = Math.max(1.0, muebleScale?.x || 1.0, muebleScale?.z || 1.0);
+        const interactRange = 2.0 + 0.8 * maxEdge;
+
+        if(distance < interactRange){
 
             interactionTarget =
                 'mueble';
@@ -376,6 +398,26 @@ export function updateInteractionSystem(){
             return;
 
         }
+
+    }
+
+    // ==========================
+    // MICROCHIP (DETECTOR EQUIPADO)
+    // ==========================
+
+    const nearbyChip = getNearbyMicrochipTarget();
+
+    if(nearbyChip){
+
+        interactionTarget =
+            'microchip';
+
+        showInteraction(
+            'Recoger microchip',
+            'pickup'
+        );
+
+        return;
 
     }
 
@@ -392,7 +434,9 @@ export function tryInteraction(){
 	
 	if(
 
-    dialogueState.active
+    dialogueState.active ||
+    isMuebleCinematicActive() ||
+    isInputLocked()
 
 ){
 
@@ -417,19 +461,23 @@ export function tryInteraction(){
             if (!gameState.flags.metPanda) {
 
                 // Callback cuando el jugador completa la presentacion y encargo de Monty
-                pandaIntroDialogue.onComplete = () => {
-                    gameState.flags.metPanda = true;
-                    gameState.flags.metMonty = true;
-                    gameState.quests.mission_001 = 'active';
-                    startMissionFromData(mission001);
-                    setPandaIdle();
-                    updateDiaryContent();
-                    saveGame();
+                const introPayload = {
+                    ...pandaIntroDialogue,
+                    onComplete: () => {
+                        if (typeof pandaIntroDialogue.onComplete === 'function') {
+                            pandaIntroDialogue.onComplete();
+                        }
+                        gameState.flags.metPanda = true;
+                        gameState.flags.metMonty = true;
+                        gameState.quests.mission_001 = 'active';
+                        startMissionFromData(mission001);
+                        setPandaIdle();
+                        updateDiaryContent();
+                        saveGame();
+                    }
                 };
 
-                startDialogue(
-                    pandaIntroDialogue
-                );
+                startDialogue(introPayload);
 
             } else {
 
@@ -446,16 +494,28 @@ export function tryInteraction(){
                     gameState.flags.deliveredBox = true;
                     gameState.flags.receivedAspirantCard = true;
                     gameState.quests.mission_001 = 'completed';
+                    gameState.quests.mission_002 = 'active';
+                    startMissionFromData(mission002);
                     updateDiaryContent();
                     saveMissionCheckpoint('mission_001_complete', {
                         name: 'Misión 1: Carnet de Aspirante',
-                        safeLocation: { x: 0, y: 0, z: 4 }
+                        safeLocation: {
+                            x: 0,
+                            y: getHeightAt(0, 4) + (runtimeState.playerHeightOffset || 0),
+                            z: 4
+                        }
                     });
                     saveGame();
 
                     // Disparar efecto audiovisual (Opción A: Banner flotante + Chime armónico)
                     // coordinado con la aparición del texto de Monty presentando el Carnet
-                    setTimeout(() => {
+                    if (itemBannerTimer) {
+                        clearTimeout(itemBannerTimer);
+                        itemBannerTimer = null;
+                    }
+                    itemBannerTimer = setTimeout(() => {
+                        itemBannerTimer = null;
+                        if (!runtimeState.sessionStarted) return;
                         showItemObtainedBanner({
                             title: '¡Acreditación Obtenida!',
                             itemName: 'Carnet de Aspirante',
@@ -464,15 +524,25 @@ export function tryInteraction(){
                         });
                     }, 1300);
 
-                    montyTurnInDialogue.onComplete = () => {
-                        updateDiaryContent();
+                    const turnInPayload = {
+                        ...montyTurnInDialogue,
+                        onComplete: () => {
+                            if (typeof montyTurnInDialogue.onComplete === 'function') {
+                                montyTurnInDialogue.onComplete();
+                            }
+                            updateDiaryContent();
+                        }
                     };
 
-                    startDialogue(montyTurnInDialogue);
+                    startDialogue(turnInPayload);
 
                 } else if (!gameState.flags.deliveredBox) {
 
                     startDialogue(montyWaitingDialogue);
+
+                } else if (gameState.quests?.mission_002 === 'active' && !gameState.flags?.altoScannedCard) {
+
+                    startDialogue(montyMission2WaitingDialogue);
 
                 } else {
 
@@ -494,6 +564,98 @@ export function tryInteraction(){
 
             if (!gameState.flags.metPanda) {
                 startDialogue(altoBusyDialogue);
+            } else if (
+                (gameState.quests?.mission_002 === 'active' || gameState.flags?.receivedAspirantCard) &&
+                !gameState.flags?.altoScannedCard
+            ) {
+                let detectorGranted = false;
+                const grantDetectorStep = () => {
+                    if (detectorGranted) return;
+                    detectorGranted = true;
+                    if (gameState.quests?.mission_002 !== 'active' && gameState.quests?.mission_002 !== 'completed') {
+                        gameState.quests.mission_002 = 'active';
+                        startMissionFromData(mission002);
+                    }
+                    gameState.flags.altoScannedCard = true;
+                    completeObjective('showCardToAlto');
+                    const addedDetector = addInventoryItem('metalDetector');
+                    updateDiaryContent();
+                    saveGame();
+                    if (addedDetector) {
+                        showItemObtainedBanner({
+                            title: '¡Herramienta Recibida!',
+                            itemName: 'Detector de metales',
+                            subtitle: 'Añadido al Inventario · Equípalo cuando lo necesites',
+                            thumbnail: 'assets/registry/inventory/metalDetector.svg'
+                        });
+                    }
+                };
+
+                startDialogue({
+                    ...altoMission2IntroDialogue,
+                    onPageChange(pageIndex) {
+                        if (pageIndex === 2) {
+                            grantDetectorStep();
+                        }
+                    },
+                    onComplete() {
+                        grantDetectorStep();
+                        updateDiaryContent();
+                    }
+                });
+            } else if (gameState.flags?.altoScannedCard && !gameState.flags?.deliveredMicrochips) {
+                const chipCount = getInventoryItemCount('microchip');
+                if (chipCount < 7) {
+                    startDialogue(altoMission2WaitingDialogue);
+                } else {
+                    removeInventoryItem('microchip');
+                    addInventoryItem('visualHygieneDoc');
+                    addInventoryItem('timeControlDoc');
+                    unlockBatterySystem(true);
+                    gameState.flags.deliveredMicrochips = true;
+                    gameState.quests.mission_002 = 'completed';
+                    completeObjective('findMicrochips');
+                    completeObjective('deliverMicrochipsToAlto');
+                    completeActiveMission();
+                    updateDiaryContent();
+                    saveMissionCheckpoint('mission_002_complete', {
+                        name: 'Misión 2: El Registro de Entrada',
+                        safeLocation: {
+                            x: runtimeState.player ? runtimeState.player.position.x : gameState.player.x,
+                            y: runtimeState.player ? runtimeState.player.position.y : gameState.player.y,
+                            z: runtimeState.player ? runtimeState.player.position.z : gameState.player.z
+                        }
+                    });
+                    saveGame();
+
+                    let docsBannerShown = false;
+                    startDialogue({
+                        ...altoMission2TurnInDialogue,
+                        onPageChange(pageIndex) {
+                            if (pageIndex === 2 && !docsBannerShown) {
+                                docsBannerShown = true;
+                                showItemObtainedBanner({
+                                    title: '¡Documentos Recibidos!',
+                                    itemName: '2 Guías Oficiales (PDF)',
+                                    subtitle: 'Disponibles en tu Registro para abrir o archivar',
+                                    thumbnail: 'assets/registry/inventory/docTimeControl.svg'
+                                });
+                            }
+                        },
+                        onComplete() {
+                            if (!docsBannerShown) {
+                                docsBannerShown = true;
+                                showItemObtainedBanner({
+                                    title: '¡Registro Completado!',
+                                    itemName: 'Control de Tiempo y Guías PDF',
+                                    subtitle: 'Sistema activado y documentos en Registro',
+                                    thumbnail: 'assets/registry/inventory/docTimeControl.svg'
+                                });
+                            }
+                            updateDiaryContent();
+                        }
+                    });
+                }
             } else {
                 const next = getNextNeutralDialogue('alto');
                 if (next) {
@@ -576,6 +738,13 @@ export function tryInteraction(){
                 });
 
             }
+
+            break;
+
+
+        case 'microchip':
+
+            collectActiveMicrochip();
 
             break;
 

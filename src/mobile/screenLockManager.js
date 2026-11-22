@@ -5,21 +5,34 @@
       si el móvil se suspende o sale de fullscreen.
    ====================================================== */
 
+import { isMobile as detectMobile } from './mobileDetection.js';
+
 let wakeLock = null;
 let fullscreenPrompt = null;
 let isMobile = false;
 
 export function initScreenLockManager() {
-    isMobile = checkIsMobile();
+    isMobile = detectMobile();
 
-    // 1. Activar Wake Lock en el primer gesto del usuario
-    const requestLockOnGesture = async () => {
-        await acquireWakeLock();
-    };
+    // 1. Activar Wake Lock en el primer gesto del usuario (solo si está soportado)
+    if ('wakeLock' in navigator) {
+        const gestureEvents = ['touchstart', 'touchend', 'pointerdown', 'click', 'keydown'];
+        const cleanupGestureListeners = () => {
+            gestureEvents.forEach(evt => {
+                window.removeEventListener(evt, requestLockOnGesture);
+            });
+        };
+        const requestLockOnGesture = async () => {
+            const result = await acquireWakeLock();
+            if (result === 'acquired' || result === 'denied') {
+                cleanupGestureListeners();
+            }
+        };
 
-    ['touchstart', 'touchend', 'pointerdown', 'click', 'keydown'].forEach(evt => {
-        window.addEventListener(evt, requestLockOnGesture, { passive: true });
-    });
+        gestureEvents.forEach(evt => {
+            window.addEventListener(evt, requestLockOnGesture, { passive: true });
+        });
+    }
 
     // 2. Re-adquirir Wake Lock al volver a la pestaña
     document.addEventListener('visibilitychange', async () => {
@@ -65,17 +78,22 @@ export function initScreenLockManager() {
 // ======================================================
 
 async function acquireWakeLock() {
-    if (!('wakeLock' in navigator)) return;
-    if (wakeLock !== null) return; // Ya activo
+    if (!('wakeLock' in navigator)) return 'unsupported';
+    if (wakeLock !== null) return 'acquired'; // Ya activo
 
     try {
         wakeLock = await navigator.wakeLock.request('screen');
         wakeLock.addEventListener('release', () => {
             wakeLock = null;
         });
+        return 'acquired';
     } catch (err) {
         // En algunas plataformas puede fallar si la batería es muy baja o no tiene permiso
         console.warn('Wake Lock no disponible o denegado:', err);
+        if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+            return 'denied';
+        }
+        return 'failed';
     }
 }
 
@@ -144,10 +162,4 @@ export async function triggerFullscreen() {
     }
     hideCentralFullscreenPrompt();
     await acquireWakeLock();
-}
-
-function checkIsMobile() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-           (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
-           (window.innerWidth <= 900);
 }

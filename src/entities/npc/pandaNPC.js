@@ -9,6 +9,8 @@ import { addCollidable }
 
 from '../collisions.js';
 
+import { getHeightAt } from '../../terrain/terrainHeight.js';
+
 import {
 
     registerWorldObject
@@ -38,7 +40,7 @@ export function loadPandaNPC(){
 	console.log('LOAD PANDA NPC');
     const transform = getEntityTransform('npcs', 'Panda', { x: 16, z: 14, rotationY: 0, scale: 1.8 });
 
-    loadModel(
+    return loadModel(
 
         'assets/models/npc/PandaNPC.glb',
 
@@ -51,8 +53,28 @@ export function loadPandaNPC(){
         (model,gltf)=>{
 			console.log('PANDA MODEL LOADED');
 
+            const initDesiredScale = transform.scale || 1.8;
+            const rawHeightFactor = (model.scale.x || initDesiredScale) / initDesiredScale;
+
             PandaNPC = model;
-            PandaNPC.userData = { isNPC: true, npcName: 'Panda', type: 'npc' };
+            PandaNPC.userData = { isNPC: true, npcName: 'Panda', type: 'npc', rawHeightFactor };
+
+            if (transform.scaleXYZ && typeof transform.scaleXYZ === 'object') {
+                const sx = Number(transform.scaleXYZ.x) || initDesiredScale;
+                const sy = Number(transform.scaleXYZ.y) || initDesiredScale;
+                const sz = Number(transform.scaleXYZ.z) || initDesiredScale;
+                PandaNPC.scale.set(sx * rawHeightFactor, sy * rawHeightFactor, sz * rawHeightFactor);
+                const b = new THREE.Box3().setFromObject(PandaNPC);
+                if (!b.isEmpty()) {
+                    const gOff = PandaNPC.position.y - b.min.y;
+                    PandaNPC.position.y = getHeightAt(transform.x, transform.z) + gOff;
+                    PandaNPC.userData.relativeGroundOffset = gOff;
+                }
+            }
+            if (typeof transform.relativeGroundOffset === 'number') {
+                PandaNPC.userData.relativeGroundOffset = transform.relativeGroundOffset;
+                PandaNPC.position.y = getHeightAt(transform.x, transform.z) + transform.relativeGroundOffset;
+            }
 			
 			registerWorldObject(
 
@@ -62,7 +84,7 @@ export function loadPandaNPC(){
 
              );
 			
-            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+            if (typeof transform.rotationY === 'number' && (transform.rotationY !== 0 || transform.explicitRotation === true)) {
                 PandaNPC.rotation.y = transform.rotationY;
             } else {
                 PandaNPC.lookAt(
@@ -79,8 +101,12 @@ export function loadPandaNPC(){
 			 
 			 
 			PandaNPC.userData.radius = 0.9;
+            PandaNPC.userData.hiddenByLayout = Boolean(transform.hidden);
+            PandaNPC.visible = !PandaNPC.userData.hiddenByLayout;
 
-            addCollidable(PandaNPC);
+            if (!PandaNPC.userData.hiddenByLayout) {
+                addCollidable(PandaNPC);
+            }
 
             // =========================================
             // ANIMATION MIXER

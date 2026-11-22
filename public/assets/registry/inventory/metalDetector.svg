@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="mdShaft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1e40af" />
+    </linearGradient>
+    <linearGradient id="mdBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7dd3fc" />
+      <stop offset="55%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="mdCoil" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f87171" />
+      <stop offset="50%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#991b1b" />
+    </linearGradient>
+    <linearGradient id="mdLcd" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ondas sutiles de detección junto al plato -->
+  <g fill="none" stroke="#38bdf8" stroke-linecap="round" opacity="0.7">
+    <path d="M84 446 C115 470, 175 478, 224 464" stroke-width="8" stroke-dasharray="14 14" />
+    <path d="M54 468 C104 500, 188 508, 250 488" stroke-width="6" stroke-dasharray="10 16" opacity="0.55" />
+  </g>
+
+  <!-- Apoyabrazos en U superior (codo/antebrazo) -->
+  <g stroke="#0b1120" stroke-width="12" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M402 44 C422 28, 456 38, 474 64 C490 88, 488 120, 464 136 L432 104 C446 94, 446 78, 436 68 C428 60, 414 60, 404 68 Z" fill="url(#mdShaft)" />
+  </g>
+
+  <!-- Mástil telescópico principal -->
+  <g stroke="#0b1120" stroke-width="12" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Tramo superior azul -->
+    <path d="M432 90 L446 106 L282 270 L268 254 Z" fill="url(#mdShaft)" />
+    <!-- Tramo inferior telescópico azul claro / metálico -->
+    <path d="M276 262 L286 272 L182 376 L172 366 Z" fill="#60a5fa" />
+  </g>
+
+  <!-- Brillo longitudinal en el mástil -->
+  <path d="M426 102 L278 250" stroke="#bfdbfe" stroke-width="4" stroke-linecap="round" opacity="0.75" />
+
+  <!-- Empuñadura ergonómica de goma negra -->
+  <g stroke="#0b1120" stroke-width="12" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M352 146 L378 172 L332 218 L306 192 Z" fill="#1e293b" />
+    <!-- Anillos de agarre -->
+    <line x1="342" y1="162" x2="362" y2="182" stroke="#0f172a" stroke-width="8" />
+    <line x1="328" y1="176" x2="348" y2="196" stroke="#0f172a" stroke-width="8" />
+  </g>
+
+  <!-- Collarín telescópico -->
+  <rect x="255" y="252" width="28" height="22" rx="6" transform="rotate(45 269 263)" fill="#0f172a" stroke="#0b1120" stroke-width="8" />
+
+  <!-- Caja de control cian con pantalla LCD emisiva -->
+  <g transform="rotate(45 316 184)">
+    <rect x="272" y="128" width="84" height="106" rx="14" fill="url(#mdBox)" stroke="#0b1120" stroke-width="12" stroke-linejoin="round" />
+    <!-- Pantalla LCD -->
+    <rect x="286" y="144" width="56" height="44" rx="6" fill="url(#mdLcd)" stroke="#0f172a" stroke-width="6" />
+    <!-- Barras de señal en LCD -->
+    <path d="M296 178 L296 170 M306 178 L306 164 M316 178 L316 158 M326 178 L326 152" stroke="#e0f2fe" stroke-width="5" stroke-linecap="round" />
+    <!-- Diales inferiores -->
+    <circle cx="300" cy="208" r="9" fill="#0f172a" stroke="#0b1120" stroke-width="4" />
+    <circle cx="328" cy="208" r="9" fill="#0f172a" stroke="#0b1120" stroke-width="4" />
+  </g>
+
+  <!-- Bobina / Plato sensor circular rojo en perspectiva -->
+  <g transform="translate(152, 384) rotate(12)">
+    <!-- Sombra / espesor inferior del plato -->
+    <ellipse cx="0" cy="10" rx="108" ry="52" fill="#7f1d1d" stroke="#0b1120" stroke-width="12" />
+    <!-- Aro exterior rojo del plato -->
+    <ellipse cx="0" cy="0" rx="108" ry="52" fill="url(#mdCoil)" stroke="#0b1120" stroke-width="12" />
+    <!-- Hueco interior del plato (recorte visual oscuro translúcido) -->
+    <ellipse cx="0" cy="0" rx="76" ry="31" fill="#1b110c" stroke="#0b1120" stroke-width="8" />
+    <!-- Brazos en cruz del sensor -->
+    <line x1="-82" y1="0" x2="82" y2="0" stroke="#0b1120" stroke-width="16" stroke-linecap="round" />
+    <line x1="-82" y1="0" x2="82" y2="0" stroke="#ef4444" stroke-width="8" stroke-linecap="round" />
+    <line x1="0" y1="-34" x2="0" y2="34" stroke="#0b1120" stroke-width="16" stroke-linecap="round" />
+    <line x1="0" y1="-34" x2="0" y2="34" stroke="#ef4444" stroke-width="8" stroke-linecap="round" />
+    <!-- Brillo superior en el aro -->
+    <path d="M-74 -22 C-30 -40, 30 -40, 74 -22" fill="none" stroke="#fecaca" stroke-width="4" stroke-linecap="round" opacity="0.65" />
+    <!-- Rótula central negra -->
+    <circle cx="0" cy="-6" r="20" fill="#1e293b" stroke="#0b1120" stroke-width="10" />
+    <circle cx="-5" cy="-11" r="6" fill="#64748b" />
+  </g>
+</svg>

@@ -67,7 +67,10 @@ export function cleanupEquipmentDebugger() {
         previewControls = null;
     }
     if (previewRenderer) {
-        previewRenderer.dispose();
+        try {
+            previewRenderer.forceContextLoss();
+            previewRenderer.dispose();
+        } catch (_) {}
         previewRenderer = null;
     }
     if (customItemsListener) {
@@ -543,7 +546,6 @@ function loadPlayerModel(onSuccess, onError) {
     }
 
     const loader = new GLTFLoader();
-    loader.setWithCredentials(true);
 
     let hasResponded = false;
     const safetyTimeout = setTimeout(() => {
@@ -783,6 +785,20 @@ function equipCurrentSelectedItem() {
  * Equipa un objeto en el socket activo del visor.
  */
 function equipCurrentItemInPreview(itemTypeOrMesh = null) {
+    if (itemTypeOrMesh && typeof itemTypeOrMesh === 'object' && itemTypeOrMesh.isObject3D) {
+        const socket = previewSockets[currentSocket];
+        if (!socket) return;
+        while (socket.children.length > 0) {
+            socket.remove(socket.children[0]);
+        }
+        const previewMesh = itemTypeOrMesh;
+        previewEquipped[currentSocket] = previewMesh;
+        applyItemTransform(previewMesh);
+        socket.add(previewMesh);
+        syncActiveButtonsInUI();
+        return;
+    }
+
     if (itemTypeOrMesh) {
         if (typeof itemTypeOrMesh === 'string') {
             currentSelectedItemId = itemTypeOrMesh;
@@ -994,6 +1010,7 @@ function setupEquipEvents() {
             const blobUrl = URL.createObjectURL(file);
             const loader = new GLTFLoader();
             loader.load(blobUrl, (gltf) => {
+                URL.revokeObjectURL(blobUrl);
                 const model = gltf.scene || gltf.scenes[0];
 
                 // Auto-ajustar tamaño si viene fuera de escala
@@ -1013,6 +1030,8 @@ function setupEquipEvents() {
                     rotation: currentTransform.rotation,
                     scale: scalePayload
                 });
+            }, undefined, () => {
+                URL.revokeObjectURL(blobUrl);
             });
         };
     }

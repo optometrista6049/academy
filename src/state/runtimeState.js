@@ -60,6 +60,11 @@ export const runtimeState = {
     // =========================
     // MODO DIOS / LEVEL BUILDER
     // =========================
-    isGodMode: false
+    isGodMode: false,
+
+    // =========================
+    // SESIÓN ACTIVA DE PARTIDA
+    // =========================
+    sessionStarted: false
 
 };

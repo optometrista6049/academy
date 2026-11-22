@@ -2,15 +2,29 @@ import * as THREE from 'three';
 import { WORLD_LIMIT } from '../core/config.js';
 import { LAKE_CENTER_X, LAKE_CENTER_Z, getLakeBasinRadius, getShoreRatio } from '../terrain/terrainHeight.js';
 import { isPointInRiverWater } from '../terrain/riverPath.js';
-import { getNearbyCollidables, registerCollidableInGrid } from '../systems/chunkSystem.js';
+import { getNearbyCollidables, registerCollidableInGrid, rebuildSpatialGrid } from '../systems/chunkSystem.js';
 import { isPointOnAnyBridge, checkBridgeRailCollision, checkBridgePierCollision } from '../environment/bridgeSystem.js';
+import { runtimeState } from '../state/runtimeState.js';
 
 export const collidables = [];
 export const cameraObstacles = [];
 
 export function addCollidable(item) {
-    collidables.push(item);
-    registerCollidableInGrid(item);
+    if (!item) return null;
+    if (!collidables.includes(item)) {
+        collidables.push(item);
+        registerCollidableInGrid(item);
+    }
+    return item;
+}
+
+export function removeCollidable(item) {
+    if (!item) return;
+    const idx = collidables.indexOf(item);
+    if (idx >= 0) {
+        collidables.splice(idx, 1);
+        rebuildSpatialGrid(collidables);
+    }
 }
 
 const PLAYER_RADIUS = 0.6;
@@ -75,8 +89,10 @@ export function collide(nextPosition, currentPosition = null){
         if (currY !== null) {
             const minY = o.userData?.minVerticalY;
             const maxY = o.userData?.maxVerticalY;
-            if (minY !== undefined && currY < minY) continue;
-            if (maxY !== undefined && currY > maxY) continue;
+            const footY = currY - (runtimeState.playerHeightOffset || 0);
+            const headY = footY + 1.4;
+            if (minY !== undefined && headY < minY) continue;
+            if (maxY !== undefined && footY > maxY) continue;
         }
 
         const ox = o.position.x;
@@ -89,31 +105,48 @@ export function collide(nextPosition, currentPosition = null){
             const sinR = Math.sin(ry);
             const dx = px - ox;
             const dz = pz - oz;
-            const lx = dx * cosR - dz * sinR - (obb.offsetX || 0);
-            const lz = dx * sinR + dz * cosR - (obb.offsetZ || 0);
 
-            const clampedX = Math.max(-obb.halfX, Math.min(obb.halfX, lx));
-            const clampedZ = Math.max(-obb.halfZ, Math.min(obb.halfZ, lz));
-            const ex = lx - clampedX;
-            const ez = lz - clampedZ;
-            const boxDistSq = ex * ex + ez * ez;
+            const checkRotatedBox = (box) => {
+                if (!box || typeof box.halfX !== 'number' || typeof box.halfZ !== 'number') return false;
+                const lx = dx * cosR - dz * sinR - (box.offsetX || 0);
+                const lz = dx * sinR + dz * cosR - (box.offsetZ || 0);
 
-            if (boxDistSq < PLAYER_RADIUS * PLAYER_RADIUS) {
-                if (currentPosition) {
-                    const cdx = currentPosition.x - ox;
-                    const cdz = currentPosition.z - oz;
-                    const clx = cdx * cosR - cdz * sinR - (obb.offsetX || 0);
-                    const clz = cdx * sinR + cdz * cosR - (obb.offsetZ || 0);
-                    const cClampedX = Math.max(-obb.halfX, Math.min(obb.halfX, clx));
-                    const cClampedZ = Math.max(-obb.halfZ, Math.min(obb.halfZ, clz));
-                    const cex = clx - cClampedX;
-                    const cez = clz - cClampedZ;
-                    const currBoxDistSq = cex * cex + cez * cez;
-                    if (currBoxDistSq < PLAYER_RADIUS * PLAYER_RADIUS && boxDistSq > currBoxDistSq) {
-                        continue;
+                const clampedX = Math.max(-box.halfX, Math.min(box.halfX, lx));
+                const clampedZ = Math.max(-box.halfZ, Math.min(box.halfZ, lz));
+                const ex = lx - clampedX;
+                const ez = lz - clampedZ;
+                const boxDistSq = ex * ex + ez * ez;
+
+                if (boxDistSq < PLAYER_RADIUS * PLAYER_RADIUS) {
+                    if (currentPosition) {
+                        const cdx = currentPosition.x - ox;
+                        const cdz = currentPosition.z - oz;
+                        const clx = cdx * cosR - cdz * sinR - (box.offsetX || 0);
+                        const clz = cdx * sinR + cdz * cosR - (box.offsetZ || 0);
+                        const cClampedX = Math.max(-box.halfX, Math.min(box.halfX, clx));
+                        const cClampedZ = Math.max(-box.halfZ, Math.min(box.halfZ, clz));
+                        const cex = clx - cClampedX;
+                        const cez = clz - cClampedZ;
+                        const currBoxDistSq = cex * cex + cez * cez;
+                        if (currBoxDistSq < PLAYER_RADIUS * PLAYER_RADIUS && boxDistSq > currBoxDistSq) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                return false;
+            };
+
+            if (checkRotatedBox(obb)) {
+                return true;
+            }
+            const extraObbs = o.userData?.extraObbCollisions;
+            if (Array.isArray(extraObbs)) {
+                for (let j = 0; j < extraObbs.length; j++) {
+                    if (checkRotatedBox(extraObbs[j])) {
+                        return true;
                     }
                 }
-                return true;
             }
             continue;
         }
@@ -181,38 +214,4 @@ export function applyWorldBounds(pos){
     }
 
     return bounced;
-}
-
-const raycaster = new THREE.Raycaster();
-
-export function fixCameraCollision(camera, targetPos, camDistance){
-
-    const dir = new THREE.Vector3()
-        .subVectors(camera.position, targetPos)
-        .normalize();
-
-    raycaster.set(targetPos, dir);
-
-    const validObstacles = cameraObstacles.filter(o => o && o.isObject3D);
-    if(validObstacles.length === 0) return;
-
-    const intersects =
-        raycaster.intersectObjects(validObstacles, true);
-
-    if(intersects.length > 0){
-
-        const dist = intersects[0].distance;
-
-        if(dist < camDistance){
-
-            camera.position.copy(
-                targetPos.clone().add(
-                    dir.multiplyScalar(Math.max(dist - 0.5, 0.5))
-                )
-            );
-
-        }
-
-    }
-
 }

@@ -1,3 +1,5 @@
+import { isMobile } from '../mobile/mobileDetection.js';
+
 function isPortrait(){
 
     return window.innerHeight >
@@ -43,9 +45,7 @@ export function enableOrientationOverlay(){
 
     function updateOrientation(){
 
-        const mobile =
-            /Android|iPhone|iPad|iPod/i
-            .test(navigator.userAgent);
+        const mobile = isMobile();
 
         if(mobile && isPortrait()){
 

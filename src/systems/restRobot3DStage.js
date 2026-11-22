@@ -6,7 +6,8 @@
    ====================================================== */
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 let renderer = null;
 let scene = null;
@@ -139,8 +140,8 @@ function setupRobotModel(gltf) {
         currentModel = null;
     }
 
-    // Clonar escena del modelo
-    const model = gltf.scene.clone(true);
+    // Clonar escena del modelo preservando el esqueleto
+    const model = SkeletonUtils.clone(gltf.scene);
     currentModel = model;
 
     // Escalar al tamaño óptimo y centrar verticalmente para amplio margen arriba y abajo
@@ -186,20 +187,36 @@ export function unmountRestRobot3DStage() {
         mixer = null;
     }
 
-    if (renderer) {
-        try {
-            renderer.dispose();
-            renderer.forceContextLoss();
-        } catch {}
-        renderer = null;
-    }
-
     if (scene) {
+        scene.traverse((obj) => {
+            if (obj.isMesh) {
+                if (obj.geometry && typeof obj.geometry.dispose === 'function') {
+                    obj.geometry.dispose();
+                }
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                mats.forEach((m) => {
+                    if (!m) return;
+                    for (const val of Object.values(m)) {
+                        if (val && val.isTexture && typeof val.dispose === 'function') {
+                            val.dispose();
+                        }
+                    }
+                    if (typeof m.dispose === 'function') m.dispose();
+                });
+            }
+        });
         while (scene.children.length > 0) {
             const obj = scene.children[0];
             scene.remove(obj);
         }
         scene = null;
+    }
+
+    if (renderer) {
+        try {
+            renderer.dispose();
+        } catch (_) {}
+        renderer = null;
     }
 
     currentModel = null;

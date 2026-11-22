@@ -8,6 +8,8 @@ import { addCollidable }
 
 from '../collisions.js';
 
+import { getHeightAt } from '../../terrain/terrainHeight.js';
+
 import {
 
     registerWorldObject
@@ -30,7 +32,7 @@ export function loadTelerinNPC(){
     console.log('LOAD TELERIN NPC');
     const transform = getEntityTransform('npcs', 'Telerín', { x: -4, z: 2, rotationY: 0, scale: 1.8 });
 
-    loadModel(
+    return loadModel(
 
         'assets/models/npc/TelerinNPC.glb',
 
@@ -43,8 +45,28 @@ export function loadTelerinNPC(){
 
             console.log('TELERIN MODEL LOADED');
 
+            const initDesiredScale = transform.scale || 1.8;
+            const rawHeightFactor = (model.scale.x || initDesiredScale) / initDesiredScale;
+
             TelerinNPC = model;
-            TelerinNPC.userData = { isNPC: true, npcName: 'Telerín', type: 'npc' };
+            TelerinNPC.userData = { isNPC: true, npcName: 'Telerín', type: 'npc', rawHeightFactor };
+
+            if (transform.scaleXYZ && typeof transform.scaleXYZ === 'object') {
+                const sx = Number(transform.scaleXYZ.x) || initDesiredScale;
+                const sy = Number(transform.scaleXYZ.y) || initDesiredScale;
+                const sz = Number(transform.scaleXYZ.z) || initDesiredScale;
+                TelerinNPC.scale.set(sx * rawHeightFactor, sy * rawHeightFactor, sz * rawHeightFactor);
+                const b = new THREE.Box3().setFromObject(TelerinNPC);
+                if (!b.isEmpty()) {
+                    const gOff = TelerinNPC.position.y - b.min.y;
+                    TelerinNPC.position.y = getHeightAt(transform.x, transform.z) + gOff;
+                    TelerinNPC.userData.relativeGroundOffset = gOff;
+                }
+            }
+            if (typeof transform.relativeGroundOffset === 'number') {
+                TelerinNPC.userData.relativeGroundOffset = transform.relativeGroundOffset;
+                TelerinNPC.position.y = getHeightAt(transform.x, transform.z) + transform.relativeGroundOffset;
+            }
 
             // Personalizar color de pelo: Castaño (#5a3825)
             TelerinNPC.traverse((child)=>{
@@ -68,7 +90,7 @@ export function loadTelerinNPC(){
 
              );
 
-            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+            if (typeof transform.rotationY === 'number' && (transform.rotationY !== 0 || transform.explicitRotation === true)) {
                 TelerinNPC.rotation.y = transform.rotationY;
             } else {
                 TelerinNPC.lookAt(
@@ -83,8 +105,12 @@ export function loadTelerinNPC(){
             }
 
             TelerinNPC.userData.radius = 0.9;
+            TelerinNPC.userData.hiddenByLayout = Boolean(transform.hidden);
+            TelerinNPC.visible = !TelerinNPC.userData.hiddenByLayout;
 
-            addCollidable(TelerinNPC);
+            if (!TelerinNPC.userData.hiddenByLayout) {
+                addCollidable(TelerinNPC);
+            }
 
             mixer =
                 new THREE.AnimationMixer(

@@ -1,5 +1,6 @@
-import { runtimeState }
-from '../state/runtimeState.js';
+import { runtimeState } from '../state/runtimeState.js';
+import { isMobile } from './mobileDetection.js';
+import { isInputLocked } from '../systems/inputLockSystem.js';
 
 const joystick = {
 
@@ -12,11 +13,13 @@ const joystick = {
 
 };
 
-export function isMobile(){
+export { isMobile };
 
-    return /Android|iPhone|iPad|iPod/i
-        .test(navigator.userAgent);
-
+export function resetJoystickState(){
+    joystick.active = false;
+    joystick.touchId = null;
+    joystick.x = 0;
+    joystick.y = 0;
 }
 
 export function initMobileJoystick(){
@@ -69,6 +72,7 @@ export function initMobileJoystick(){
     // =====================================================
 
     stick.addEventListener('touchstart',(e)=>{
+        if(runtimeState.isGodMode || isInputLocked()) return;
 
         const touch = e.changedTouches[0];
 
@@ -95,6 +99,10 @@ export function initMobileJoystick(){
     stick.addEventListener('touchmove',(e)=>{
 
         if(!joystick.active) return;
+        if(runtimeState.isGodMode || isInputLocked()){
+            resetJoystickState();
+            return;
+        }
 
         let touchFound = null;
 
@@ -132,24 +140,23 @@ export function initMobileJoystick(){
     },{ passive:true });
 
     // =====================================================
-    // TOUCH END
+    // TOUCH END / CANCEL / BLUR
     // =====================================================
 
-    stick.addEventListener('touchend',(e)=>{
-
-        joystick.active = false;
-
-        joystick.touchId = null;
-
-        joystick.x = 0;
-        joystick.y = 0;
-
-    },{ passive:true });
+    stick.addEventListener('touchend', resetJoystickState, { passive:true });
+    stick.addEventListener('touchcancel', resetJoystickState, { passive:true });
+    window.addEventListener('blur', resetJoystickState, { passive:true });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) resetJoystickState();
+    });
 
 }
 
 export function getJoystickInput(){
-
+    if(runtimeState.isGodMode || isInputLocked()){
+        if(joystick.active || joystick.x !== 0 || joystick.y !== 0){
+            resetJoystickState();
+        }
+    }
     return joystick;
-
 }

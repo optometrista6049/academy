@@ -7,7 +7,7 @@
    ====================================================== */
 
 import { gameState } from "../../../state/gameState.js";
-import { hasInventoryItem } from "./inventoryModuleV2.js";
+import { hasInventoryItem, getInventoryItemCount } from "./inventoryModuleV2.js";
 
 let diaryRoot = null;
 let diaryPanel = null;
@@ -53,7 +53,7 @@ function getMissionsList() {
     const hasBox = hasInventoryItem("badgeBox");
     const openedMueble = Boolean(gameState.flags.openedMueble) || hasBox || isMissionComplete;
 
-    return [
+    const missionsList = [
         {
             id: "mission_001",
             title: "Misión 1: Los preparativos de la Academia",
@@ -87,6 +87,70 @@ function getMissionsList() {
             ]
         }
     ];
+
+    const hasMission2Started = Boolean(
+        gameState.quests?.mission_002 === "active" ||
+        gameState.quests?.mission_002 === "completed" ||
+        gameState.flags?.deliveredBox ||
+        gameState.flags?.receivedAspirantCard ||
+        gameState.flags?.altoScannedCard ||
+        gameState.flags?.deliveredMicrochips
+    );
+
+    if (hasMission2Started) {
+        const altoScannedCard = Boolean(gameState.flags?.altoScannedCard);
+        const deliveredMicrochips = Boolean(
+            gameState.flags?.deliveredMicrochips ||
+            gameState.quests?.mission_002 === "completed"
+        );
+        const chipCount = getInventoryItemCount("microchip");
+        const allChipsFound = deliveredMicrochips || chipCount >= 7;
+
+        const m2Objectives = [
+            {
+                title: "Buscar al Señor Alto",
+                desc: altoScannedCard
+                    ? "Carnet de Aspirante escaneado por el Señor Alto. Registro formalizado en el sistema de entrada."
+                    : "Cruza alguno de los puentes a la derecha de Monty, busca al Señor Alto y enséñale tu Carnet de Aspirante.",
+                status: altoScannedCard ? "completed" : "active",
+                icon: altoScannedCard ? "✅" : "⏳"
+            }
+        ];
+
+        if (altoScannedCard) {
+            m2Objectives.push({
+                title: "Recuperar los 7 microchips",
+                desc: allChipsFound
+                    ? "Has reunido los 7 microchips perdidos con el Detector de metales."
+                    : `Equipa el Detector de metales desde tu Inventario y recupera los 7 microchips perdidos en los alrededores (${chipCount}/7).`,
+                status: allChipsFound ? "completed" : "active",
+                icon: allChipsFound ? "✅" : "⏳"
+            });
+        }
+
+        if (allChipsFound) {
+            m2Objectives.push({
+                title: "Entregar los 7 microchips al Señor Alto",
+                desc: deliveredMicrochips
+                    ? "Microchips entregados. Sistema de Control de Tiempo activado y documentos enviados al Registro."
+                    : "Vuelve a hablar con el Señor Alto para entregarle los 7 microchips reunidos.",
+                status: deliveredMicrochips ? "completed" : "active",
+                icon: deliveredMicrochips ? "✅" : "⏳"
+            });
+        }
+
+        missionsList.push({
+            id: "mission_002",
+            title: "Misión 2: El Registro de Entrada",
+            status: deliveredMicrochips ? "completed" : "active",
+            statusLabel: deliveredMicrochips ? "COMPLETADA" : "EN CURSO",
+            description:
+                "Completa tu registro oficial ante el Señor Alto y colabora para poner en marcha los sistemas principales de tu interfaz de Aspirante.",
+            objectives: m2Objectives
+        });
+    }
+
+    return missionsList;
 }
 
 /* ======================================================

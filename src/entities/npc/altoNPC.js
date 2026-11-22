@@ -8,6 +8,8 @@ import { addCollidable }
 
 from '../collisions.js';
 
+import { getHeightAt } from '../../terrain/terrainHeight.js';
+
 import {
 
     registerWorldObject
@@ -30,7 +32,7 @@ export function loadAltoNPC(){
     console.log('LOAD ALTO NPC');
     const transform = getEntityTransform('npcs', 'Alto', { x: 4, z: 2, rotationY: 0, scale: 2.7 });
 
-    loadModel(
+    return loadModel(
 
         'assets/models/npc/AltoNPC.glb',
 
@@ -43,8 +45,28 @@ export function loadAltoNPC(){
 
             console.log('ALTO MODEL LOADED');
 
+            const initDesiredScale = transform.scale || 2.7;
+            const rawHeightFactor = (model.scale.x || initDesiredScale) / initDesiredScale;
+
             AltoNPC = model;
-            AltoNPC.userData = { isNPC: true, npcName: 'Alto', type: 'npc' };
+            AltoNPC.userData = { isNPC: true, npcName: 'Alto', type: 'npc', rawHeightFactor };
+
+            if (transform.scaleXYZ && typeof transform.scaleXYZ === 'object') {
+                const sx = Number(transform.scaleXYZ.x) || initDesiredScale;
+                const sy = Number(transform.scaleXYZ.y) || initDesiredScale;
+                const sz = Number(transform.scaleXYZ.z) || initDesiredScale;
+                AltoNPC.scale.set(sx * rawHeightFactor, sy * rawHeightFactor, sz * rawHeightFactor);
+                const b = new THREE.Box3().setFromObject(AltoNPC);
+                if (!b.isEmpty()) {
+                    const gOff = AltoNPC.position.y - b.min.y;
+                    AltoNPC.position.y = getHeightAt(transform.x, transform.z) + gOff;
+                    AltoNPC.userData.relativeGroundOffset = gOff;
+                }
+            }
+            if (typeof transform.relativeGroundOffset === 'number') {
+                AltoNPC.userData.relativeGroundOffset = transform.relativeGroundOffset;
+                AltoNPC.position.y = getHeightAt(transform.x, transform.z) + transform.relativeGroundOffset;
+            }
 			
 			registerWorldObject(
 
@@ -54,7 +76,7 @@ export function loadAltoNPC(){
 
             );
 
-            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+            if (typeof transform.rotationY === 'number' && (transform.rotationY !== 0 || transform.explicitRotation === true)) {
                 AltoNPC.rotation.y = transform.rotationY;
             } else {
                 AltoNPC.lookAt(
@@ -69,8 +91,12 @@ export function loadAltoNPC(){
             }
 
             AltoNPC.userData.radius = 0.9;
+            AltoNPC.userData.hiddenByLayout = Boolean(transform.hidden);
+            AltoNPC.visible = !AltoNPC.userData.hiddenByLayout;
 
-            addCollidable(AltoNPC);
+            if (!AltoNPC.userData.hiddenByLayout) {
+                addCollidable(AltoNPC);
+            }
 
             mixer =
                 new THREE.AnimationMixer(

@@ -279,9 +279,12 @@ function renderSelectedDocument() {
     previewWrap.className = "archivePreviewFrame";
     previewWrap.title = "Haz clic en 'Abrir' para ver a pantalla completa";
 
+    const docSource = doc.documentImage || doc.thumbnail;
+    const isPdfDoc = /\.pdf(\?.*|#.*)?$/i.test(String(docSource || ''));
+
     const previewImg = document.createElement("img");
     previewImg.className = "archivePreviewImage";
-    previewImg.src = doc.documentImage || doc.thumbnail;
+    previewImg.src = isPdfDoc ? (doc.thumbnail || docSource) : docSource;
     previewImg.alt = doc.title;
     previewImg.draggable = false;
 
@@ -301,7 +304,7 @@ function renderSelectedDocument() {
 
     const badgeEl = document.createElement("span");
     badgeEl.className = "archiveOfficialBadge";
-    badgeEl.textContent = "Documento Oficial";
+    badgeEl.textContent = isPdfDoc ? "Documento PDF" : "Documento Oficial";
 
     titleRow.appendChild(titleEl);
     titleRow.appendChild(badgeEl);
@@ -321,15 +324,16 @@ function renderSelectedDocument() {
     openBtn.innerHTML = `<span>👁️ Abrir</span>`;
     openBtn.title = "Abrir documento a pantalla completa";
     openBtn.onclick = () => {
-        openDocumentViewer(doc.documentImage || doc.thumbnail, doc.title);
+        openDocumentViewer(docSource, doc.title);
     };
 
     const downloadBtn = document.createElement("button");
     downloadBtn.className = "archiveBtn archiveBtnDownload";
     downloadBtn.innerHTML = `<span>📥 Descargar</span>`;
-    downloadBtn.title = "Descargar carnet al dispositivo";
+    downloadBtn.title = "Descargar documento al dispositivo";
     downloadBtn.onclick = () => {
-        triggerDeviceDownload(doc.documentImage || doc.thumbnail, doc.downloadFilename || "Carnet_Aspirante_Monteserin.jpg");
+        const defaultName = isPdfDoc ? `${doc.id || 'documento'}.pdf` : "Carnet_Aspirante_Monteserin.jpg";
+        triggerDeviceDownload(docSource, doc.downloadFilename || defaultName);
     };
 
     actionsRow.appendChild(openBtn);
@@ -348,7 +352,6 @@ function triggerDeviceDownload(fileUrl, fileName) {
     const link = document.createElement("a");
     link.href = fileUrl;
     link.download = fileName;
-    link.target = "_blank";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

@@ -224,15 +224,60 @@ function setupSlotEvents() {
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = (evt) => {
-                const dataUrl = evt.target.result;
-                logoPreview.src = dataUrl;
+            reader.onload = async (evt) => {
+                const rawDataUrl = evt.target?.result;
+                if (!rawDataUrl) return;
 
+                // Convertir a PNG válido antes de persistir en assets/ui/monteserin_academy_logo_clean.png
+                let cleanPngDataUrl = rawDataUrl;
+                try {
+                    cleanPngDataUrl = await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.naturalWidth || img.width || 512;
+                            canvas.height = img.naturalHeight || img.height || 512;
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                resolve(canvas.toDataURL('image/png'));
+                            } else {
+                                resolve(rawDataUrl);
+                            }
+                        };
+                        img.onerror = () => resolve(rawDataUrl);
+                        img.src = rawDataUrl;
+                    });
+                } catch (_) {}
+
+                logoPreview.src = cleanPngDataUrl;
                 const stageLogo = document.querySelector('.dialogue-stage-logo');
-                if (stageLogo) stageLogo.src = dataUrl;
+                if (stageLogo) stageLogo.src = cleanPngDataUrl;
 
-                logoStatus.textContent = `✅ Logo cargado en memoria temporal: ${file.name}`;
-                logoStatus.className = 'devStatusMsg success';
+                logoStatus.textContent = `⏳ Guardando logotipo "${file.name}" en el proyecto...`;
+                logoStatus.className = 'devStatusMsg';
+
+                try {
+                    const res = await fetch('/api/upload-logo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            cleanBase64Data: cleanPngDataUrl,
+                            rawBase64Data: cleanPngDataUrl
+                        })
+                    });
+                    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                    if (!res.ok || !ctype.includes('application/json')) {
+                        throw new Error('Sin servidor de desarrollo local');
+                    }
+                    logoPreview.src = `assets/ui/monteserin_academy_logo_clean.png?v=${Date.now()}`;
+                    logoStatus.textContent = `✅ Logo guardado permanentemente en assets/ y public/: ${file.name}`;
+                    logoStatus.className = 'devStatusMsg success';
+                    showDevToast(`🎨 Logotipo guardado en disco: ${file.name}`);
+                } catch (_) {
+                    logoStatus.textContent = `⚠️ Logo aplicado solo en memoria temporal (requiere servidor dev para grabar en disco): ${file.name}`;
+                    logoStatus.className = 'devStatusMsg warning';
+                }
             };
             reader.readAsDataURL(file);
         };
@@ -250,9 +295,17 @@ function setupSlotEvents() {
             const file = e.target.files && e.target.files[0];
             if (!file) return;
 
+            const isJpg = file.type.includes('jpeg') || /\.jpe?g$/i.test(file.name);
+            if (!isJpg) {
+                carnetStatus.textContent = '⚠️ Selecciona una imagen en formato .JPG o .JPEG.';
+                carnetStatus.className = 'devStatusMsg error';
+                return;
+            }
+
             const reader = new FileReader();
-            reader.onload = (evt) => {
-                const dataUrl = evt.target.result;
+            reader.onload = async (evt) => {
+                const dataUrl = evt.target?.result;
+                if (!dataUrl) return;
                 carnetPreview.src = dataUrl;
 
                 if (registryCatalog.aspirantCard) {
@@ -260,8 +313,32 @@ function setupSlotEvents() {
                     registryCatalog.aspirantCard.documentImage = dataUrl;
                 }
 
-                carnetStatus.textContent = `✅ Carnet cargado y vinculado al Registro: ${file.name}`;
-                carnetStatus.className = 'devStatusMsg success';
+                carnetStatus.textContent = `⏳ Guardando carnet "${file.name}" en el proyecto...`;
+                carnetStatus.className = 'devStatusMsg';
+
+                try {
+                    const res = await fetch('/api/upload-carnet', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ carnetBase64Data: dataUrl })
+                    });
+                    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                    if (!res.ok || !ctype.includes('application/json')) {
+                        throw new Error('Sin servidor de desarrollo local');
+                    }
+                    const bustedUrl = `assets/ui/ASPIRANTE.jpg?v=${Date.now()}`;
+                    carnetPreview.src = bustedUrl;
+                    if (registryCatalog.aspirantCard) {
+                        registryCatalog.aspirantCard.thumbnail = bustedUrl;
+                        registryCatalog.aspirantCard.documentImage = bustedUrl;
+                    }
+                    carnetStatus.textContent = `✅ Carnet JPG guardado permanentemente en assets/ y public/: ${file.name}`;
+                    carnetStatus.className = 'devStatusMsg success';
+                    showDevToast(`🪪 Carnet JPG guardado en disco: ${file.name}`);
+                } catch (_) {
+                    carnetStatus.textContent = `⚠️ Carnet aplicado en memoria temporal (requiere servidor dev para grabar en disco): ${file.name}`;
+                    carnetStatus.className = 'devStatusMsg warning';
+                }
             };
             reader.readAsDataURL(file);
         };
@@ -285,11 +362,13 @@ function setupSlotEvents() {
             loadGLBEquipment(
                 blobUrl,
                 (model) => {
+                    URL.revokeObjectURL(blobUrl);
                     equipItem(targetSocket, model, { scale: 1.0 });
                     glbStatus.textContent = `✅ Modelo "${file.name}" acoplado a ${targetSocket}!`;
                     glbStatus.className = 'devStatusMsg success';
                 },
                 (err) => {
+                    URL.revokeObjectURL(blobUrl);
                     glbStatus.textContent = `❌ Error al cargar modelo 3D: ${err.message || 'Formato no soportado'}`;
                     glbStatus.className = 'devStatusMsg error';
                 }

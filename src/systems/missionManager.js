@@ -18,7 +18,7 @@ export function startMission(
 
 ){
 
-    if(missionState.activeMissionId){
+    if(missionState.activeMissionId && missionState.activeMissionStatus === 'active'){
 
         console.warn(
             'Ya existe una misión activa:',

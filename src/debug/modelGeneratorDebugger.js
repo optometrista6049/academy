@@ -19,6 +19,7 @@ import {
 } from '../systems/customItemStorage.js';
 import { generateThreeModelFromPrompt } from '../systems/threeGeneratorEngine.js';
 import { showDevModalDialog, escapeHtml } from './devModalDialog.js';
+import { showDevToast } from './devPanel.js';
 
 // Estado del visor 3D del generador
 let genScene = null;
@@ -654,7 +655,13 @@ function handleSaveCurrentItem() {
     // Verificar que compile bien antes de guardar
     const compileResult = buildThreeMeshFromCode(code);
     if (!compileResult.success) {
-        alert(`No se puede guardar: el código contiene errores de Three.js.\n\n${compileResult.error}`);
+        showDevModalDialog({
+            title: '⚠️ Error de Compilación Three.js',
+            message: `No se puede guardar porque el código contiene errores:<br><br><code style="display:block;padding:8px;background:rgba(0,0,0,0.45);border-radius:6px;color:#fca5a5;">${escapeHtml(compileResult.error)}</code>`,
+            confirmText: 'Entendido',
+            cancelText: 'Cerrar',
+            isDanger: true
+        });
         return null;
     }
 
@@ -702,7 +709,13 @@ function handleSaveAsNewItem() {
 
     const compileResult = buildThreeMeshFromCode(code);
     if (!compileResult.success) {
-        alert(`No se puede guardar: el código contiene errores de Three.js.\n\n${compileResult.error}`);
+        showDevModalDialog({
+            title: '⚠️ Error de Compilación Three.js',
+            message: `No se puede guardar porque el código contiene errores:<br><br><code style="display:block;padding:8px;background:rgba(0,0,0,0.45);border-radius:6px;color:#fca5a5;">${escapeHtml(compileResult.error)}</code>`,
+            confirmText: 'Entendido',
+            cancelText: 'Cerrar',
+            isDanger: true
+        });
         return null;
     }
 
@@ -755,7 +768,7 @@ function setupGeneratorEvents() {
         submitBtn.onclick = async () => {
             const prompt = promptInput.value.trim();
             if (!prompt) {
-                alert('Por favor escribe un prompt descriptivo para generar el modelo 3D.');
+                showDevToast('⚠️ Escribe un prompt descriptivo para generar el modelo 3D.');
                 promptInput.focus();
                 return;
             }
@@ -784,7 +797,13 @@ function setupGeneratorEvents() {
                 showDevToast(`✨ ¡Modelo "${generated.name}" generado exitosamente!`);
             } catch (err) {
                 console.error('[ModelGenerator] Error generando modelo:', err);
-                alert(`Error al generar modelo: ${err.message || err}`);
+                showDevModalDialog({
+                    title: '❌ Error al Generar Modelo 3D',
+                    message: `No se pudo generar el modelo:<br><br><code style="display:block;padding:8px;background:rgba(0,0,0,0.45);border-radius:6px;color:#fca5a5;">${escapeHtml(err.message || String(err))}</code>`,
+                    confirmText: 'Entendido',
+                    cancelText: 'Cerrar',
+                    isDanger: true
+                });
             } finally {
                 if (loadingEl) loadingEl.style.display = 'none';
                 submitBtn.disabled = false;
@@ -992,21 +1011,13 @@ export function cleanupModelGeneratorDebugger() {
         genControls = null;
     }
     if (genRenderer) {
-        genRenderer.dispose();
+        try {
+            genRenderer.forceContextLoss();
+            genRenderer.dispose();
+        } catch (_) {}
         genRenderer = null;
     }
     genScene = null;
     genCamera = null;
     genCurrentObject = null;
-}
-
-function showDevToast(msg) {
-    const toast = document.getElementById('devToast');
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.className = 'devToast show';
-    clearTimeout(toast._timer);
-    toast._timer = setTimeout(() => {
-        toast.className = 'devToast';
-    }, 2800);
 }

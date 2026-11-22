@@ -328,8 +328,8 @@ export function showDialogue(
             console.error('Error starting dialogue stage for NPC:', err);
         }
 
-        // 3. Pre-renderizar contenido textual de la primera página
-        updateDialogue();
+        // 3. Pre-renderizar contenido textual de la primera página sin duplicar showDialogueStage
+        updateDialogue(true);
 
         // 4. Lanzar la caja de diálogo SOLO cuando la cinemática ya esté plenamente asentada (~1250ms)
         dialogueEntryTimer = setTimeout(() => {
@@ -398,7 +398,7 @@ function checkScrollHint(){
 // UPDATE DIALOGUE
 // ======================================================
 
-function updateDialogue(){
+function updateDialogue(skipStageSync = false){
 
     const dialogue =
 
@@ -436,10 +436,12 @@ function updateDialogue(){
         // En la caja de diálogo solo aparece el nombre, ocultando el retrato
         portraitContainer.style.display = 'none';
 
-        try {
-            showDialogueStage(currentSpeaker);
-        } catch (err) {
-            console.error('Error starting dialogue stage for NPC:', err);
+        if (!skipStageSync) {
+            try {
+                showDialogueStage(currentSpeaker);
+            } catch (err) {
+                console.error('Error starting dialogue stage for NPC:', err);
+            }
         }
     } else {
         // Mantener estética estándar original cuando NO sea diálogo de NPC

@@ -29,11 +29,37 @@ export const mission001 = {
 
 
 // ======================================================
+// MISIÓN 002
+// El Sistema de Entrada y los Microchips
+// ======================================================
+
+export const mission002 = {
+
+    id: 'mission002',
+
+    title: 'Misión 2: El Registro de Entrada',
+
+    objectives: {
+
+        showCardToAlto: false,
+
+        findMicrochips: false,
+
+        deliverMicrochipsToAlto: false
+
+    }
+
+};
+
+
+// ======================================================
 // CATÁLOGO DE MISIONES
 // ======================================================
 
 export const missions = {
 
-    mission001
+    mission001,
+
+    mission002
 
 };

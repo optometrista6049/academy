@@ -1,9 +1,5 @@
 import * as THREE from 'three';
 
-import {
-  GLTFLoader
-} from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
-
 
 // ======================================================
 // CORE
@@ -100,16 +96,9 @@ from './ui/registry/registryUI.js';
 //SISTEMA DIALOGOS INTERACCIONES EN TLEFONO
 //=======================================
 
-export function hasInteractionTarget(){
-
-    return interactionTarget !== null;
-
-}
-
-import {
-
+export {
+    hasInteractionTarget,
     tryInteraction
-
 }
 from './interaction/interactionManager.js';
 
@@ -130,6 +119,8 @@ import {
 
 }
 from './systems/saveSystem.js';
+
+import { runtimeState } from './state/runtimeState.js';
 
 
 // ======================================================
@@ -291,6 +282,11 @@ import {
 
 } from './systems/inputSystem.js';
 
+import {
+    initMicrochipHuntSystem,
+    updateMicrochipHuntSystem
+} from './systems/microchipHuntSystem.js';
+
 import './systems/resizeSystem.js';
 
 
@@ -330,6 +326,8 @@ import { waitForInitialLayoutSync } from './systems/worldLayoutSystem.js';
 // ======================================================
 
 async function startGame(){
+
+    runtimeState.sessionStarted = true;
 
     showLoadingScreen();
 
@@ -383,9 +381,12 @@ async function startGame(){
     initMobileJoystick();
 
     
+    await waitForInitialLayoutSync(1500);
+
+    initMicrochipHuntSystem();
+
     generateClouds();
 
-   
     createForest();
 
     createRockField();
@@ -398,81 +399,64 @@ async function startGame(){
 
     generateMountainRange();
 
-    await waitForInitialLayoutSync(1500);
+    const loadStartTime = performance.now();
 
-    
-    loadPlayer();
+    const playerPromise = loadPlayer();
 
-   
     if (DEV_CONFIG.enabled) {
         initworldEditor();
     }
 
-    loadAndSpawnWorldObjects();
-
-    
-    loadPandaNPC();
-
-    
-    loadAltoNPC();
-
-    
-    loadTelerinNPC();
-
-    
-    loadTeleronNPC();
-
-    loadMuebleObject();
-
-    
+    const worldObjectsPromise = loadAndSpawnWorldObjects();
+    const pandaPromise = loadPandaNPC();
+    const altoPromise = loadAltoNPC();
+    const telerinPromise = loadTelerinNPC();
+    const teleronPromise = loadTeleronNPC();
+    const mueblePromise = loadMuebleObject();
 
     animate({
-
         scene,
         camera,
         renderer,
-
         updateFunctions:[
-
             updatePlayer,
-
             updateInteractionSystem,
-
             updatePandaReminder,
-
             updateLake,
-
             updateRiver,
-
             () => updateWaterMaterials(performance.now() * 0.001),
-
             updateClouds,
-
             updatePlayTime,
-
             updatePandaNPC,
-
             updateAltoNPC,
-
             updateTelerinNPC,
-
             updateTeleronNPC,
-
+            updateMicrochipHuntSystem,
             ...(DEV_CONFIG.enabled ? [updateworldEditor] : []),
-
             updateVisibilitySystem
-
         ]
-
     });
 
-    
+    await Promise.race([
+        Promise.allSettled([
+            playerPromise,
+            worldObjectsPromise,
+            pandaPromise,
+            altoPromise,
+            telerinPromise,
+            teleronPromise,
+            mueblePromise
+        ]),
+        new Promise((resolve) => setTimeout(resolve, 5000))
+    ]);
 
-    setTimeout(()=>{
+    const elapsed = performance.now() - loadStartTime;
+    const minDisplayMs = 450;
+    if (elapsed < minDisplayMs) {
+        await new Promise((resolve) => setTimeout(resolve, minDisplayMs - elapsed));
+    }
 
-        hideLoadingScreen();
-
-    },5000);
+    hideLoadingScreen();
 
 }
 
@@ -485,7 +469,9 @@ window.addEventListener(
 
     ()=>{
 
-        saveGame();
+        if (runtimeState.sessionStarted) {
+            saveGame();
+        }
 
     }
 

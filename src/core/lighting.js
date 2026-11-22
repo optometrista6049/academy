@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { scene } from './scene.js';
 import { renderer } from './renderer.js';
+import { isMobile } from '../mobile/mobileDetection.js';
 
 // Luz hemisférica diurna (Cielo azul fresco arriba, pradera verde esmeralda abajo)
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x558b2f, 0.70);
@@ -14,9 +15,10 @@ sunLight.castShadow = true;
 // Añadir el target del sol a la escena para poder desplazarlo dinámicamente
 scene.add(sunLight.target);
 
-// Configuración optimizada de sombras suaves y ancladas al suelo (anti-Peter Panning)
-sunLight.shadow.mapSize.width = 2048;
-sunLight.shadow.mapSize.height = 2048;
+// Configuración optimizada de sombras suaves y ancladas al suelo (adaptativa móvil/PC)
+const shadowRes = isMobile() ? 1024 : 2048;
+sunLight.shadow.mapSize.width = shadowRes;
+sunLight.shadow.mapSize.height = shadowRes;
 sunLight.shadow.camera.near = 15;
 sunLight.shadow.camera.far = 180;
 const d = 48; // Cobertura enfocada alrededor del jugador (96m de diámetro, ~4.6cm/texel)

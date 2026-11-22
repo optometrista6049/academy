@@ -8,7 +8,7 @@
 
 import { gameState } from '../state/gameState.js';
 import { saveGame } from './saveSystem.js';
-import { DEV_CONFIG } from '../debug/devPanel.js';
+import { DEV_CONFIG } from '../config/devConfig.js';
 import { mountRestRobot3DStage, unmountRestRobot3DStage } from './restRobot3DStage.js';
 import { triggerFullscreen } from '../mobile/screenLockManager.js';
 
@@ -53,7 +53,9 @@ export function initSessionBatterySystem() {
     sessionBattery.isInitialized = true;
 
     loadBatteryState();
-    calculateOfflineRecovery();
+    if (sessionBattery.enabled) {
+        calculateOfflineRecovery();
+    }
     setupInputTracking();
     createHUDWidget();
     createRestOverlay();
@@ -65,6 +67,31 @@ export function initSessionBatterySystem() {
     }
 
     console.log('🔋 Sistema de Batería de Exploración inicializado (Estado: ' + (sessionBattery.enabled ? 'ACTIVO' : 'INACTIVO / ESPERA MISIÓN 2') + ')');
+}
+
+export function syncSessionBatteryFromGameState() {
+    sessionBattery.devForced = false;
+    sessionBattery.enabled = false;
+    sessionBattery.consumedSeconds = 0;
+    sessionBattery.cooldownUntil = null;
+    sessionBattery.isAfk = false;
+    sessionBattery.timeSinceLastInput = 0;
+
+    loadBatteryState();
+    if (sessionBattery.enabled) {
+        calculateOfflineRecovery();
+    }
+
+    if (hudElement) {
+        hudElement.style.display = sessionBattery.enabled ? 'flex' : 'none';
+    }
+    updateHUDVisuals();
+
+    if (sessionBattery.enabled && isCooldownActive()) {
+        showRestOverlay();
+    } else {
+        hideRestOverlay();
+    }
 }
 
 export function resetSessionBatteryForNewGame() {
@@ -107,10 +134,20 @@ export function loadBatteryState() {
                 if (typeof data.consumedSeconds === 'number') sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, data.consumedSeconds));
                 if (data.cooldownUntil) sessionBattery.cooldownUntil = Number(data.cooldownUntil);
                 if (data.lastActiveTimestamp) sessionBattery.lastActiveTimestamp = Number(data.lastActiveTimestamp);
-                if (data.devForced === true && gameState.flags?.batterySystemUnlocked) {
+                if (DEV_CONFIG.enabled && data.devForced === true && data.enabled !== false) {
                     sessionBattery.devForced = true;
                     sessionBattery.enabled = true;
                 }
+            }
+        } else if (gameState.sessionControl && typeof gameState.sessionControl === 'object') {
+            if (typeof gameState.sessionControl.consumedSeconds === 'number') {
+                sessionBattery.consumedSeconds = Math.max(0, Math.min(BATTERY_CONFIG.MAX_SESSION_SEC, gameState.sessionControl.consumedSeconds));
+            }
+            if (gameState.sessionControl.cooldownUntil) {
+                sessionBattery.cooldownUntil = Number(gameState.sessionControl.cooldownUntil);
+            }
+            if (gameState.sessionControl.lastActiveTimestamp) {
+                sessionBattery.lastActiveTimestamp = Number(gameState.sessionControl.lastActiveTimestamp);
             }
         }
     } catch (e) {
@@ -168,6 +205,7 @@ export function saveBatteryState() {
 // ======================================================
 
 function calculateOfflineRecovery() {
+    if (!sessionBattery.enabled) return;
     const now = Date.now();
     const last = sessionBattery.lastActiveTimestamp || now;
     const elapsedMs = Math.max(0, now - last);
@@ -900,13 +938,20 @@ export function showBatteryToast(title, message, type = 'info') {
         document.body.appendChild(toast);
     }
 
-    toast.className = `robotBatteryToast toast-${type} visible`;
+    const escapeToastHtml = (val) => String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    toast.className = `robotBatteryToast toast-${escapeToastHtml(type)} visible`;
     toast.innerHTML = `
         <div class="toastHeader">
             <span class="toastIcon">${type === 'danger' ? '⚠️' : (type === 'warning' ? '⚡' : '🔋')}</span>
-            <strong>${title}</strong>
+            <strong>${escapeToastHtml(title)}</strong>
         </div>
-        <div class="toastBody">${message}</div>
+        <div class="toastBody">${escapeToastHtml(message)}</div>
     `;
 
     if (toastTimer) clearTimeout(toastTimer);
@@ -952,6 +997,13 @@ export function devSetSystemEnabled(enabled) {
     const wasEnabled = sessionBattery.enabled;
     sessionBattery.enabled = Boolean(enabled);
     sessionBattery.devForced = sessionBattery.enabled;
+
+    if (!sessionBattery.enabled && gameState.flags) {
+        gameState.flags.batterySystemUnlocked = false;
+    }
+    if (gameState.sessionControl) {
+        gameState.sessionControl.enabled = sessionBattery.enabled;
+    }
 
     // Si se activa por primera vez o se enciende desde apagado, arranque garantizado al 100%
     if (sessionBattery.enabled && !wasEnabled) {

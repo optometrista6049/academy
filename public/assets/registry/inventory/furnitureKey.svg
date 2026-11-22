@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <!-- Llavero verde de esquinas redondeadas -->
+  <g id="keychain-tag">
+    <!-- Sombra/Borde base -->
+    <path d="M190 100 C155 100 135 130 128 175 L80 390 C72 425 95 455 130 458 L280 460 C315 460 338 435 348 395 L370 300 C375 275 365 245 350 225 L260 120 C240 105 215 100 190 100 Z" 
+          fill="#1E824C" stroke="#0E331E" stroke-width="16" stroke-linejoin="round" />
+    <!-- Cuerpo verde brillante -->
+    <path d="M190 112 C162 112 145 138 138 178 L94 384 C88 412 106 442 135 444 L275 446 C304 446 324 424 334 388 L355 296 C360 274 350 248 338 230 L254 130 C236 116 214 112 190 112 Z" 
+          fill="#2ECC71" />
+    <!-- Resplandor/Luz interior del llavero -->
+    <path d="M185 125 C165 125 152 145 146 178 L108 360 C102 385 110 405 124 415 C132 370 150 240 195 180 C235 130 280 145 315 210 L250 138 C232 128 208 125 185 125 Z" 
+          fill="#58D68D" opacity="0.6" />
+  </g>
+
+  <!-- Llave Dorada -->
+  <g id="golden-key">
+    <!-- Silueta y borde exterior de la llave -->
+    <g stroke="#1A1105" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Cabeza circular de la llave -->
+      <circle cx="295" cy="165" r="88" fill="#F4D03F" />
+      <!-- Diente y vástago de la llave -->
+      <path d="M335 228 L405 380 L425 390 L460 435 L428 438 L415 412 L388 418 L378 398 L360 400 L320 310 L290 245 Z" 
+            fill="#F4D03F" />
+    </g>
+
+    <!-- Faceta de luz en la cabeza de la llave (tono amarillo claro) -->
+    <path d="M295 83 C250 83 213 120 213 165 C213 178 216 190 222 201 L345 130 C333 102 316 83 295 83 Z" 
+          fill="#FDEBD0" />
+    
+    <!-- Faceta sombreada inferior de la cabeza de la llave -->
+    <path d="M226 208 C242 235 272 250 305 248 L355 220 L378 175 C378 165 375 152 370 142 L226 208 Z" 
+          fill="#E59866" opacity="0.3" />
+
+    <!-- Orificio central de la llave -->
+    <circle cx="272" cy="125" r="25" fill="#784212" stroke="#1A1105" stroke-width="12" />
+    <path d="M272 100 L255 75" stroke="#1A1105" stroke-width="12" stroke-linecap="round" />
+
+    <!-- Ranura longitudinal del vástago (relieve y hendidura metálica) -->
+    <path d="M312 255 L382 390 L392 386 L324 250 Z" fill="#D35400" opacity="0.35" />
+    <path d="M318 260 L385 390" stroke="#1A1105" stroke-width="12" stroke-linecap="round" />
+    <path d="M365 315 L385 350" stroke="#1A1105" stroke-width="10" stroke-linecap="round" />
+
+    <!-- Destellos dorados en el borde de la llave -->
+    <circle cx="360" cy="115" r="10" fill="#FEF9E7" />
+    <path d="M345 235 L412 375" stroke="#FEF9E7" stroke-width="4" stroke-linecap="round" opacity="0.8" />
+  </g>
+</svg>

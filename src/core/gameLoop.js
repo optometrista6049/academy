@@ -9,6 +9,16 @@ export function animate({
 
 }){
 
+    let lastWarnTime = 0;
+
+    function warnThrottled(label, err) {
+        const now = performance.now();
+        if (now - lastWarnTime > 2000) {
+            lastWarnTime = now;
+            console.warn(label, err);
+        }
+    }
+
     function loop(){
 
         requestAnimationFrame(loop);
@@ -26,7 +36,7 @@ export function animate({
             try {
                 update(delta);
             } catch (err) {
-                console.warn('Game loop update error caught:', err);
+                warnThrottled('Game loop update error caught:', err);
             }
         }
 
@@ -36,7 +46,7 @@ export function animate({
         try {
             renderer.render(scene, camera);
         } catch (err) {
-            console.warn('Game loop render error caught:', err);
+            warnThrottled('Game loop render error caught:', err);
         }
 
     }

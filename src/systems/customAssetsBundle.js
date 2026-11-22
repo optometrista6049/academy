@@ -7,7 +7,7 @@
    ====================================================== */
 
 export const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = 5242880;
-export const CUSTOM_ASSETS_BUNDLE_UPDATED_AT = 1795088966077;
+export const CUSTOM_ASSETS_BUNDLE_UPDATED_AT = 1795337517117;
 
 export const BUNDLED_CUSTOM_MODELS_META = {
     "Fantasy_House_by_Quaternius_-_BH2XHWUNmF.glb": {

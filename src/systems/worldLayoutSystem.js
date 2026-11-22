@@ -71,7 +71,7 @@ export const DEFAULT_WORLD_LAYOUT = {
             }
         ]
     },
-    "updatedAt": 1795088784152
+    "updatedAt": 1795289865543
 };
 
 const LAYOUT_STORAGE_KEY = 'monteserin_world_layout';
@@ -364,15 +364,31 @@ function sendServerLayoutSync(payload) {
 
 function mergeHiddenProcedural(primary, fallback = null) {
     const merged = { trees: [], rocks: [] };
-    if (fallback && typeof fallback === 'object') {
-        Object.keys(fallback).forEach((k) => {
-            if (Array.isArray(fallback[k])) merged[k] = fallback[k];
+    const appendUnique = (cat, items) => {
+        if (!Array.isArray(items)) return;
+        if (!Array.isArray(merged[cat])) merged[cat] = [];
+        items.forEach((entry) => {
+            if (!entry || typeof entry !== 'object') return;
+            const exists = merged[cat].some((it) => {
+                if (entry.id && it.id === entry.id) return true;
+                if (typeof entry.archIdx === 'number' && it.archIdx === entry.archIdx &&
+                    typeof entry.instanceIdx === 'number' && it.instanceIdx === entry.instanceIdx) {
+                    return true;
+                }
+                if (typeof entry.geoType !== 'undefined' && it.geoType === entry.geoType &&
+                    typeof entry.instanceIdx === 'number' && it.instanceIdx === entry.instanceIdx) {
+                    return true;
+                }
+                return false;
+            });
+            if (!exists) merged[cat].push(entry);
         });
+    };
+    if (fallback && typeof fallback === 'object') {
+        Object.keys(fallback).forEach((k) => appendUnique(k, fallback[k]));
     }
     if (primary && typeof primary === 'object') {
-        Object.keys(primary).forEach((k) => {
-            if (Array.isArray(primary[k])) merged[k] = primary[k];
-        });
+        Object.keys(primary).forEach((k) => appendUnique(k, primary[k]));
     }
     return merged;
 }

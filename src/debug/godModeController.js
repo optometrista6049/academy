@@ -44,7 +44,8 @@ import {
     getObjectScaleXYZFromData,
     getObjectLocalBounds,
     updateWorldObjectLogic,
-    commitStagedWorldObjects
+    commitStagedWorldObjects,
+    deepDisposeObject
 } from '../systems/worldObjectsManager.js';
 import { dismissPandaReminder } from '../ui/pandaReminder.js';
 import { showDevToast, closeDevPanel, openDevPanel } from './devPanel.js';
@@ -53,7 +54,12 @@ import { getPandaNPC } from '../entities/npc/pandaNPC.js';
 import { getAltoNPC } from '../entities/npc/altoNPC.js';
 import { getTelerinNPC } from '../entities/npc/telerinNPC.js';
 import { getTeleronNPC } from '../entities/npc/teleronNPC.js';
-import { getMuebleObject } from '../entities/objects/muebleObject.js';
+import {
+    getMuebleObject,
+    getMuebleLogicalScale,
+    applyMuebleLogicalScale,
+    syncMuebleDrawerTransform
+} from '../entities/objects/muebleObject.js';
 import {
     getWorldLayout,
     getEntityTransform,
@@ -66,10 +72,11 @@ import {
     reloadWorldLayoutFromStorage
 } from '../systems/worldLayoutSystem.js';
 import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
-import { collidables, addCollidable } from '../entities/collisions.js';
+import { collidables, addCollidable, removeCollidable } from '../entities/collisions.js';
 import { rebuildSpatialGrid } from '../systems/chunkSystem.js';
 import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
 import { DEV_CONFIG } from '../config/devConfig.js';
+import { snapCameraOrbitTo } from '../player/playerCamera.js';
 
 let isGodModeActive = false;
 let godAnimationId = null;
@@ -230,6 +237,8 @@ function spawnLocatorBeacon(pos) {
         if (elapsed > 3.5) {
             if (locatorBeaconMesh) {
                 scene.remove(locatorBeaconMesh);
+                if (locatorBeaconMesh.geometry) locatorBeaconMesh.geometry.dispose();
+                if (locatorBeaconMesh.material) locatorBeaconMesh.material.dispose();
                 locatorBeaconMesh = null;
             }
             return;
@@ -354,14 +363,19 @@ function focusCameraOnTarget(target) {
     // Si la entidad tiene malla y es un NPC o mueble, asegurar que esté en la superficie del terreno y visible
     if (target.mesh) {
         if (target.type === 'npc' || target.type === 'furniture' || target.type === 'custom') {
-            snapObjectToTerrain(target.mesh, pos.x, pos.z);
-            target.mesh.visible = true;
-            target.mesh.traverse(child => {
-                if (child.isMesh) {
-                    child.visible = true;
-                    child.frustumCulled = false;
-                }
-            });
+            const explicitOffset = Number.isFinite(target.mesh.userData?.relativeGroundOffset)
+                ? target.mesh.userData.relativeGroundOffset
+                : null;
+            snapObjectToTerrain(target.mesh, pos.x, pos.z, explicitOffset);
+            if (!target.mesh.userData?.hiddenByLayout) {
+                target.mesh.visible = true;
+                target.mesh.traverse(child => {
+                    if (child.isMesh) {
+                        child.visible = true;
+                        child.frustumCulled = false;
+                    }
+                });
+            }
             target.mesh.updateMatrixWorld(true);
         }
     }
@@ -466,6 +480,20 @@ function resetEntityToSavedPosition(target) {
     const groundY = getHeightAt(saved.x, saved.z);
     const newPos = { x: saved.x, y: groundY, z: saved.z };
 
+    if (target.mesh && (target.type === 'npc' || target.type === 'furniture')) {
+        const shouldHide = Boolean(saved.hidden);
+        target.mesh.userData.hiddenByLayout = shouldHide;
+        target.mesh.visible = !shouldHide;
+        if (shouldHide) {
+            removeCollidable(target.mesh);
+        } else {
+            addCollidable(target.mesh);
+        }
+        if (target.type === 'furniture') {
+            syncMuebleDrawerTransform();
+        }
+    }
+
     selectEntityFromLocator(target);
     applyLiveMoveToSelectedObject(newPos);
     commitSelectedObjectMove(newPos);
@@ -473,8 +501,30 @@ function resetEntityToSavedPosition(target) {
     if (typeof saved.rotationY === 'number') {
         applyRotationToSelected(saved.rotationY);
     }
-    if (typeof saved.scale === 'number') {
-        applyScaleToSelected(saved.scale);
+    if (saved.scaleXYZ || typeof saved.scale === 'number') {
+        if (target.type === 'furniture') {
+            applyMuebleLogicalScale(saved.scaleXYZ || saved.scale || 1.0);
+            const logical = getMuebleLogicalScale();
+            currentScaleXYZ = { ...logical };
+            currentScale = Number(((logical.x + logical.y + logical.z) / 3).toFixed(4));
+            syncScaleInputsDOM();
+        } else if (typeof saved.scale === 'number') {
+            applyScaleToSelected(saved.scale);
+        }
+    }
+
+    if (target.type === 'furniture' && target.mesh) {
+        if (typeof saved.relativeGroundOffset === 'number' && Number.isFinite(saved.relativeGroundOffset)) {
+            target.mesh.userData.relativeGroundOffset = saved.relativeGroundOffset;
+            target.mesh.position.y = getHeightAt(saved.x, saved.z) + saved.relativeGroundOffset;
+            target.mesh.updateMatrixWorld(true);
+            updateEntityTransform('furniture', 'mueble', { relativeGroundOffset: saved.relativeGroundOffset }, false);
+        }
+        syncMuebleDrawerTransform({ syncState: true });
+        rebuildSpatialGrid(collidables);
+        if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
+            selectionBoxHelper.update();
+        }
     }
 
     showDevToast(`🔄 "${target.name}" restablecido a su posición guardada (${saved.x.toFixed(1)}, ${saved.z.toFixed(1)})`);
@@ -490,6 +540,13 @@ function selectEntityFromLocator(target) {
         return;
     }
     if (target.type === 'player') {
+        const baseScale = runtimeState.player.userData?.baseScale || 1.4;
+        const pScaleXYZ = {
+            x: Number((runtimeState.player.scale.x / baseScale).toFixed(3)),
+            y: Number((runtimeState.player.scale.y / baseScale).toFixed(3)),
+            z: Number((runtimeState.player.scale.z / baseScale).toFixed(3))
+        };
+        const pScaleAvg = Number(((pScaleXYZ.x + pScaleXYZ.y + pScaleXYZ.z) / 3).toFixed(4));
         selectWorldObject({
             type: 'player',
             mesh: runtimeState.player,
@@ -498,22 +555,33 @@ function selectEntityFromLocator(target) {
                 icon: '🤖',
                 position: runtimeState.player.position,
                 rotationY: runtimeState.player.rotation.y,
-                scale: runtimeState.player.scale.x / 1.4
+                scale: pScaleAvg,
+                scaleXYZ: pScaleXYZ
             }
         });
     } else if (target.type === 'npc') {
+        const npcMesh = target.mesh;
+        const rawFactor = npcMesh?.userData?.rawHeightFactor || 1;
+        const nScaleXYZ = npcMesh ? {
+            x: Number((npcMesh.scale.x / rawFactor).toFixed(3)),
+            y: Number((npcMesh.scale.y / rawFactor).toFixed(3)),
+            z: Number((npcMesh.scale.z / rawFactor).toFixed(3))
+        } : (target.savedPos?.scaleXYZ || { x: target.savedPos?.scale || 1.8, y: target.savedPos?.scale || 1.8, z: target.savedPos?.scale || 1.8 });
+        const nScaleAvg = Number(((nScaleXYZ.x + nScaleXYZ.y + nScaleXYZ.z) / 3).toFixed(4));
         selectWorldObject({
             type: 'npc',
-            mesh: target.mesh,
+            mesh: npcMesh,
             data: {
                 name: `NPC ${target.name}`,
                 icon: target.icon,
                 position: target.pos,
-                rotationY: target.mesh ? target.mesh.rotation.y : (target.savedPos?.rotationY || 0),
-                scale: target.mesh ? target.mesh.scale.x : (target.savedPos?.scale || 1.8)
+                rotationY: npcMesh ? npcMesh.rotation.y : (target.savedPos?.rotationY || 0),
+                scale: nScaleAvg,
+                scaleXYZ: nScaleXYZ
             }
         });
     } else if (target.type === 'furniture') {
+        const logicalScale = getMuebleLogicalScale();
         selectWorldObject({
             type: 'furniture',
             mesh: target.mesh,
@@ -522,7 +590,8 @@ function selectEntityFromLocator(target) {
                 icon: '🪑',
                 position: target.pos,
                 rotationY: target.mesh ? target.mesh.rotation.y : (target.savedPos?.rotationY || Math.PI),
-                scale: target.mesh ? target.mesh.scale.x : 1.0
+                scale: Number(((logicalScale.x + logicalScale.y + logicalScale.z) / 3).toFixed(4)),
+                scaleXYZ: logicalScale
             }
         });
     }
@@ -531,9 +600,15 @@ function selectEntityFromLocator(target) {
 /**
  * Activa el Modo Dios en el juego.
  */
-export function enterGodMode() {
+export function enterGodMode(preselectedItem = null) {
     if (!DEV_CONFIG.enabled) return;
-    if (isGodModeActive) return;
+    if (isGodModeActive) {
+        if (preselectedItem && preselectedItem.url) {
+            currentTool = 'place';
+            setSelectedItem(preselectedItem).then(() => renderHUDContent());
+        }
+        return;
+    }
     isGodModeActive = true;
     runtimeState.isGodMode = true;
 
@@ -558,7 +633,7 @@ export function enterGodMode() {
     // 3. Crear elementos visuales 3D auxiliares (cursor de suelo)
     createPlacementCursor();
 
-    // 4. Iniciar con PUNTERO LIBRE (sin ningún ítem preseleccionado) y Catálogo 3D abierto por defecto
+    // 4. Iniciar con PUNTERO LIBRE (o ítem preseleccionado) y Catálogo 3D abierto por defecto
     selectedCatalogItem = null;
     destroyGhostMesh();
     currentTool = 'place';
@@ -566,6 +641,9 @@ export function enterGodMode() {
 
     // 5. Crear la barra flotante (HUD) y ventanas activas
     createGodModeHUD();
+    if (preselectedItem && preselectedItem.url) {
+        setSelectedItem(preselectedItem).then(() => renderHUDContent());
+    }
 
     // 6. Conectar eventos de teclado y ratón
     bindGodModeEvents();
@@ -652,6 +730,12 @@ export function exitGodMode(force = false) {
         cancelAnimationFrame(godAnimationId);
         godAnimationId = null;
     }
+    if (activeFlyAnimation) {
+        cancelAnimationFrame(activeFlyAnimation);
+        activeFlyAnimation = null;
+    }
+    isMouseDown = false;
+    hasMovedSignificantly = false;
 
     // Limpiar auxiliares 3D
     destroyPlacementCursor();
@@ -681,7 +765,7 @@ export function exitGodMode(force = false) {
         logicWindowPanel = null;
     }
 
-    // Restaurar cámara del player
+    // Restaurar cámara del player y sincronizar órbita para evitar salto brusco al ángulo previo
     const player = runtimeState.player;
     if (player) {
         camera.position.set(
@@ -690,6 +774,7 @@ export function exitGodMode(force = false) {
             player.position.z + 8.0
         );
         camera.lookAt(player.position);
+        snapCameraOrbitTo(camera.position, player.position);
     }
 
     showDevToast('🚶 Regresado al modo Player');
@@ -742,6 +827,7 @@ function createPlacementCursor() {
 function destroyPlacementCursor() {
     if (placementCursor) {
         scene.remove(placementCursor);
+        deepDisposeObject(placementCursor);
         placementCursor = null;
     }
 }
@@ -915,6 +1001,7 @@ function destroyGhostMesh() {
     }
     if (ghostMesh) {
         scene.remove(ghostMesh);
+        deepDisposeObject(ghostMesh);
         ghostMesh = null;
     }
 }
@@ -2253,11 +2340,11 @@ function renderLocatorWindowContent() {
                 e.stopPropagation();
                 const entId = delBtn.getAttribute('data-ent-id');
                 if (entId) {
-                    removePlacedObjectFromWorld(entId);
+                    removePlacedObjectFromWorld(entId, false);
                     if (selectedWorldObject?.id === entId) clearSelectionHelper();
                     hasUnsavedChanges = true;
                     pendingChangesCount++;
-                    showDevToast('🗑️ Objeto eliminado del escenario');
+                    showDevToast('🗑️ Objeto eliminado (se fijará al pulsar Guardar y Hornear)');
                     renderHUDContent();
                 }
                 return;
@@ -2409,8 +2496,10 @@ function renderObjectsWindowContent() {
         b.onclick = async (e) => {
             e.stopPropagation();
             const objId = b.getAttribute('data-id');
-            const cloned = await duplicateWorldObject(objId);
+            const cloned = await duplicateWorldObject(objId, null, false);
             if (cloned && cloned.mesh) {
+                hasUnsavedChanges = true;
+                pendingChangesCount++;
                 selectWorldObject(cloned);
                 showDevToast(`📑 ¡"${cloned.data?.name || 'Objeto'}" duplicado! Se ha seleccionado la copia para que puedas moverla`);
                 renderHUDContent();
@@ -2434,11 +2523,11 @@ function renderObjectsWindowContent() {
         b.onclick = (e) => {
             e.stopPropagation();
             const objId = b.getAttribute('data-id');
-            removePlacedObjectFromWorld(objId);
+            removePlacedObjectFromWorld(objId, false);
             if (selectedWorldObject?.id === objId) clearSelectionHelper();
             hasUnsavedChanges = true;
             pendingChangesCount++;
-            showDevToast('🗑️ Objeto eliminado del escenario');
+            showDevToast('🗑️ Objeto eliminado (se fijará al pulsar Guardar y Hornear)');
             renderHUDContent();
         };
     });
@@ -2487,8 +2576,11 @@ function setupHUDEvents() {
     const undoBtn = hudContainer.querySelector('#godUndoBtn');
     if (undoBtn) {
         undoBtn.onclick = () => {
-            const undone = undoLastPlacedObject();
+            const undone = undoLastPlacedObject(false);
             if (undone) {
+                if (selectedWorldObject?.id === undone.id) clearSelectionHelper(false);
+                hasUnsavedChanges = true;
+                pendingChangesCount++;
                 showDevToast(`↶ Deshecho: "${undone.data?.name || 'Objeto'}"`);
                 renderHUDContent();
             } else {
@@ -2613,52 +2705,87 @@ function setupHUDEvents() {
 
                     // 3. Re-sincronizar mallas en vivo con las coordenadas confirmadas
                     if (runtimeState.player && confirmedLayout.playerSpawn) {
-                        const groundY = getHeightAt(confirmedLayout.playerSpawn.x, confirmedLayout.playerSpawn.z);
-                        runtimeState.player.position.set(confirmedLayout.playerSpawn.x, groundY + (runtimeState.playerHeightOffset || 0), confirmedLayout.playerSpawn.z);
-                        if (typeof confirmedLayout.playerSpawn.rotationY === 'number') {
-                            runtimeState.player.rotation.y = confirmedLayout.playerSpawn.rotationY;
+                        const ps = confirmedLayout.playerSpawn;
+                        const baseScale = runtimeState.player.userData?.baseScale || 1.4;
+                        if (ps.scaleXYZ && typeof ps.scaleXYZ === 'object') {
+                            runtimeState.player.scale.set(
+                                baseScale * (Number(ps.scaleXYZ.x) || 1),
+                                baseScale * (Number(ps.scaleXYZ.y) || 1),
+                                baseScale * (Number(ps.scaleXYZ.z) || 1)
+                            );
+                        } else {
+                            const psScalar = typeof ps.scale === 'number' && ps.scale > 0 ? ps.scale : 1.0;
+                            runtimeState.player.scale.setScalar(baseScale * psScalar);
+                        }
+                        const pOff = typeof ps.relativeGroundOffset === 'number'
+                            ? ps.relativeGroundOffset
+                            : computeGroundOffset(runtimeState.player);
+                        runtimeState.playerHeightOffset = pOff;
+                        runtimeState.player.userData.relativeGroundOffset = pOff;
+                        const groundY = getHeightAt(ps.x, ps.z);
+                        runtimeState.player.position.set(ps.x, groundY + pOff, ps.z);
+                        if (typeof ps.rotationY === 'number') {
+                            runtimeState.player.rotation.y = ps.rotationY;
                         }
                     }
 
                     const npcsMap = confirmedLayout.npcs || {};
-                    const altoMesh = getAltoNPC();
-                    if (altoMesh && npcsMap.Alto) {
-                        const groundY = getHeightAt(npcsMap.Alto.x, npcsMap.Alto.z);
-                        altoMesh.position.set(npcsMap.Alto.x, groundY, npcsMap.Alto.z);
-                        if (typeof npcsMap.Alto.rotationY === 'number') altoMesh.rotation.y = npcsMap.Alto.rotationY;
-                        if (typeof npcsMap.Alto.scale === 'number') altoMesh.scale.setScalar(npcsMap.Alto.scale);
-                    }
+                    const restoreNpcEntity = (mesh, cfg) => {
+                        if (!mesh || !cfg) return;
+                        const rawFactor = mesh.userData?.rawHeightFactor || 1;
+                        if (cfg.scaleXYZ && typeof cfg.scaleXYZ === 'object') {
+                            const fallbackS = typeof cfg.scale === 'number' && cfg.scale > 0 ? cfg.scale : 1.8;
+                            mesh.scale.set(
+                                (Number(cfg.scaleXYZ.x) || fallbackS) * rawFactor,
+                                (Number(cfg.scaleXYZ.y) || fallbackS) * rawFactor,
+                                (Number(cfg.scaleXYZ.z) || fallbackS) * rawFactor
+                            );
+                        } else if (typeof cfg.scale === 'number' && cfg.scale > 0) {
+                            mesh.scale.setScalar(cfg.scale * rawFactor);
+                        }
+                        if (typeof cfg.rotationY === 'number') mesh.rotation.y = cfg.rotationY;
+                        const npcOff = typeof cfg.relativeGroundOffset === 'number'
+                            ? cfg.relativeGroundOffset
+                            : computeGroundOffset(mesh);
+                        mesh.userData.relativeGroundOffset = npcOff;
+                        const groundY = getHeightAt(cfg.x, cfg.z);
+                        mesh.position.set(cfg.x, groundY + npcOff, cfg.z);
+                        mesh.userData.hiddenByLayout = Boolean(cfg.hidden);
+                        mesh.visible = !mesh.userData.hiddenByLayout;
+                        if (mesh.userData.hiddenByLayout) {
+                            removeCollidable(mesh);
+                        } else {
+                            addCollidable(mesh);
+                        }
+                    };
 
-                    const pandaMesh = getPandaNPC();
-                    if (pandaMesh && npcsMap.Panda) {
-                        const groundY = getHeightAt(npcsMap.Panda.x, npcsMap.Panda.z);
-                        pandaMesh.position.set(npcsMap.Panda.x, groundY, npcsMap.Panda.z);
-                        if (typeof npcsMap.Panda.rotationY === 'number') pandaMesh.rotation.y = npcsMap.Panda.rotationY;
-                    }
-
-                    const telerinMesh = getTelerinNPC();
-                    if (telerinMesh && (npcsMap['Telerín'] || npcsMap['Telerin'])) {
-                        const t = npcsMap['Telerín'] || npcsMap['Telerin'];
-                        const groundY = getHeightAt(t.x, t.z);
-                        telerinMesh.position.set(t.x, groundY, t.z);
-                        if (typeof t.rotationY === 'number') telerinMesh.rotation.y = t.rotationY;
-                    }
-
-                    const teleronMesh = getTeleronNPC();
-                    if (teleronMesh && (npcsMap['Telerón'] || npcsMap['Teleron'])) {
-                        const t = npcsMap['Telerón'] || npcsMap['Teleron'];
-                        const groundY = getHeightAt(t.x, t.z);
-                        teleronMesh.position.set(t.x, groundY, t.z);
-                        if (typeof t.rotationY === 'number') teleronMesh.rotation.y = t.rotationY;
-                    }
+                    restoreNpcEntity(getAltoNPC(), npcsMap.Alto);
+                    restoreNpcEntity(getPandaNPC(), npcsMap.Panda);
+                    restoreNpcEntity(getTelerinNPC(), npcsMap['Telerín'] || npcsMap['Telerin']);
+                    restoreNpcEntity(getTeleronNPC(), npcsMap['Telerón'] || npcsMap['Teleron']);
 
                     const muebleMesh = getMuebleObject();
                     if (muebleMesh && confirmedLayout.furniture?.mueble) {
                         const m = confirmedLayout.furniture.mueble;
-                        const groundY = getHeightAt(m.x, m.z);
-                        muebleMesh.position.set(m.x, groundY + 0.45, m.z);
                         if (typeof m.rotationY === 'number') muebleMesh.rotation.y = m.rotationY;
+                        applyMuebleLogicalScale(m.scaleXYZ || m.scale || 1.0);
+                        const groundOffset = typeof m.relativeGroundOffset === 'number'
+                            ? m.relativeGroundOffset
+                            : computeGroundOffset(muebleMesh);
+                        muebleMesh.userData.relativeGroundOffset = groundOffset;
+                        const groundY = getHeightAt(m.x, m.z);
+                        muebleMesh.position.set(m.x, groundY + groundOffset, m.z);
+                        muebleMesh.userData.hiddenByLayout = Boolean(m.hidden);
+                        muebleMesh.visible = !muebleMesh.userData.hiddenByLayout;
+                        if (muebleMesh.userData.hiddenByLayout) {
+                            removeCollidable(muebleMesh);
+                        } else {
+                            addCollidable(muebleMesh);
+                        }
+                        syncMuebleDrawerTransform({ syncState: true });
                     }
+
+                    rebuildSpatialGrid(collidables);
 
                     hasUnsavedChanges = false;
                     pendingChangesCount = 0;
@@ -2729,11 +2856,13 @@ function setupHUDEvents() {
     const toggleSolidBtn = hudContainer.querySelector('#godToggleSolidBtn');
     if (toggleSolidBtn && selectedWorldObject && selectedWorldObject.type === 'custom') {
         toggleSolidBtn.onclick = () => {
-            const res = toggleObjectSolidState(selectedWorldObject.id);
+            const res = toggleObjectSolidState(selectedWorldObject.id, false);
             if (res) {
                 if (selectedWorldObject.data) {
                     selectedWorldObject.data.isSolid = res.isSolid;
                 }
+                hasUnsavedChanges = true;
+                pendingChangesCount++;
                 showDevToast(res.isSolid ? '🧱 Objeto configurado como SÓLIDO (con colisión física)' : '👻 Objeto configurado como TRASPASABLE (sin colisión)');
                 renderHUDContent();
             }
@@ -3021,13 +3150,13 @@ function bindCatalogCardEvents() {
     if (!catalogWindowPanel) return;
 
     catalogWindowPanel.querySelectorAll('.godDeleteUploadedCardBtn').forEach(delBtn => {
-        delBtn.onclick = (e) => {
+        delBtn.onclick = async (e) => {
             e.stopPropagation();
             const id = delBtn.getAttribute('data-id');
             if (!id) return;
             deleteUploadedModel(id);
             if (selectedCatalogItem?.sourceId === id) {
-                setSelectedItem(null);
+                await setSelectedItem(null);
             }
             showDevToast('🗑️ Modelo eliminado de la lista de Modelos PC');
             renderHUDContent();
@@ -3245,8 +3374,11 @@ function onKeyDown(e) {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 e.stopPropagation();
-                const undone = undoLastPlacedObject();
+                const undone = undoLastPlacedObject(false);
                 if (undone) {
+                    if (selectedWorldObject?.id === undone.id) clearSelectionHelper(false);
+                    hasUnsavedChanges = true;
+                    pendingChangesCount++;
                     showDevToast(`↶ Deshecho: "${undone.data?.name || 'Objeto'}"`);
                     renderHUDContent();
                 }
@@ -3618,10 +3750,15 @@ function getSelectableCandidates() {
         if (teleron && teleron.visible !== false) candidates.push(teleron);
     } catch (_) {}
 
-    // 4. Mueble
+    // 4. Mueble (incluyendo su cajón interactivo desacoplado)
     try {
         const mueble = getMuebleObject();
-        if (mueble && mueble.visible !== false) candidates.push(mueble);
+        if (mueble && mueble.visible !== false) {
+            candidates.push(mueble);
+            if (mueble.userData?.drawerGroup && mueble.userData.drawerGroup.visible !== false) {
+                candidates.push(mueble.userData.drawerGroup);
+            }
+        }
     } catch (_) {}
 
     // 5. Todos los InstancedMeshes de la escena (Árboles y Rocas)
@@ -3736,6 +3873,12 @@ function resolveAndSelectObjectFromHit(hit) {
             curr = curr.parent;
         }
         if (isPlayerHit) {
+            const baseScale = runtimeState.player.userData?.baseScale || 1.4;
+            const pScaleXYZ = {
+                x: Number((runtimeState.player.scale.x / baseScale).toFixed(3)),
+                y: Number((runtimeState.player.scale.y / baseScale).toFixed(3)),
+                z: Number((runtimeState.player.scale.z / baseScale).toFixed(3))
+            };
             selectWorldObject({
                 type: 'player',
                 mesh: runtimeState.player,
@@ -3744,7 +3887,8 @@ function resolveAndSelectObjectFromHit(hit) {
                     icon: '🤖',
                     position: runtimeState.player.position,
                     rotationY: runtimeState.player.rotation.y,
-                    scale: runtimeState.player.scale.x / 1.4
+                    scale: Number(((pScaleXYZ.x + pScaleXYZ.y + pScaleXYZ.z) / 3).toFixed(4)),
+                    scaleXYZ: pScaleXYZ
                 }
             });
             return;
@@ -3771,6 +3915,12 @@ function resolveAndSelectObjectFromHit(hit) {
                 curr = curr.parent;
             }
             if (isNpcHit) {
+                const rawFactor = npcMesh.userData?.rawHeightFactor || 1;
+                const nScaleXYZ = {
+                    x: Number((npcMesh.scale.x / rawFactor).toFixed(3)),
+                    y: Number((npcMesh.scale.y / rawFactor).toFixed(3)),
+                    z: Number((npcMesh.scale.z / rawFactor).toFixed(3))
+                };
                 selectWorldObject({
                     type: 'npc',
                     mesh: npcMesh,
@@ -3779,7 +3929,8 @@ function resolveAndSelectObjectFromHit(hit) {
                         icon: npcItem.icon,
                         position: npcMesh.position,
                         rotationY: npcMesh.rotation.y,
-                        scale: npcMesh.scale.x
+                        scale: Number(((nScaleXYZ.x + nScaleXYZ.y + nScaleXYZ.z) / 3).toFixed(4)),
+                        scaleXYZ: nScaleXYZ
                     }
                 });
                 return;
@@ -3787,19 +3938,26 @@ function resolveAndSelectObjectFromHit(hit) {
         }
     }
 
-    // 4. ¿Es el Mueble / Mobiliario?
+    // 4. ¿Es el Mueble / Mobiliario (o su cajón interactivo)?
     const mueble = getMuebleObject();
     if (mueble) {
         let curr = hitObj;
         let isMuebleHit = false;
         while (curr) {
-            if (curr === mueble || curr.userData?.isFurniture || curr.userData?.type === 'mueble') {
+            if (
+                curr === mueble ||
+                curr.userData?.isFurniture ||
+                curr.userData?.type === 'mueble' ||
+                curr.userData?.isMuebleDrawerPart ||
+                curr.userData?.parentMueble === mueble
+            ) {
                 isMuebleHit = true;
                 break;
             }
             curr = curr.parent;
         }
         if (isMuebleHit) {
+            const logicalScale = getMuebleLogicalScale();
             selectWorldObject({
                 type: 'furniture',
                 mesh: mueble,
@@ -3808,7 +3966,8 @@ function resolveAndSelectObjectFromHit(hit) {
                     icon: '🪑',
                     position: mueble.position,
                     rotationY: mueble.rotation.y,
-                    scale: mueble.scale.x
+                    scale: Number(((logicalScale.x + logicalScale.y + logicalScale.z) / 3).toFixed(4)),
+                    scaleXYZ: logicalScale
                 }
             });
             return;
@@ -3925,7 +4084,12 @@ function applyLiveMoveToSelectedObject(targetPos, allowSnap = true) {
             });
             selectedWorldObject.mesh.visible = true;
         }
-    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
+    } else if (selectedWorldObject.type === 'furniture') {
+        if (selectedWorldObject.mesh) {
+            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            syncMuebleDrawerTransform();
+        }
+    } else if (selectedWorldObject.type === 'generic') {
         if (selectedWorldObject.mesh) {
             snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
         }
@@ -4190,7 +4354,7 @@ async function detachInstancedObjectToCustom(instObj, targetPos = null) {
  * Consolida la posición final del objeto: actualiza chunks, colisiones y memoria staged.
  * No persiste en disco ni LocalStorage hasta que el usuario pulse 'Guardar y Hornear Escenario'.
  */
-function commitSelectedObjectMove(targetPos) {
+function commitSelectedObjectMove(targetPos, skipDirty = false) {
     if (!selectedWorldObject || !targetPos) return;
 
     if (selectedWorldObject.type === 'custom') {
@@ -4224,11 +4388,19 @@ function commitSelectedObjectMove(targetPos) {
             if (npcName) {
                 updateEntityTransform('npcs', npcName, { x: targetPos.x, z: targetPos.z }, false);
             }
+            rebuildSpatialGrid(collidables);
         }
-    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
+    } else if (selectedWorldObject.type === 'furniture') {
         if (selectedWorldObject.mesh) {
             snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            syncMuebleDrawerTransform();
             updateEntityTransform('furniture', 'mueble', { x: targetPos.x, z: targetPos.z }, false);
+            rebuildSpatialGrid(collidables);
+        }
+    } else if (selectedWorldObject.type === 'generic') {
+        if (selectedWorldObject.mesh) {
+            snapObjectToTerrain(selectedWorldObject.mesh, targetPos.x, targetPos.z);
+            rebuildSpatialGrid(collidables);
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
@@ -4247,8 +4419,10 @@ function commitSelectedObjectMove(targetPos) {
     }
 
     lastSnapResult = null;
-    hasUnsavedChanges = true;
-    pendingChangesCount++;
+    if (!skipDirty) {
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
+    }
 
     if (selectionBoxHelper && typeof selectionBoxHelper.update === 'function') {
         selectionBoxHelper.update();
@@ -4264,7 +4438,7 @@ function revertSelectedObjectPosition(origPos) {
     if (!selectedWorldObject || !origPos) return;
     applyLiveMoveToSelectedObject({ ...origPos, _rawY: true }, false);
     if (selectedWorldObject.category !== 'instanced') {
-        commitSelectedObjectMove(origPos);
+        commitSelectedObjectMove(origPos, true);
     }
 }
 
@@ -4378,13 +4552,19 @@ function applyRotationToSelected(newRotY) {
             selectedWorldObject.mesh.rotation.y = currentRotationY;
             const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
             if (npcName) {
-                updateEntityTransform('npcs', npcName, { rotationY: currentRotationY }, false);
+                updateEntityTransform('npcs', npcName, { rotationY: currentRotationY, explicitRotation: true }, false);
             }
         }
-    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
+    } else if (selectedWorldObject.type === 'furniture') {
         if (selectedWorldObject.mesh) {
             selectedWorldObject.mesh.rotation.y = currentRotationY;
+            syncMuebleDrawerTransform();
+            rebuildSpatialGrid(collidables);
             updateEntityTransform('furniture', 'mueble', { rotationY: currentRotationY }, false);
+        }
+    } else if (selectedWorldObject.type === 'generic') {
+        if (selectedWorldObject.mesh) {
+            selectedWorldObject.mesh.rotation.y = currentRotationY;
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
@@ -4431,26 +4611,52 @@ function applyScaleXYZInternal() {
         updatePlacedObjectTransform(selectedWorldObject.id, { scaleXYZ: currentScaleXYZ }, false);
     } else if (selectedWorldObject.type === 'player') {
         if (runtimeState.player) {
+            const baseScale = runtimeState.player.userData?.baseScale || 1.4;
             runtimeState.player.scale.set(
-                currentScaleXYZ.x * 1.4,
-                currentScaleXYZ.y * 1.4,
-                currentScaleXYZ.z * 1.4
+                currentScaleXYZ.x * baseScale,
+                currentScaleXYZ.y * baseScale,
+                currentScaleXYZ.z * baseScale
             );
+            const newOffset = computeGroundOffset(runtimeState.player);
+            runtimeState.playerHeightOffset = newOffset;
+            runtimeState.player.userData.relativeGroundOffset = newOffset;
+            updateEntityTransform('playerSpawn', null, {
+                scale: currentScale,
+                scaleXYZ: { ...currentScaleXYZ }
+            }, false);
         }
     } else if (selectedWorldObject.type === 'npc') {
         if (selectedWorldObject.mesh) {
-            selectedWorldObject.mesh.scale.set(currentScaleXYZ.x, currentScaleXYZ.y, currentScaleXYZ.z);
-            snapObjectToTerrain(selectedWorldObject.mesh, selectedWorldObject.mesh.position.x, selectedWorldObject.mesh.position.z);
+            const rawFactor = selectedWorldObject.mesh.userData?.rawHeightFactor || 1;
+            selectedWorldObject.mesh.scale.set(
+                currentScaleXYZ.x * rawFactor,
+                currentScaleXYZ.y * rawFactor,
+                currentScaleXYZ.z * rawFactor
+            );
+            const gOff = computeGroundOffset(selectedWorldObject.mesh);
+            selectedWorldObject.mesh.userData.relativeGroundOffset = gOff;
+            snapObjectToTerrain(selectedWorldObject.mesh, selectedWorldObject.mesh.position.x, selectedWorldObject.mesh.position.z, gOff);
             const npcName = (selectedWorldObject.data?.name || selectedWorldObject.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
             if (npcName) {
-                updateEntityTransform('npcs', npcName, { scale: currentScale }, false);
+                updateEntityTransform('npcs', npcName, {
+                    scale: currentScale,
+                    scaleXYZ: { ...currentScaleXYZ }
+                }, false);
             }
         }
-    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
+    } else if (selectedWorldObject.type === 'furniture') {
+        if (selectedWorldObject.mesh) {
+            applyMuebleLogicalScale(currentScaleXYZ);
+            updateEntityTransform('furniture', 'mueble', {
+                scale: currentScale,
+                scaleXYZ: { ...currentScaleXYZ }
+            }, false);
+            rebuildSpatialGrid(collidables);
+        }
+    } else if (selectedWorldObject.type === 'generic') {
         if (selectedWorldObject.mesh) {
             selectedWorldObject.mesh.scale.set(currentScaleXYZ.x, currentScaleXYZ.y, currentScaleXYZ.z);
             snapObjectToTerrain(selectedWorldObject.mesh, selectedWorldObject.mesh.position.x, selectedWorldObject.mesh.position.z);
-            updateEntityTransform('furniture', 'mueble', { scale: currentScale }, false);
         }
     } else if (selectedWorldObject.category === 'instanced') {
         const instToDetach = selectedWorldObject;
@@ -4533,6 +4739,18 @@ function applyElevationOffsetToSelected(deltaY) {
         updatePlacedObjectTransform(selectedWorldObject.id, {
             position: { x: mesh.position.x, z: mesh.position.z, elevationOffset: newRel }
         }, false);
+    } else if (selectedWorldObject.type === 'furniture') {
+        syncMuebleDrawerTransform();
+        updateEntityTransform('furniture', 'mueble', { relativeGroundOffset: newRel }, false);
+        rebuildSpatialGrid(collidables);
+    } else if (selectedWorldObject.type === 'npc') {
+        const npcName = (selectedWorldObject.data?.name || mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
+        if (npcName) {
+            updateEntityTransform('npcs', npcName, { relativeGroundOffset: newRel }, false);
+        }
+    } else if (selectedWorldObject.type === 'player') {
+        runtimeState.playerHeightOffset = newRel;
+        updateEntityTransform('playerSpawn', null, { relativeGroundOffset: newRel }, false);
     }
 
     hasUnsavedChanges = true;
@@ -4763,7 +4981,9 @@ function openObjectLogicModal(targetEntry) {
     ['keydown', 'keyup', 'keypress'].forEach(evt => {
         panel.addEventListener(evt, (e) => {
             if (e.key === 'Escape') {
-                close();
+                if (typeof activeLogicCloseFn === 'function') {
+                    activeLogicCloseFn();
+                }
                 return;
             }
             e.stopPropagation();
@@ -4964,7 +5184,7 @@ function openObjectLogicModal(targetEntry) {
             logicType: newType,
             logicConfig: newConfig,
             isSolid: newSolid
-        });
+        }, false);
 
         if (targetEntry.data) {
             targetEntry.data.name = newName;
@@ -4973,6 +5193,8 @@ function openObjectLogicModal(targetEntry) {
             targetEntry.data.isSolid = newSolid;
         }
 
+        hasUnsavedChanges = true;
+        pendingChangesCount++;
         showDevToast(`✅ Lógica configurada para "${newName}" (${newType})`);
         close();
         renderHUDContent();
@@ -5016,34 +5238,69 @@ function executeDeleteSelectedObject() {
         showDevToast(delMsg);
         renderHUDContent();
     } else if (selectedWorldObject.type === 'npc') {
+        const targetNpc = selectedWorldObject;
         showDevModalDialog({
             title: '👤 Ocultar NPC del Escenario',
-            message: `¿Deseas ocultar a "${selectedWorldObject.data?.name || 'NPC'}" del escenario?`,
+            message: `¿Deseas ocultar a "${targetNpc.data?.name || 'NPC'}" del escenario? Se fijará al pulsar Guardar y Hornear.`,
             confirmText: '🗑️ Ocultar NPC',
             cancelText: 'Cancelar',
             isDanger: true,
             onConfirm: () => {
-                if (selectedWorldObject?.mesh) {
-                    selectedWorldObject.mesh.visible = false;
+                if (targetNpc?.mesh) {
+                    targetNpc.mesh.userData.hiddenByLayout = true;
+                    targetNpc.mesh.visible = false;
+                    removeCollidable(targetNpc.mesh);
+                    const npcName = (targetNpc.data?.name || targetNpc.mesh.userData?.npcName || '').replace(/^NPC\s+/i, '').trim();
+                    if (npcName) {
+                        updateEntityTransform('npcs', npcName, { hidden: true }, false);
+                    }
+                    hasUnsavedChanges = true;
+                    pendingChangesCount++;
                 }
                 clearSelectionHelper();
-                showDevToast('🗑️ NPC ocultado del escenario');
+                showDevToast('🗑️ NPC ocultado (se fijará al pulsar Guardar y Hornear)');
                 renderHUDContent();
             }
         });
-    } else if (selectedWorldObject.type === 'furniture' || selectedWorldObject.type === 'generic') {
+    } else if (selectedWorldObject.type === 'furniture') {
+        const targetFurniture = selectedWorldObject;
         showDevModalDialog({
-            title: '🪑 Ocultar Elemento del Escenario',
-            message: `¿Deseas ocultar "${selectedWorldObject.data?.name || 'Elemento'}" del escenario?`,
+            title: '🪑 Ocultar Mueble del Escenario',
+            message: `¿Deseas ocultar "${targetFurniture.data?.name || 'Mueble'}" del escenario? Se fijará al pulsar Guardar y Hornear.`,
             confirmText: '🗑️ Ocultar',
             cancelText: 'Cancelar',
             isDanger: true,
             onConfirm: () => {
-                if (selectedWorldObject?.mesh) {
-                    selectedWorldObject.mesh.visible = false;
+                if (targetFurniture?.mesh) {
+                    targetFurniture.mesh.userData.hiddenByLayout = true;
+                    targetFurniture.mesh.visible = false;
+                    removeCollidable(targetFurniture.mesh);
+                    syncMuebleDrawerTransform();
+                    updateEntityTransform('furniture', 'mueble', { hidden: true }, false);
+                    hasUnsavedChanges = true;
+                    pendingChangesCount++;
                 }
                 clearSelectionHelper();
-                showDevToast('🗑️ Elemento ocultado del escenario');
+                showDevToast('🗑️ Mueble ocultado (se fijará al pulsar Guardar y Hornear)');
+                renderHUDContent();
+            }
+        });
+    } else if (selectedWorldObject.type === 'generic') {
+        const targetGeneric = selectedWorldObject;
+        showDevModalDialog({
+            title: '📦 Ocultar Elemento Temporalmente',
+            message: `¿Deseas ocultar "${targetGeneric.data?.name || 'Elemento'}" durante esta sesión? (Nota: los elementos estáticos base del entorno no son editables permanentemente).`,
+            confirmText: '🗑️ Ocultar',
+            cancelText: 'Cancelar',
+            isDanger: true,
+            onConfirm: () => {
+                if (targetGeneric?.mesh) {
+                    targetGeneric.mesh.userData.hiddenByLayout = true;
+                    targetGeneric.mesh.visible = false;
+                    removeCollidable(targetGeneric.mesh);
+                }
+                clearSelectionHelper();
+                showDevToast('🗑️ Elemento ocultado temporalmente en esta sesión');
                 renderHUDContent();
             }
         });

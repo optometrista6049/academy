@@ -22,6 +22,15 @@ export const gameState = {
 
     inventory:[],
 
+    itemCounts:{},
+
+    equipped:{
+        rightHand:null,
+        leftHand:null,
+        back:null,
+        head:null
+    },
+
     archived:[],
 
     dialogueIndices:{

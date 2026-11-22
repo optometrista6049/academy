@@ -2,6 +2,7 @@ import { runtimeState }
 
 from '../state/runtimeState.js';
 import { DEV_CONFIG } from '../config/devConfig.js';
+import { isInputLocked } from '../systems/inputLockSystem.js';
 
 let panel;
 
@@ -56,6 +57,16 @@ export function initworldEditor(){
         'keydown',
 
         (e)=>{
+            const target = e.target;
+            const isTyping = target && (
+                target.tagName === 'INPUT' ||
+                target.tagName === 'TEXTAREA' ||
+                target.tagName === 'SELECT' ||
+                target.isContentEditable
+            );
+            if (isTyping || isInputLocked()) {
+                return;
+            }
 
             if(
                 e.key.toLowerCase() !== 'p'

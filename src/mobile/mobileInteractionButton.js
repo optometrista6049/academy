@@ -95,10 +95,13 @@ export function showMobileInteractionButton(text = '', type = 'talk'){
 
     if(!isMobileDevice()) return;
 
-    // Conmutar icono según el tipo de interacción (NPC vs Objeto)
+    // Conmutar icono según el tipo de interacción (NPC, Objeto o Recoger)
     const iconImg = button.querySelector('#mobileInteractionIcon');
     if (iconImg) {
-        if (type === 'object') {
+        if (type === 'pickup') {
+            iconImg.src = './assets/ui/icons/pickup_hand.svg';
+            iconImg.alt = 'Recoger objeto';
+        } else if (type === 'object') {
             iconImg.src = './assets/ui/icons/interact_object.svg';
             iconImg.alt = 'Examinar objeto';
         } else {

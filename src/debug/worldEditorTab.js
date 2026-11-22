@@ -28,6 +28,7 @@ import { runtimeState } from '../state/runtimeState.js';
 import { showDevToast, closeDevPanel } from './devPanel.js';
 import { showDevModalDialog } from './devModalDialog.js';
 import { bakeCurrentWorldToCode } from '../systems/bakeSystem.js';
+import { getHeightAt } from '../terrain/terrainHeight.js';
 
 export function renderWorldEditorTab(container) {
     const placedObjects = getSavedWorldObjects();
@@ -354,7 +355,13 @@ function setupWorldEditorEvents(container) {
             const url = btn.getAttribute('data-url');
             const name = btn.getAttribute('data-name');
             const id = btn.getAttribute('data-id');
-            enterGodMode();
+            enterGodMode(url ? {
+                source: 'glb',
+                sourceId: id,
+                name: name || 'Modelo GLB',
+                icon: '🎨',
+                url
+            } : null);
         };
     });
 
@@ -371,11 +378,12 @@ function setupWorldEditorEvents(container) {
     container.querySelectorAll('.devTeleportToObjBtn').forEach(btn => {
         btn.onclick = () => {
             const x = parseFloat(btn.getAttribute('data-x'));
-            const y = parseFloat(btn.getAttribute('data-y'));
             const z = parseFloat(btn.getAttribute('data-z'));
 
-            if (runtimeState.player) {
-                runtimeState.player.position.set(x, y, z + 2.0);
+            if (runtimeState.player && Number.isFinite(x) && Number.isFinite(z)) {
+                const targetZ = z + 2.0;
+                const safeY = getHeightAt(x, targetZ) + (runtimeState.playerHeightOffset || 0);
+                runtimeState.player.position.set(x, safeY, targetZ);
                 showDevToast(`📍 Player teletransportado junto al objeto (${x.toFixed(1)}, ${z.toFixed(1)})`);
             }
         };
@@ -450,6 +458,59 @@ function setupWorldEditorEvents(container) {
             reader.readAsText(file);
         };
     }
+
+    // 9. Historial de versiones del escenario (Guardar / Restaurar / Eliminar)
+    const saveVersionBtn = container.querySelector('#devSaveNewVersionBtn');
+    const versionNameInput = container.querySelector('#devNewVersionNameInput');
+    if (saveVersionBtn) {
+        saveVersionBtn.onclick = () => {
+            const name = versionNameInput ? versionNameInput.value : '';
+            const created = saveSceneVersion(name);
+            showDevToast(`📚 Versión guardada: "${created.name}" (${created.count} objetos)`);
+            renderWorldEditorTab(container);
+        };
+    }
+
+    container.querySelectorAll('.devRestoreVersionBtn').forEach(btn => {
+        btn.onclick = () => {
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            showDevModalDialog({
+                title: '🔄 Restaurar Versión del Escenario',
+                message: '¿Deseas restaurar el escenario al estado guardado en esta versión?<br><br><span style="font-size:0.8rem;color:#cbd5e1;">Los cambios no guardados del escenario actual se reemplazarán por esta instantánea.</span>',
+                confirmText: '🔄 Sí, Restaurar',
+                cancelText: 'Cancelar',
+                onConfirm: async () => {
+                    try {
+                        const restored = await restoreSceneVersion(id);
+                        showDevToast(`✅ Escenario restaurado a "${restored.name}"`);
+                        renderWorldEditorTab(container);
+                    } catch (err) {
+                        showDevToast(`❌ Error restaurando versión: ${err.message || err}`);
+                    }
+                }
+            });
+        };
+    });
+
+    container.querySelectorAll('.devDeleteVersionBtn').forEach(btn => {
+        btn.onclick = () => {
+            const id = btn.getAttribute('data-id');
+            if (!id) return;
+            showDevModalDialog({
+                title: '🗑️ Eliminar Versión Guardada',
+                message: '¿Deseas eliminar esta versión del historial?',
+                confirmText: '🗑️ Eliminar',
+                cancelText: 'Cancelar',
+                isDanger: true,
+                onConfirm: () => {
+                    deleteSceneVersion(id);
+                    showDevToast('🗑️ Versión eliminada del historial');
+                    renderWorldEditorTab(container);
+                }
+            });
+        };
+    });
 }
 
 function THREE_radToDeg(rad) {

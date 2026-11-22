@@ -13,20 +13,102 @@ export default defineConfig(() => {
       {
         name: 'logo-upload-server',
         configureServer(server) {
-          const readRequestBody = (req: import('http').IncomingMessage): Promise<string> => {
+          const readRequestBody = (
+            req: import('http').IncomingMessage,
+            maxBytes: number = 50 * 1024 * 1024
+          ): Promise<string> => {
             return new Promise((resolve, reject) => {
               const chunks: Buffer[] = [];
+              let totalBytes = 0;
+              let settled = false;
               req.on('data', (chunk: Buffer | string) => {
-                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8'));
+                if (settled) return;
+                const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8');
+                totalBytes += buf.length;
+                if (totalBytes > maxBytes) {
+                  settled = true;
+                  req.destroy();
+                  reject(new Error(`Payload demasiado grande (máximo ${Math.round(maxBytes / (1024 * 1024))} MB)`));
+                  return;
+                }
+                chunks.push(buf);
               });
-              req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-              req.on('error', reject);
+              req.on('end', () => {
+                if (!settled) {
+                  settled = true;
+                  resolve(Buffer.concat(chunks).toString('utf8'));
+                }
+              });
+              req.on('error', (err) => {
+                if (!settled) {
+                  settled = true;
+                  reject(err);
+                }
+              });
             });
           };
 
           const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = 5 * 1024 * 1024;
-          const writeCustomAssetsBundle = () => {
+          const BUNDLE_FILE_PATH = path.resolve(__dirname, 'src/systems/customAssetsBundle.js');
+
+          const readExistingBundleMaps = () => {
+            const prevModels: Record<string, string> = {};
+            const prevDocs: Record<string, string> = {};
+            try {
+              if (!fs.existsSync(BUNDLE_FILE_PATH)) return { prevModels, prevDocs };
+              const raw = fs.readFileSync(BUNDLE_FILE_PATH, 'utf8');
+              const mMatch = raw.match(/export const BUNDLED_CUSTOM_MODELS = (\{[\s\S]*?\n\});/);
+              if (mMatch) Object.assign(prevModels, JSON.parse(mMatch[1]));
+              const dMatch = raw.match(/export const BUNDLED_CUSTOM_DOCS = (\{[\s\S]*?\n\});/);
+              if (dMatch) Object.assign(prevDocs, JSON.parse(dMatch[1]));
+            } catch (_) {}
+            return { prevModels, prevDocs };
+          };
+
+          const restoreMissingAssetsFromBundle = (opts: { deletedModel?: string; deletedDoc?: string } = {}) => {
+            const { prevModels, prevDocs } = readExistingBundleMaps();
+            const customModelsDir = path.resolve(__dirname, 'assets/models/custom');
+            const publicCustomModelsDir = path.resolve(__dirname, 'public/assets/models/custom');
+            const docsDir = path.resolve(__dirname, 'assets/docs');
+            const publicDocsDir = path.resolve(__dirname, 'public/assets/docs');
+
+            for (const [fname, dataUri] of Object.entries(prevModels)) {
+              if (!fname || fname === opts.deletedModel || typeof dataUri !== 'string') continue;
+              const p1 = path.resolve(customModelsDir, fname);
+              const p2 = path.resolve(publicCustomModelsDir, fname);
+              if (!fs.existsSync(p1) && !fs.existsSync(p2)) {
+                const b64 = dataUri.replace(/^data:.*?;base64,/, '');
+                if (b64) {
+                  const buf = Buffer.from(b64, 'base64');
+                  fs.mkdirSync(customModelsDir, { recursive: true });
+                  fs.mkdirSync(publicCustomModelsDir, { recursive: true });
+                  fs.writeFileSync(p1, buf);
+                  fs.writeFileSync(p2, buf);
+                }
+              }
+            }
+
+            for (const [fname, dataUri] of Object.entries(prevDocs)) {
+              if (!fname || fname === opts.deletedDoc || typeof dataUri !== 'string') continue;
+              const p1 = path.resolve(docsDir, fname);
+              const p2 = path.resolve(publicDocsDir, fname);
+              if (!fs.existsSync(p1) && !fs.existsSync(p2)) {
+                const b64 = dataUri.replace(/^data:.*?;base64,/, '');
+                if (b64) {
+                  const buf = Buffer.from(b64, 'base64');
+                  fs.mkdirSync(docsDir, { recursive: true });
+                  fs.mkdirSync(publicDocsDir, { recursive: true });
+                  fs.writeFileSync(p1, buf);
+                  fs.writeFileSync(p2, buf);
+                }
+              }
+            }
+          };
+
+          const writeCustomAssetsBundle = (opts: { deletedModel?: string; deletedDoc?: string; allowEmptyModels?: boolean; allowEmptyDocs?: boolean } = {}) => {
             const now = Date.now();
+            restoreMissingAssetsFromBundle(opts);
+
             const scanBinaryDir = (dirs: string[], regex: RegExp) => {
               const found = new Map<string, { filename: string; fullPath: string; size: number; mtimeMs: number }>();
               for (const dir of dirs) {
@@ -44,6 +126,23 @@ export default defineConfig(() => {
                   } catch (_) {}
                 }
               }
+              // Asegurar espejo mutuo entre assets/ y public/assets/
+              if (dirs.length === 2) {
+                for (const item of found.values()) {
+                  const aPath = path.resolve(dirs[0], item.filename);
+                  const bPath = path.resolve(dirs[1], item.filename);
+                  try {
+                    if (!fs.existsSync(aPath)) {
+                      fs.mkdirSync(dirs[0], { recursive: true });
+                      fs.copyFileSync(item.fullPath, aPath);
+                    }
+                    if (!fs.existsSync(bPath)) {
+                      fs.mkdirSync(dirs[1], { recursive: true });
+                      fs.copyFileSync(item.fullPath, bPath);
+                    }
+                  } catch (_) {}
+                }
+              }
               return Array.from(found.values()).sort((a, b) => a.filename.localeCompare(b.filename));
             };
 
@@ -56,6 +155,7 @@ export default defineConfig(() => {
               /\.pdf$/i
             );
 
+            const { prevModels, prevDocs } = readExistingBundleMaps();
             const modelData: Record<string, string> = {};
             const modelMeta: Record<string, { filename: string; size: number; skippedOversize: boolean }> = {};
             const skippedOversize: string[] = [];
@@ -73,6 +173,11 @@ export default defineConfig(() => {
               }
             }
 
+            if (models.length === 0 && Object.keys(prevModels).length > 0 && !opts.allowEmptyModels && !opts.deletedModel) {
+              Object.assign(modelData, prevModels);
+              bundledModelCount = Object.keys(modelData).length;
+            }
+
             const docData: Record<string, string> = {};
             const docMeta: Record<string, { filename: string; size: number; skippedOversize: boolean }> = {};
             let bundledDocCount = 0;
@@ -86,6 +191,11 @@ export default defineConfig(() => {
                 docData[d.filename] = `data:application/pdf;base64,${fs.readFileSync(d.fullPath).toString('base64')}`;
                 bundledDocCount++;
               }
+            }
+
+            if (docs.length === 0 && Object.keys(prevDocs).length > 0 && !opts.allowEmptyDocs && !opts.deletedDoc) {
+              Object.assign(docData, prevDocs);
+              bundledDocCount = Object.keys(docData).length;
             }
 
             const bundleCode = `/* ======================================================
@@ -155,11 +265,10 @@ export function getBundledCustomDocsList() {
 }
 `;
 
-            const targetPath = path.resolve(__dirname, 'src/systems/customAssetsBundle.js');
-            const tmpPath = `${targetPath}.tmp`;
-            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+            const tmpPath = `${BUNDLE_FILE_PATH}.tmp`;
+            fs.mkdirSync(path.dirname(BUNDLE_FILE_PATH), { recursive: true });
             fs.writeFileSync(tmpPath, bundleCode, 'utf8');
-            fs.renameSync(tmpPath, targetPath);
+            fs.renameSync(tmpPath, BUNDLE_FILE_PATH);
 
             return {
               modelCount: models.length,
@@ -171,6 +280,8 @@ export function getBundledCustomDocsList() {
             };
           };
 
+          restoreMissingAssetsFromBundle();
+
           server.middlewares.use('/api/upload-logo', async (req, res) => {
             if (req.method === 'POST') {
               try {
@@ -181,10 +292,16 @@ export function getBundledCustomDocsList() {
                     data.cleanBase64Data.replace(/^data:image\/\w+;base64,/, ''),
                     'base64'
                   );
+                  fs.mkdirSync(path.resolve(__dirname, 'assets/ui'), { recursive: true });
+                  fs.mkdirSync(path.resolve(__dirname, 'public/assets/ui'), { recursive: true });
                   fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_clean.png'), cleanBuffer);
                   fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo.png'), cleanBuffer);
                   fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_trans.png'), cleanBuffer);
                   fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_official_logo.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo_clean.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo_trans.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_official_logo.png'), cleanBuffer);
                   try {
                     fs.mkdirSync(path.resolve(__dirname, 'src/assets/images'), { recursive: true });
                     fs.writeFileSync(path.resolve(__dirname, 'src/assets/images/monteserin_official_logo.png'), cleanBuffer);
@@ -196,6 +313,7 @@ export function getBundledCustomDocsList() {
                     'base64'
                   );
                   fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_raw.png'), rawBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo_raw.png'), rawBuffer);
                 }
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ success: true, message: 'Logotipo guardado exitosamente en el servidor' }));
@@ -222,8 +340,12 @@ export function getBundledCustomDocsList() {
                   );
                   fs.mkdirSync(path.resolve(__dirname, 'assets/carnet'), { recursive: true });
                   fs.mkdirSync(path.resolve(__dirname, 'public/assets/carnet'), { recursive: true });
+                  fs.mkdirSync(path.resolve(__dirname, 'assets/ui'), { recursive: true });
+                  fs.mkdirSync(path.resolve(__dirname, 'public/assets/ui'), { recursive: true });
                   fs.writeFileSync(path.resolve(__dirname, 'assets/carnet/carnet_oficial.jpg'), carnetBuffer);
                   fs.writeFileSync(path.resolve(__dirname, 'public/assets/carnet/carnet_oficial.jpg'), carnetBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/ASPIRANTE.jpg'), carnetBuffer);
+                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/ASPIRANTE.jpg'), carnetBuffer);
                 }
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ 
@@ -290,7 +412,15 @@ export function getBundledCustomDocsList() {
                   return res.end(JSON.stringify({ error: 'filename y base64Data son requeridos' }));
                 }
 
-                const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const safeName = path
+                  .basename(String(filename || '').trim())
+                  .replace(/[^a-zA-Z0-9._-]/g, '_')
+                  .replace(/^\.+/, '');
+                if (!safeName || safeName === '.' || safeName === '..' || !/\.(glb|gltf)$/i.test(safeName)) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'filename inválido (solo se permiten .glb o .gltf)' }));
+                }
                 const customDir = path.resolve(__dirname, 'assets/models/custom');
                 const publicCustomDir = path.resolve(__dirname, 'public/assets/models/custom');
                 fs.mkdirSync(customDir, { recursive: true });
@@ -321,16 +451,70 @@ export function getBundledCustomDocsList() {
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({ error: String(err) }));
               }
-            } else {
-              res.statusCode = 405;
-              res.end('Method Not Allowed');
             }
+
+            if (req.method === 'DELETE') {
+              const handleDeleteModel = (rawName: string) => {
+                const safeName = path
+                  .basename(String(rawName || '').trim())
+                  .replace(/[^a-zA-Z0-9._-]/g, '_')
+                  .replace(/^\.+/, '');
+                if (!safeName || safeName === '.' || safeName === '..') {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'filename inválido' }));
+                }
+                const customDir = path.resolve(__dirname, 'assets/models/custom');
+                const publicCustomDir = path.resolve(__dirname, 'public/assets/models/custom');
+                let deleted = false;
+                [path.resolve(customDir, safeName), path.resolve(publicCustomDir, safeName)].forEach((p) => {
+                  if (fs.existsSync(p)) {
+                    fs.unlinkSync(p);
+                    deleted = true;
+                  }
+                });
+                const bundleStats = writeCustomAssetsBundle({ deletedModel: safeName, allowEmptyModels: true });
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ success: true, deleted, filename: safeName, bundleStats }));
+              };
+
+              try {
+                const parsedUrl = new URL(req.url || '', 'http://localhost');
+                const queryName = parsedUrl.searchParams.get('filename');
+                if (queryName) {
+                  return handleDeleteModel(queryName);
+                }
+                const body = await readRequestBody(req);
+                const parsed = JSON.parse(body || '{}');
+                if (!parsed.filename) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'filename es requerido' }));
+                }
+                return handleDeleteModel(parsed.filename);
+              } catch (err) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: String(err) }));
+              }
+            }
+
+            res.statusCode = 405;
+            res.end('Method Not Allowed');
           });
 
           // Servidor estático directo para modelos personalizados subidos (con 404 real si falta el binario)
           server.middlewares.use('/assets/models/custom', (req, res, next) => {
             const cleanUrl = (req.url || '').split('?')[0].replace(/^\//, '');
-            const safeFile = path.basename(decodeURIComponent(cleanUrl));
+            let decodedUrl = '';
+            try {
+              decodedUrl = decodeURIComponent(cleanUrl);
+            } catch {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: 'Malformed model URL' }));
+            }
+            const safeFile = path.basename(decodedUrl);
             if (!safeFile) {
               return next();
             }
@@ -502,7 +686,7 @@ export function getBundledCustomDocsList() {
                     deleted = true;
                   }
                 });
-                const bundleStats = writeCustomAssetsBundle();
+                const bundleStats = writeCustomAssetsBundle({ deletedDoc: safeName, allowEmptyDocs: true });
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({ success: true, deleted, filename: safeName, bundleStats }));
               };
@@ -536,7 +720,15 @@ export function getBundledCustomDocsList() {
           // Servidor estático directo para documentos PDF (devuelve 404 JSON si no existe)
           server.middlewares.use('/assets/docs', (req, res, next) => {
             const cleanUrl = (req.url || '').split('?')[0].replace(/^\//, '');
-            const safeFile = path.basename(decodeURIComponent(cleanUrl));
+            let decodedUrl = '';
+            try {
+              decodedUrl = decodeURIComponent(cleanUrl);
+            } catch {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: 'Malformed PDF URL' }));
+            }
+            const safeFile = path.basename(decodedUrl);
             if (!safeFile) {
               return next();
             }
@@ -566,24 +758,33 @@ export function getBundledCustomDocsList() {
             const dataFile = path.resolve(dataDir, 'custom_3d_items.json');
             const publicDataFile = path.resolve(publicDataDir, 'custom_3d_items.json');
 
-            const readItemsFromDisk = () => {
-              try {
-                if (fs.existsSync(dataFile)) {
-                  const raw = fs.readFileSync(dataFile, 'utf8');
-                  const parsed = JSON.parse(raw);
-                  if (Array.isArray(parsed)) return parsed;
+            const readItemsFromDisk = (): { items: unknown[]; updatedAt: number } => {
+              const candidates = [publicDataFile, dataFile];
+              for (const fPath of candidates) {
+                try {
+                  if (fs.existsSync(fPath)) {
+                    const raw = fs.readFileSync(fPath, 'utf8');
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) {
+                      const maxItemTs = parsed.reduce((acc: number, it: Record<string, unknown>) => Math.max(acc, Number(it?.updatedAt) || 0), 0);
+                      return { items: parsed, updatedAt: maxItemTs };
+                    }
+                    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.items)) {
+                      return { items: parsed.items, updatedAt: Number(parsed.updatedAt || 0) };
+                    }
+                  }
+                } catch (e) {
+                  console.warn('[Server] Error leyendo custom_3d_items.json:', e);
                 }
-              } catch (e) {
-                console.warn('[Server] Error leyendo custom_3d_items.json:', e);
               }
-              return [];
+              return { items: [], updatedAt: 0 };
             };
 
-            const writeItemsToDisk = (items: unknown[]) => {
+            const writeItemsToDisk = (items: unknown[], updatedAt: number = Date.now()) => {
               try {
                 fs.mkdirSync(dataDir, { recursive: true });
                 fs.mkdirSync(publicDataDir, { recursive: true });
-                const content = JSON.stringify(items, null, 2);
+                const content = JSON.stringify({ items, updatedAt }, null, 2);
                 fs.writeFileSync(dataFile, content, 'utf8');
                 fs.writeFileSync(publicDataFile, content, 'utf8');
                 return true;
@@ -594,22 +795,23 @@ export function getBundledCustomDocsList() {
             };
 
             if (req.method === 'GET') {
-              const items = readItemsFromDisk();
+              const { items, updatedAt } = readItemsFromDisk();
               res.setHeader('Content-Type', 'application/json');
-              return res.end(JSON.stringify({ success: true, items }));
+              return res.end(JSON.stringify({ success: true, items, updatedAt }));
             }
 
             if (req.method === 'POST') {
               try {
                 const body = await readRequestBody(req);
                 const payload = JSON.parse(body || '{}');
-                const currentItems = readItemsFromDisk();
+                const { items: currentItems } = readItemsFromDisk();
                 const { action } = payload;
 
                 if (action === 'sync-all' && Array.isArray(payload.items)) {
-                  writeItemsToDisk(payload.items);
+                  const ts = Number(payload.updatedAt) || Date.now();
+                  writeItemsToDisk(payload.items, ts);
                   res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ success: true, count: payload.items.length }));
+                  return res.end(JSON.stringify({ success: true, count: payload.items.length, updatedAt: ts }));
                 }
 
                 if (action === 'save' && payload.item) {
@@ -619,40 +821,44 @@ export function getBundledCustomDocsList() {
                   } else {
                     currentItems.unshift(payload.item);
                   }
-                  writeItemsToDisk(currentItems);
+                  const ts = Date.now();
+                  writeItemsToDisk(currentItems, ts);
                   res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ success: true, count: currentItems.length }));
+                  return res.end(JSON.stringify({ success: true, count: currentItems.length, updatedAt: ts }));
                 }
 
                 if (action === 'delete' && payload.id) {
                   const filtered = currentItems.filter((i: { id: string }) => i.id !== payload.id);
-                  writeItemsToDisk(filtered);
+                  const ts = Date.now();
+                  writeItemsToDisk(filtered, ts);
                   res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ success: true, count: filtered.length }));
+                  return res.end(JSON.stringify({ success: true, count: filtered.length, updatedAt: ts }));
                 }
 
                 if (action === 'rename' && payload.id && payload.name) {
                   const target = currentItems.find((i: { id: string }) => i.id === payload.id) as { name?: string; updatedAt?: number } | undefined;
+                  const ts = Date.now();
                   if (target) {
                     target.name = String(payload.name).trim();
-                    target.updatedAt = Date.now();
-                    writeItemsToDisk(currentItems);
+                    target.updatedAt = ts;
+                    writeItemsToDisk(currentItems, ts);
                   }
                   res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ success: true, count: currentItems.length }));
+                  return res.end(JSON.stringify({ success: true, count: currentItems.length, updatedAt: ts }));
                 }
 
                 if (action === 'transform' && payload.id && payload.transform) {
                   const target = currentItems.find((i: { id: string }) => i.id === payload.id) as { transform?: unknown; socket?: string; scale?: number; updatedAt?: number } | undefined;
+                  const ts = Date.now();
                   if (target) {
                     target.transform = payload.transform;
                     if (payload.transform.socket) target.socket = payload.transform.socket;
                     if (typeof payload.transform.scale === 'number') target.scale = payload.transform.scale;
-                    target.updatedAt = Date.now();
-                    writeItemsToDisk(currentItems);
+                    target.updatedAt = ts;
+                    writeItemsToDisk(currentItems, ts);
                   }
                   res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ success: true, count: currentItems.length }));
+                  return res.end(JSON.stringify({ success: true, count: currentItems.length, updatedAt: ts }));
                 }
 
                 res.statusCode = 400;
@@ -816,15 +1022,38 @@ export function getBundledCustomDocsList() {
 
             const readLayoutData = (): { layout: Record<string, unknown>; versions: unknown[] } => {
               let layout: Record<string, unknown> = {};
+              let publicLayout: Record<string, unknown> = {};
               let versions: unknown[] = [];
               try {
                 if (fs.existsSync(layoutFile)) {
-                  const raw = fs.readFileSync(layoutFile, 'utf8');
-                  layout = JSON.parse(raw);
+                  layout = JSON.parse(fs.readFileSync(layoutFile, 'utf8'));
                 }
               } catch (e) {
                 console.warn('[Server] Error leyendo world_layout.json:', e);
               }
+              try {
+                if (fs.existsSync(publicLayoutFile)) {
+                  publicLayout = JSON.parse(fs.readFileSync(publicLayoutFile, 'utf8'));
+                }
+              } catch (e) {
+                console.warn('[Server] Error leyendo public/assets/data/world_layout.json:', e);
+              }
+
+              const localUpdated = Number(layout?.updatedAt || 0);
+              const publicUpdated = Number(publicLayout?.updatedAt || 0);
+              if (publicUpdated > localUpdated && Object.keys(publicLayout).length > 0) {
+                layout = publicLayout;
+                try {
+                  fs.mkdirSync(dataDir, { recursive: true });
+                  fs.writeFileSync(layoutFile, JSON.stringify(layout, null, 2), 'utf8');
+                } catch (_) {}
+              } else if (localUpdated > publicUpdated && Object.keys(layout).length > 0) {
+                try {
+                  fs.mkdirSync(publicDataDir, { recursive: true });
+                  fs.writeFileSync(publicLayoutFile, JSON.stringify(layout, null, 2), 'utf8');
+                } catch (_) {}
+              }
+
               try {
                 if (fs.existsSync(versionsFile)) {
                   const raw = fs.readFileSync(versionsFile, 'utf8');
@@ -851,11 +1080,12 @@ export function getBundledCustomDocsList() {
             const writeVersionsData = (versions: unknown[]) => {
               try {
                 fs.mkdirSync(dataDir, { recursive: true });
-                fs.mkdirSync(publicDataDir, { recursive: true });
                 const capped = Array.isArray(versions) ? versions.slice(0, MAX_LAYOUT_VERSIONS) : [];
                 const content = JSON.stringify(capped, null, 2);
                 fs.writeFileSync(versionsFile, content, 'utf8');
-                fs.writeFileSync(publicVersionsFile, content, 'utf8');
+                if (fs.existsSync(publicVersionsFile)) {
+                  try { fs.unlinkSync(publicVersionsFile); } catch (_) {}
+                }
                 return true;
               } catch (err) {
                 console.error('[Server] Error escribiendo world_layout_versions.json:', err);
@@ -1008,7 +1238,7 @@ export const DEFAULT_3D_PRESETS = ${JSON.stringify(customItems, null, 4)};
                 fs.writeFileSync(path.resolve(publicDataDir, 'world_placed_objects.json'), oStr, 'utf8');
 
                 if (hasCustomItems) {
-                  const cStr = JSON.stringify(customItems, null, 2);
+                  const cStr = JSON.stringify({ items: customItems, updatedAt: bakedAt }, null, 2);
                   fs.writeFileSync(path.resolve(dataDir, 'custom_3d_items.json'), cStr, 'utf8');
                   fs.writeFileSync(path.resolve(publicDataDir, 'custom_3d_items.json'), cStr, 'utf8');
                 }
@@ -1062,7 +1292,14 @@ export const DEFAULT_3D_PRESETS = ${JSON.stringify(customItems, null, 4)};
               if (process.env.GEMINI_API_KEY) {
                   try {
                     const { GoogleGenAI } = await import('@google/genai');
-                    const ai = new GoogleGenAI({});
+                    const ai = new GoogleGenAI({
+                      apiKey: process.env.GEMINI_API_KEY,
+                      httpOptions: {
+                        headers: {
+                          'User-Agent': 'aistudio-build',
+                        },
+                      },
+                    });
                     const systemInstruction = `Eres un experto programador de Three.js para un videojuego 3D.
 Tu objetivo es generar código JavaScript puro para Three.js que construya un objeto 3D a escala real métrica (entre 0.15m y 0.70m de tamaño, adecuado para que un robot lo sostenga en la mano o lleve en la espalda).
 
@@ -1082,7 +1319,7 @@ REGLAS DE CÓDIGO THREE.JS:
 }`;
 
                     const result = await ai.models.generateContent({
-                      model: 'gemini-3.8-flash',
+                      model: 'gemini-4-hydrogen',
                       contents: `Genera el modelo 3D Three.js para el prompt: "${prompt}". Socket sugerido: ${socket}.`,
                       config: {
                         systemInstruction,
@@ -1109,6 +1346,31 @@ REGLAS DE CÓDIGO THREE.JS:
                 res.end(JSON.stringify({ error: String(err) }));
               }
           });
+        },
+        closeBundle() {
+          // Blindaje de compilación para GitHub Pages: eliminar backups y archivos de verificación si reapareciesen en public/
+          const distDir = path.resolve(__dirname, 'dist');
+          if (!fs.existsSync(distDir)) return;
+
+          const pruneDir = (dir: string) => {
+            for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+              const fullPath = path.join(dir, ent.name);
+              if (ent.isDirectory()) {
+                pruneDir(fullPath);
+              } else if (
+                /\.backup/i.test(ent.name) ||
+                /^verificacion_.*\.html$/i.test(ent.name) ||
+                ent.name === 'dev_world_versions.json' ||
+                ent.name === 'world_layout_versions.json'
+              ) {
+                try {
+                  fs.unlinkSync(fullPath);
+                } catch (_) {}
+              }
+            }
+          };
+
+          pruneDir(distDir);
         }
       }
     ],

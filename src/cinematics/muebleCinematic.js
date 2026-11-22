@@ -3,7 +3,9 @@ import { camera } from '../core/camera.js';
 import { scene } from '../core/scene.js';
 import { runtimeState } from '../state/runtimeState.js';
 import { gameState } from '../state/gameState.js';
-import { getHeightAt } from '../terrain/terrainHeight.js';
+import { getHeightAt, LAKE_WATER_Y } from '../terrain/terrainHeight.js';
+import { getBridgeHeight } from '../environment/bridgeSystem.js';
+import { getWaterSurfaceLevel } from '../terrain/riverPath.js';
 import { lockInput, unlockInput } from '../systems/inputLockSystem.js';
 import {
     setCameraCinematicOverride,
@@ -11,13 +13,17 @@ import {
     snapCameraOrbitTo
 } from '../player/playerCamera.js';
 import { setPlayerAnimationOverride } from '../player/playerAnimation.js';
-import { getMuebleDrawer, getMuebleObject } from '../entities/objects/muebleObject.js';
+import { getMuebleDrawer, getMuebleObject, syncMuebleDrawerTransform } from '../entities/objects/muebleObject.js';
+import { getEntityTransform } from '../systems/worldLayoutSystem.js';
 import { addInventoryItem, removeInventoryItem } from '../ui/registry/modules/inventoryModuleV2.js';
 import { completeObjective } from '../systems/missionManager.js';
 import { updateDiaryContent } from '../ui/registry/modules/diaryModule.js';
 import { isMobileDevice } from '../utils/deviceDetection.js';
 import { hideMobileInteractionButton } from '../mobile/mobileInteractionButton.js';
 import { triggerRegistryIntakeEffect } from '../ui/registry/registryUI.js';
+import { saveGame } from '../systems/saveSystem.js';
+import { collidables } from '../entities/collisions.js';
+import { rebuildSpatialGrid } from '../systems/chunkSystem.js';
 
 // =========================================================================
 // AUDIO PROCEDURAL CON WEB AUDIO API
@@ -323,10 +329,12 @@ function getRegistryButtonWorldPos(cam) {
     let screenY = -0.84;
     if (btn) {
         const rect = btn.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height * 0.45;
-        screenX = (cx / window.innerWidth) * 2 - 1;
-        screenY = -(cy / window.innerHeight) * 2 + 1;
+        if (rect.width > 0 && rect.height > 0) {
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height * 0.45;
+            screenX = (cx / window.innerWidth) * 2 - 1;
+            screenY = -(cy / window.innerHeight) * 2 + 1;
+        }
     }
     const ndcVec = new THREE.Vector3(screenX, screenY, 0.5);
     ndcVec.unproject(cam);
@@ -526,47 +534,98 @@ export function playMuebleOpeningCinematic(onFinished = null) {
     // El jugador PERMANECE 100% VISIBLE
     player.visible = true;
 
-    // Calcular cotas del terreno
-    const groundY = getHeightAt(14.75, 21.65);
+    // Calcular cotas y marco de referencia dinámico respecto a la cómoda actual
+    const muebleTransform = getEntityTransform('furniture', 'mueble') || {};
+    const muebleX = Number.isFinite(mueble?.position?.x)
+        ? mueble.position.x
+        : (typeof muebleTransform.x === 'number' ? muebleTransform.x : 14.77);
+    const muebleZ = Number.isFinite(mueble?.position?.z)
+        ? mueble.position.z
+        : (typeof muebleTransform.z === 'number' ? muebleTransform.z : 23.26);
+    const muebleRotY = Number.isFinite(mueble?.rotation?.y)
+        ? mueble.rotation.y
+        : (typeof muebleTransform.rotationY === 'number' ? muebleTransform.rotationY : Math.PI);
+    const liveLogicalScale = mueble?.userData?.logicalScale;
+    const cfgScaleXYZ = muebleTransform.scaleXYZ;
+    const fallbackUniform = (typeof muebleTransform.scale === 'number' && muebleTransform.scale > 0) ? muebleTransform.scale : 1.0;
+    const scaleX = (liveLogicalScale && liveLogicalScale.x > 0) ? liveLogicalScale.x : (cfgScaleXYZ?.x > 0 ? cfgScaleXYZ.x : fallbackUniform);
+    const scaleY = (liveLogicalScale && liveLogicalScale.y > 0) ? liveLogicalScale.y : (cfgScaleXYZ?.y > 0 ? cfgScaleXYZ.y : fallbackUniform);
+    const scaleZ = (liveLogicalScale && liveLogicalScale.z > 0) ? liveLogicalScale.z : (cfgScaleXYZ?.z > 0 ? cfgScaleXYZ.z : fallbackUniform);
+
+    const deltaRotY = muebleRotY - Math.PI;
+    const cosM = Math.cos(deltaRotY);
+    const sinM = Math.sin(deltaRotY);
+    const baseGroundY = getHeightAt(muebleX, muebleZ);
+    const muebleBaseBottomY = Number.isFinite(drawerData?.baseY)
+        ? (drawerData.baseY - 0.63 * scaleY)
+        : baseGroundY;
+
+    function getWalkableSurfaceY(wx, wz) {
+        const gh = getHeightAt(wx, wz);
+        const bh = getBridgeHeight(wx, wz, gh);
+        return bh !== null ? Math.max(gh, bh) : gh;
+    }
+
+    function localOffsetToWorld(lx, lyOffset, lz, useTerrainGround = false) {
+        const sx = lx * scaleX;
+        const sz = lz * scaleZ;
+        const wx = muebleX + sx * cosM + sz * sinM;
+        const wz = muebleZ - sx * sinM + sz * cosM;
+        const wy = useTerrainGround ? getWalkableSurfaceY(wx, wz) : (muebleBaseBottomY + lyOffset * scaleY);
+        return new THREE.Vector3(wx, wy, wz);
+    }
+
+    function worldToLocalOffset(worldPos) {
+        const dx = worldPos.x - muebleX;
+        const dz = worldPos.z - muebleZ;
+        const invX = 1 / Math.max(0.05, scaleX);
+        const invZ = 1 / Math.max(0.05, scaleZ);
+        return {
+            x: (dx * cosM - dz * sinM) * invX,
+            z: (dx * sinM + dz * cosM) * invZ
+        };
+    }
+
+    function localApproachToWorld(lx, lz) {
+        const appScaleX = Math.max(0.85, scaleX);
+        const appScaleZ = Math.max(0.85, scaleZ);
+        const sx = lx * appScaleX;
+        const sz = lz * appScaleZ;
+        const wx = muebleX + sx * cosM + sz * sinM;
+        const wz = muebleZ - sx * sinM + sz * cosM;
+        const wy = getWalkableSurfaceY(wx, wz);
+        return new THREE.Vector3(wx, wy, wz);
+    }
 
     // Posición inicial del jugador y rotación
     const startPlayerPos = player.position.clone();
     const startPlayerRotY = player.rotation.y;
 
-    // Posición final del robot frente a la cómoda (Opción B: Plano Detalle AAA):
-    // El robot se coloca a distancia amplia y natural (Z=21.65, X=14.75), a ~1.25m de la cómoda
-    // y en el lateral derecho, asegurando un encuadre 100% limpio y sin obstruir jamás la cómoda ni el cajón.
-    const targetPlayerPos = new THREE.Vector3(14.75, groundY, 21.65);
-    const targetPlayerRotY = -0.32; // Mirando hacia la cerradura del mueble
-
     // Posición exacta del cerrojo/bocallave en el frontal del mueble
-    const lockTarget = new THREE.Vector3(14.35, groundY + 0.65, 22.84);
+    const lockTarget = localOffsetToWorld(-0.42, 0.65, -0.42, false);
+
+    // Posición final del robot frente a la cómoda (con despeje mínimo garantizado incluso en escalas pequeñas)
+    const targetPlayerPos = localApproachToWorld(-0.02, -1.61);
+    const targetPlayerRotY = Math.atan2(lockTarget.x - targetPlayerPos.x, lockTarget.z - targetPlayerPos.z);
 
     // Posiciones cinematográficas de la cámara (Opción B):
-    // 1) Plano Detalle (Close-Up cinematográfico macro de la cerradura):
-    //    Situado a ~40 cm de la bocallave en ángulo tres cuartos superior, mostrando
-    //    con gran nitidez las vetas de la madera, la chapa de bronce y la llave entrando y girando.
-    const camCloseUpPos = new THREE.Vector3(14.50, groundY + 0.72, 22.42);
+    const camCloseUpPos = localOffsetToWorld(-0.27, 0.72, -0.84, false);
     const camCloseUpLook = lockTarget.clone();
 
-    // 2) Plano de revelación amplio (Wide Reveal Shot desde la izquierda):
-    //    El cajón y la cómoda quedan en el centro despejado de la pantalla;
-    //    el robot queda a la derecha contemplando la escena sin interponerse jamás.
-    const camRevealPos = new THREE.Vector3(13.55, groundY + 1.28, 21.40);
-    const camRevealLook = new THREE.Vector3(14.35, groundY + 0.68, 22.75);
+    const camRevealPos = localOffsetToWorld(-1.22, 1.28, -1.86, false);
+    const camRevealLook = localOffsetToWorld(-0.42, 0.68, -0.51, false);
 
     const camStartPos = camera.position.clone();
     const camStartLook = new THREE.Vector3(player.position.x, player.position.y + 1.3, player.position.z);
 
     // Waypoint de seguridad para el traveling continuo de la cámara si estaba detrás del mueble
-    const isCameraBehindOrSide = camStartPos.z > 22.75 || Math.abs(camStartPos.x - 14.77) > 1.4;
+    const camLocalStart = worldToLocalOffset(camStartPos);
+    const isCameraBehindOrSide = camLocalStart.z > -0.51 || Math.abs(camLocalStart.x) > 1.4;
     let camMidPos = null;
     if (isCameraBehindOrSide) {
-        if (camStartPos.x <= 14.77) {
-            camMidPos = new THREE.Vector3(12.70, groundY + 1.55, 22.20);
-        } else {
-            camMidPos = new THREE.Vector3(16.60, groundY + 1.55, 22.20);
-        }
+        camMidPos = camLocalStart.x <= 0
+            ? localOffsetToWorld(-2.07, 1.55, -1.06, false)
+            : localOffsetToWorld(1.83, 1.55, -1.06, false);
     }
 
     function evaluateInitialCamera(t) {
@@ -583,7 +642,7 @@ export function playMuebleOpeningCinematic(onFinished = null) {
             pos.lerpVectors(camStartPos, camCloseUpPos, t);
         }
 
-        const h = getHeightAt(pos.x, pos.z);
+        const h = getWalkableSurfaceY(pos.x, pos.z);
         if (pos.y < h + 0.50) {
             pos.y = h + 0.50;
         }
@@ -596,23 +655,24 @@ export function playMuebleOpeningCinematic(onFinished = null) {
     const pathPoints = [];
     pathPoints.push(startPlayerPos.clone());
 
-    if (startPlayerPos.z >= 22.70) {
+    const startLocal = worldToLocalOffset(startPlayerPos);
+    if (startLocal.z >= -0.56) {
         // El jugador interactúa desde detrás o un flanco del mueble:
         // Rodear el mueble por el lateral más próximo sin colisionar
-        if (startPlayerPos.x <= 14.77) {
+        if (startLocal.x <= 0) {
             // Flanco izquierdo
-            if (startPlayerPos.z > 23.40) {
-                pathPoints.push(new THREE.Vector3(13.20, getHeightAt(13.20, startPlayerPos.z), startPlayerPos.z));
+            if (startLocal.z > 0.14) {
+                pathPoints.push(localApproachToWorld(-1.57, startLocal.z));
             }
-            pathPoints.push(new THREE.Vector3(13.15, getHeightAt(13.15, 23.26), 23.26));
-            pathPoints.push(new THREE.Vector3(13.35, getHeightAt(13.35, 21.65), 21.65));
+            pathPoints.push(localApproachToWorld(-1.62, 0));
+            pathPoints.push(localApproachToWorld(-1.42, -1.61));
         } else {
             // Flanco derecho
-            if (startPlayerPos.z > 23.40) {
-                pathPoints.push(new THREE.Vector3(16.30, getHeightAt(16.30, startPlayerPos.z), startPlayerPos.z));
+            if (startLocal.z > 0.14) {
+                pathPoints.push(localApproachToWorld(1.53, startLocal.z));
             }
-            pathPoints.push(new THREE.Vector3(16.35, getHeightAt(16.35, 23.26), 23.26));
-            pathPoints.push(new THREE.Vector3(16.05, getHeightAt(16.05, 21.65), 21.65));
+            pathPoints.push(localApproachToWorld(1.58, 0));
+            pathPoints.push(localApproachToWorld(1.28, -1.61));
         }
     }
     pathPoints.push(targetPlayerPos.clone());
@@ -658,7 +718,7 @@ export function playMuebleOpeningCinematic(onFinished = null) {
 
         const x = THREE.MathUtils.lerp(p0.x, p1.x, tSeg);
         const z = THREE.MathUtils.lerp(p0.z, p1.z, tSeg);
-        const y = getHeightAt(x, z);
+        const y = getWalkableSurfaceY(x, z);
 
         const dx = p1.x - p0.x;
         const dz = p1.z - p0.z;
@@ -685,14 +745,21 @@ export function playMuebleOpeningCinematic(onFinished = null) {
     // Instanciar la llave dorada
     const heldKeyData = createHeldKey();
     const heldKey = heldKeyData.keyGroup;
+    const keyVisualScale = Math.max(0.65, Math.min(1.8, (scaleX + scaleY + scaleZ) / 3));
+    heldKey.scale.setScalar(keyVisualScale);
     scene.add(heldKey);
     heldKey.visible = false;
 
-    // Configuración inicial de partes del cajón: la llave del mueble permanece 100% invisible
+    // Configuración inicial de partes del cajón: garantizar que la caja está limpia dentro del cajón y la llave invisible
+    drawerData._cinematicOverride = true;
     drawerData.setDrawerProgress(0);
     drawerData.setKeyProgress(0, 0, false);
     drawerData.keyGroup.visible = false;
-    drawerData.boxGroup.visible = true;
+    if (typeof drawerData.resetBoxToDrawer === 'function') {
+        drawerData.resetBoxToDrawer(true);
+    } else {
+        drawerData.boxGroup.visible = true;
+    }
     drawerData.setBoxLift(0);
 
     // Activar animación nativa de marcha para la aproximación
@@ -809,9 +876,9 @@ export function playMuebleOpeningCinematic(onFinished = null) {
             heldKey.visible = true;
             drawerData.keyGroup.visible = false;
 
-            const keyEntryStart = new THREE.Vector3(14.42, groundY + 0.69, 22.58);
+            const keyEntryStart = localOffsetToWorld(-0.35, 0.69, -0.68, false);
             heldKey.position.lerpVectors(keyEntryStart, lockTarget, easedInsert);
-            heldKey.rotation.set(0, 0, 0);
+            heldKey.rotation.set(0, deltaRotY, 0);
 
             // Clic metálico de inserción al encajar en el fondo de la cerradura
             if (insertT >= 0.88 && !sfxKeyInsertPlayed) {
@@ -839,7 +906,7 @@ export function playMuebleOpeningCinematic(onFinished = null) {
             heldKey.position.copy(lockTarget);
 
             // Giro limpio de 90° en el eje longitudinal de la cerradura
-            heldKey.rotation.set(0, 0, (Math.PI / 2) * easedTurn);
+            heldKey.rotation.set(0, deltaRotY, (Math.PI / 2) * easedTurn);
 
             // Auténtico sonido de desbloqueo mecánico ("clic-clac")
             if (turnT >= 0.45 && !sfxKeyTurnPlayed) {
@@ -995,6 +1062,7 @@ export function playMuebleOpeningCinematic(onFinished = null) {
     function finishCinematic() {
         heldKeyData.dispose();
         drawerData.hideBox();
+        drawerData._cinematicOverride = false;
 
         // Restaurar estado base de animaciones del jugador
         setPlayerAnimationOverride(null);
@@ -1003,8 +1071,12 @@ export function playMuebleOpeningCinematic(onFinished = null) {
         removeInventoryItem('furnitureKey');
         addInventoryItem('badgeBox');
         gameState.flags.openedMueble = true;
+        gameState.flags.drawerOpened = true;
         completeObjective('findBadgeBox');
         updateDiaryContent();
+        syncMuebleDrawerTransform();
+        rebuildSpatialGrid(collidables);
+        saveGame();
 
         // Transición suave de retorno de la cámara al modo normal de juego
         let returnElapsed = 0;
@@ -1017,13 +1089,19 @@ export function playMuebleOpeningCinematic(onFinished = null) {
             : targetPlayerPos;
         const returnEndLook = new THREE.Vector3(p.x, p.y + 1.4, p.z);
 
-        // Cámara de tercera persona por detrás del jugador
+        // Cámara de tercera persona por detrás del jugador mirando hacia la cómoda con cota segura
         const defaultCamDistance = 4.2;
         const returnEndPos = new THREE.Vector3(
-            p.x,
+            p.x - defaultCamDistance * sinM,
             p.y + 1.7,
-            p.z - defaultCamDistance // Detrás del jugador (mirando hacia el mueble en +Z)
+            p.z - defaultCamDistance * cosM
         );
+        const endSurfaceH = getWalkableSurfaceY(returnEndPos.x, returnEndPos.z);
+        const endWaterH = getWaterSurfaceLevel(returnEndPos.x, returnEndPos.z);
+        const minEndY = Math.max(endSurfaceH + 1.2, (endWaterH !== null ? endWaterH : LAKE_WATER_Y) + 0.8);
+        if (returnEndPos.y < minEndY) {
+            returnEndPos.y = minEndY;
+        }
 
         setCameraCinematicOverride((retDelta, retCam) => {
             returnElapsed += retDelta;
@@ -1031,6 +1109,12 @@ export function playMuebleOpeningCinematic(onFinished = null) {
             const eased = easeInOutCubic(t);
 
             retCam.position.lerpVectors(returnStartPos, returnEndPos, eased);
+            const retSurfaceH = getWalkableSurfaceY(retCam.position.x, retCam.position.z);
+            const retWaterH = getWaterSurfaceLevel(retCam.position.x, retCam.position.z);
+            const minRetY = Math.max(retSurfaceH + 0.8, (retWaterH !== null ? retWaterH : LAKE_WATER_Y) + 0.6);
+            if (retCam.position.y < minRetY) {
+                retCam.position.y = minRetY;
+            }
             const currentLook = new THREE.Vector3().lerpVectors(returnStartLook, returnEndLook, eased);
             retCam.lookAt(currentLook);
 

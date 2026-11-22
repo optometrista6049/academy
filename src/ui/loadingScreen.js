@@ -21,7 +21,7 @@ export function showLoadingScreen(){
 
             width:'100vw',
 
-            height:'100vh',
+            height:'100dvh',
 
             backgroundImage:
                 'url(assets/ui/loading.jpg)',

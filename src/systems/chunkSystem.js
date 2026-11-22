@@ -44,25 +44,58 @@ export function registerCollidableInGrid(item) {
     let extentZ = 0.5;
 
     const obb = item.userData?.obbCollision;
+    let minCx;
+    let maxCx;
+    let minCz;
+    let maxCz;
+
     if (obb && typeof obb.halfX === 'number' && typeof obb.halfZ === 'number') {
         const ry = item.rotation ? item.rotation.y : 0;
         const cosR = Math.cos(ry);
         const sinR = Math.sin(ry);
-        const ox = obb.offsetX || 0;
-        const oz = obb.offsetZ || 0;
-        wx += ox * cosR + oz * sinR;
-        wz += -ox * sinR + oz * cosR;
-        extentX = obb.halfX * Math.abs(cosR) + obb.halfZ * Math.abs(sinR) + 0.5;
-        extentZ = obb.halfX * Math.abs(sinR) + obb.halfZ * Math.abs(cosR) + 0.5;
-    } else if (typeof item.userData?.radius === 'number' && item.userData.radius > 0) {
-        extentX = item.userData.radius;
-        extentZ = item.userData.radius;
-    }
+        const computeBounds = (box) => {
+            const ox = box.offsetX || 0;
+            const oz = box.offsetZ || 0;
+            const bx = item.position.x + ox * cosR + oz * sinR;
+            const bz = item.position.z - ox * sinR + oz * cosR;
+            const ex = box.halfX * Math.abs(cosR) + box.halfZ * Math.abs(sinR) + 0.5;
+            const ez = box.halfX * Math.abs(sinR) + box.halfZ * Math.abs(cosR) + 0.5;
+            return {
+                minCx: getChunkCoord(bx - ex),
+                maxCx: getChunkCoord(bx + ex),
+                minCz: getChunkCoord(bz - ez),
+                maxCz: getChunkCoord(bz + ez)
+            };
+        };
 
-    const minCx = getChunkCoord(wx - extentX);
-    const maxCx = getChunkCoord(wx + extentX);
-    const minCz = getChunkCoord(wz - extentZ);
-    const maxCz = getChunkCoord(wz + extentZ);
+        const baseBounds = computeBounds(obb);
+        minCx = baseBounds.minCx;
+        maxCx = baseBounds.maxCx;
+        minCz = baseBounds.minCz;
+        maxCz = baseBounds.maxCz;
+
+        const extraObbs = item.userData?.extraObbCollisions;
+        if (Array.isArray(extraObbs)) {
+            for (let i = 0; i < extraObbs.length; i++) {
+                const sub = extraObbs[i];
+                if (!sub || typeof sub.halfX !== 'number' || typeof sub.halfZ !== 'number') continue;
+                const sb = computeBounds(sub);
+                minCx = Math.min(minCx, sb.minCx);
+                maxCx = Math.max(maxCx, sb.maxCx);
+                minCz = Math.min(minCz, sb.minCz);
+                maxCz = Math.max(maxCz, sb.maxCz);
+            }
+        }
+    } else {
+        if (typeof item.userData?.radius === 'number' && item.userData.radius > 0) {
+            extentX = item.userData.radius;
+            extentZ = item.userData.radius;
+        }
+        minCx = getChunkCoord(wx - extentX);
+        maxCx = getChunkCoord(wx + extentX);
+        minCz = getChunkCoord(wz - extentZ);
+        maxCz = getChunkCoord(wz + extentZ);
+    }
 
     for (let cx = minCx; cx <= maxCx; cx++) {
         for (let cz = minCz; cz <= maxCz; cz++) {
@@ -175,7 +208,9 @@ export function updateChunkSystem() {
                 chunk.visible = true;
                 for (let i = 0; i < chunk.objects.length; i++) {
                     const obj = chunk.objects[i];
-                    if (obj) obj.visible = true;
+                    if (obj) {
+                        obj.visible = !obj.userData?.hiddenByLayout;
+                    }
                 }
             }
         });
@@ -202,7 +237,7 @@ export function updateChunkSystem() {
             for (let i = 0; i < chunk.objects.length; i++) {
                 const obj = chunk.objects[i];
                 if (obj) {
-                    obj.visible = isVisible;
+                    obj.visible = !obj.userData?.hiddenByLayout && isVisible;
                 }
             }
         }

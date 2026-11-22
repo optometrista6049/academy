@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { getCustomItemById, buildThreeMeshFromCode } from '../systems/customItemStorage.js';
+import { deepDisposeObject } from '../systems/worldObjectsManager.js';
 
 export const playerEquipment = {
     initialized: false,
@@ -196,7 +197,9 @@ export function unequipItem(socketName) {
     if (!socket) return;
 
     while (socket.children.length > 0) {
-        socket.remove(socket.children[0]);
+        const child = socket.children[0];
+        socket.remove(child);
+        deepDisposeObject(child);
     }
     playerEquipment.equipped[socketName] = null;
 }

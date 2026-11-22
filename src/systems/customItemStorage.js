@@ -183,20 +183,22 @@ export function getCustomItems() {
             let updated = false;
             const codeIsNewerThanCache = DEFAULT_3D_PRESETS_UPDATED_AT > localUpdatedAt;
 
-            DEFAULT_3D_PRESETS.forEach(defItem => {
-                const existingIdx = parsed.findIndex(i => i.id === defItem.id);
-                if (existingIdx === -1) {
-                    parsed.push(defItem);
-                    updated = true;
-                } else {
-                    const defTime = Number(defItem.updatedAt || 0);
-                    const localTime = Number(parsed[existingIdx].updatedAt || 0);
-                    if ((defTime && defTime > localTime) || codeIsNewerThanCache) {
-                        parsed[existingIdx] = defItem;
+            if (codeIsNewerThanCache) {
+                DEFAULT_3D_PRESETS.forEach(defItem => {
+                    const existingIdx = parsed.findIndex(i => i.id === defItem.id);
+                    if (existingIdx === -1) {
+                        parsed.push(defItem);
                         updated = true;
+                    } else {
+                        const defTime = Number(defItem.updatedAt || 0);
+                        const localTime = Number(parsed[existingIdx].updatedAt || 0);
+                        if ((defTime && defTime > localTime) || codeIsNewerThanCache) {
+                            parsed[existingIdx] = defItem;
+                            updated = true;
+                        }
                     }
-                }
-            });
+                });
+            }
             if (updated || codeIsNewerThanCache) {
                 try {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
@@ -350,10 +352,11 @@ export function getCustomItemById(id) {
  */
 export function resetCustomLibrary() {
     if (!DEV_CONFIG.enabled) return [...DEFAULT_3D_PRESETS];
+    const ts = DEFAULT_3D_PRESETS_UPDATED_AT || Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_3D_PRESETS));
-    localStorage.setItem(STORAGE_UPDATED_KEY, String(DEFAULT_3D_PRESETS_UPDATED_AT || Date.now()));
+    localStorage.setItem(STORAGE_UPDATED_KEY, String(ts));
     notifyStorageUpdate();
-    sendServerSync({ action: 'sync-all', items: [...DEFAULT_3D_PRESETS] });
+    sendServerSync({ action: 'sync-all', items: [...DEFAULT_3D_PRESETS], updatedAt: ts });
     return [...DEFAULT_3D_PRESETS];
 }
 
@@ -375,9 +378,11 @@ export function importItemsJSON(jsonString) {
     try {
         const parsed = JSON.parse(jsonString);
         if (Array.isArray(parsed)) {
+            const ts = Date.now();
             localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-            localStorage.setItem(STORAGE_UPDATED_KEY, String(Date.now()));
+            localStorage.setItem(STORAGE_UPDATED_KEY, String(ts));
             notifyStorageUpdate();
+            sendServerSync({ action: 'sync-all', items: parsed, updatedAt: ts });
             return { success: true, count: parsed.length };
         }
         return { success: false, error: 'El archivo JSON no contiene una lista válida.' };
@@ -495,6 +500,7 @@ export async function initServerSync() {
 
     try {
         let serverItems = null;
+        let serverUpdatedAt = 0;
         let isDevApi = false;
         const localEditor = isLocalEditorRuntime();
 
@@ -505,6 +511,7 @@ export async function initServerSync() {
                 const data = await res.json().catch(() => null);
                 if (Array.isArray(data?.items)) {
                     serverItems = data.items;
+                    serverUpdatedAt = Number(data.updatedAt || 0);
                     isDevApi = true;
                 }
             }
@@ -518,14 +525,19 @@ export async function initServerSync() {
                 const parsedStatic = await staticRes.json().catch(() => null);
                 if (Array.isArray(parsedStatic)) {
                     serverItems = parsedStatic;
+                    serverUpdatedAt = parsedStatic.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), 0);
+                } else if (parsedStatic && typeof parsedStatic === 'object' && Array.isArray(parsedStatic.items)) {
+                    serverItems = parsedStatic.items;
+                    serverUpdatedAt = Number(parsedStatic.updatedAt || 0);
                 }
             }
         }
 
         if (!localEditor) {
-            if (Array.isArray(serverItems) && serverItems.length > 0) {
+            if (Array.isArray(serverItems)) {
                 const serverMaxTime = serverItems.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), 0);
-                if (serverMaxTime > Number(DEFAULT_3D_PRESETS_UPDATED_AT || 0)) {
+                const effectiveServerTime = Math.max(serverUpdatedAt, serverMaxTime);
+                if (effectiveServerTime > Number(DEFAULT_3D_PRESETS_UPDATED_AT || 0)) {
                     staticOfficialCustomItems = sortCustomItemsByRecency(serverItems);
                     notifyStorageUpdate();
                 }
@@ -533,33 +545,50 @@ export async function initServerSync() {
             return;
         }
 
+        const localRaw = localStorage.getItem(STORAGE_KEY);
+        const localUpdatedAt = Number(localStorage.getItem(STORAGE_UPDATED_KEY) || 0);
         const localItems = getCustomItems();
+        const serverMaxItemTime = Array.isArray(serverItems)
+            ? serverItems.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), 0)
+            : 0;
+        const effectiveServerTime = Math.max(serverUpdatedAt, serverMaxItemTime);
+        const effectiveLocalTime = localRaw === null
+            ? Number(DEFAULT_3D_PRESETS_UPDATED_AT || 0)
+            : Math.max(localUpdatedAt, Number(DEFAULT_3D_PRESETS_UPDATED_AT || 0));
 
-        if (Array.isArray(serverItems) && serverItems.length > 0) {
-            const mergedMap = new Map();
-            // 1. Añadir server/static items como base
-            serverItems.forEach(item => mergedMap.set(item.id, item));
-            // 2. Fusionar local items creados o más recientes en caché dev
-            localItems.forEach(localItem => {
-                const existing = mergedMap.get(localItem.id);
-                if (!existing && !localItem.id.startsWith('preset_')) {
-                    mergedMap.set(localItem.id, localItem);
-                } else if (existing && localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt)) {
-                    mergedMap.set(localItem.id, localItem);
+        if (Array.isArray(serverItems) && (serverItems.length > 0 || effectiveServerTime > effectiveLocalTime)) {
+            if (effectiveServerTime > effectiveLocalTime) {
+                // El disco/servidor es más reciente (incluye posibles borrados): prevalece
+                const syncedList = sortCustomItemsByRecency(serverItems);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(syncedList));
+                localStorage.setItem(STORAGE_UPDATED_KEY, String(effectiveServerTime));
+                notifyStorageUpdate();
+            } else {
+                const mergedMap = new Map();
+                // 1. Añadir server/static items como base
+                serverItems.forEach(item => mergedMap.set(item.id, item));
+                // 2. Fusionar local items creados o más recientes en caché dev
+                localItems.forEach(localItem => {
+                    const existing = mergedMap.get(localItem.id);
+                    if (!existing && !localItem.id.startsWith('preset_')) {
+                        mergedMap.set(localItem.id, localItem);
+                    } else if (existing && localItem.updatedAt && (!existing.updatedAt || localItem.updatedAt > existing.updatedAt)) {
+                        mergedMap.set(localItem.id, localItem);
+                    }
+                });
+
+                const mergedList = sortCustomItemsByRecency(Array.from(mergedMap.values()));
+                const maxTime = mergedList.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), Math.max(DEFAULT_3D_PRESETS_UPDATED_AT, localUpdatedAt));
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedList));
+                localStorage.setItem(STORAGE_UPDATED_KEY, String(maxTime));
+                notifyStorageUpdate();
+
+                if (isDevApi) {
+                    sendServerSync({ action: 'sync-all', items: mergedList, updatedAt: maxTime });
                 }
-            });
-
-            const mergedList = sortCustomItemsByRecency(Array.from(mergedMap.values()));
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedList));
-            const maxTime = mergedList.reduce((acc, it) => Math.max(acc, Number(it?.updatedAt) || 0), DEFAULT_3D_PRESETS_UPDATED_AT);
-            localStorage.setItem(STORAGE_UPDATED_KEY, String(maxTime));
-            notifyStorageUpdate();
-
-            if (isDevApi) {
-                sendServerSync({ action: 'sync-all', items: mergedList });
             }
         } else if (isDevApi && localItems.length > 0) {
-            sendServerSync({ action: 'sync-all', items: localItems });
+            sendServerSync({ action: 'sync-all', items: localItems, updatedAt: effectiveLocalTime || Date.now() });
         }
     } catch (e) {
         console.warn('[CustomItemStorage] Servidor de persistencia no disponible:', e);

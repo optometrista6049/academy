@@ -23,16 +23,16 @@ import { isProceduralInstanceHidden } from '../systems/worldLayoutSystem.js';
 const rockList = [];
 
 function recordRock(x, z, scale = 1) {
-    const geoType = Math.floor(Math.random() * 2); // 0: Dodecahedron, 1: Icosahedron
+    const geoType = Math.floor(rand() * 2); // 0: Dodecahedron, 1: Icosahedron
     const y = getHeightAt(x, z);
 
-    const scaleX = scale * (0.8 + Math.random() * 0.5);
-    const scaleY = scale * (0.7 + Math.random() * 0.8);
-    const scaleZ = scale * (0.8 + Math.random() * 0.5);
+    const scaleX = scale * (0.8 + rand() * 0.5);
+    const scaleY = scale * (0.7 + rand() * 0.8);
+    const scaleZ = scale * (0.8 + rand() * 0.5);
 
-    const rotX = Math.random() * Math.PI;
-    const rotY = Math.random() * Math.PI;
-    const rotZ = Math.random() * Math.PI;
+    const rotX = rand() * Math.PI;
+    const rotY = rand() * Math.PI;
+    const rotZ = rand() * Math.PI;
 
     rockList.push({
         x,
@@ -58,9 +58,9 @@ function generateAncientRocks() {
 
     for (let i = 0; i < 8; i++) {
         recordRock(
-            centerX + (Math.random() - 0.5) * 14,
-            centerZ + (Math.random() - 0.5) * 14,
-            3 + Math.random() * 2
+            centerX + (rand() - 0.5) * 14,
+            centerZ + (rand() - 0.5) * 14,
+            3 + rand() * 2
         );
     }
 }
@@ -94,7 +94,7 @@ function generateScatteredRocks() {
         recordRock(
             x,
             z,
-            1 + Math.random() * 2.5
+            1 + rand() * 2.5
         );
     }
 }

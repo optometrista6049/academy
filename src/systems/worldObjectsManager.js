@@ -97,6 +97,20 @@ export async function getGlbFromLocalCache(key) {
     }
 }
 
+async function deleteGlbFromLocalCache(key) {
+    if (!key) return;
+    try {
+        const db = await openGlbDatabase();
+        await new Promise((resolve) => {
+            const tx = db.transaction(GLB_STORE_NAME, 'readwrite');
+            const store = tx.objectStore(GLB_STORE_NAME);
+            store.delete(key);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (_) {}
+}
+
 /**
  * Normaliza la ruta de un modelo personalizado para usar ruta relativa compatible con raíz y subcarpetas (GitHub Pages: ./assets/models/custom/...).
  */
@@ -251,24 +265,60 @@ export function getObjectScaleXYZFromData(data) {
 }
 
 /**
- * Mide las dimensiones reales sin rotación (espacio local orientado) del objeto
- * incluyendo su escala actual y el posible desplazamiento del pivote respecto al centro.
+ * Calcula el Box3 considerando únicamente subárboles visibles y mallas reales (ignorando luces, helpers y ocultos).
+ */
+export function computeVisibleBox3(root) {
+    const box = new THREE.Box3();
+    if (!root) return box;
+    root.updateMatrixWorld(true);
+
+    const meshBox = new THREE.Box3();
+    let hasVisibleMesh = false;
+
+    const traverseVisible = (node) => {
+        if (!node || node.visible === false) return;
+        if (node.userData?.isHelper || node.isLight) return;
+        if (node.isMesh && node.geometry) {
+            if (!node.geometry.boundingBox) node.geometry.computeBoundingBox();
+            if (node.geometry.boundingBox && !node.geometry.boundingBox.isEmpty()) {
+                meshBox.copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld);
+                box.union(meshBox);
+                hasVisibleMesh = true;
+            }
+        }
+        if (Array.isArray(node.children)) {
+            for (let i = 0; i < node.children.length; i++) {
+                traverseVisible(node.children[i]);
+            }
+        }
+    };
+
+    traverseVisible(root);
+    if (!hasVisibleMesh) {
+        box.setFromObject(root);
+    }
+    return box;
+}
+
+/**
+ * Mide las dimensiones reales sin rotación en Y (espacio local orientado, preservando inclinación X/Z)
+ * del objeto incluyendo su escala actual y el posible desplazamiento del pivote respecto al centro.
  */
 export function getObjectLocalBounds(mesh) {
     if (!mesh) {
         return {
             width: 1, height: 1, depth: 1,
             halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
-            centerOffset: { x: 0, z: 0 }
+            centerOffset: { x: 0, y: 0.5, z: 0 }
         };
     }
     const prevRotX = mesh.rotation.x;
     const prevRotY = mesh.rotation.y;
     const prevRotZ = mesh.rotation.z;
-    mesh.rotation.set(0, 0, 0);
+    mesh.rotation.set(prevRotX, 0, prevRotZ);
     mesh.updateMatrixWorld(true);
 
-    const box = new THREE.Box3().setFromObject(mesh);
+    const box = computeVisibleBox3(mesh);
 
     mesh.rotation.set(prevRotX, prevRotY, prevRotZ);
     mesh.updateMatrixWorld(true);
@@ -304,7 +354,7 @@ export function getObjectLocalBounds(mesh) {
 }
 
 /**
- * Calcula y asigna tanto el radio espacial como la caja OBB 2D exacta para colisiones no uniformes.
+ * Calcula y asigna tanto el radio espacial como la caja OBB 2D exacta y límites verticales 3D para colisiones.
  */
 export function updateObjectCollisionMetadata(mesh) {
     if (!mesh) return 0.8;
@@ -317,6 +367,9 @@ export function updateObjectCollisionMetadata(mesh) {
         offsetX: bounds.centerOffset.x,
         offsetZ: bounds.centerOffset.z
     };
+    const centerY = mesh.position.y + (bounds.centerOffset.y || 0);
+    mesh.userData.minVerticalY = centerY - bounds.halfExtents.y - 0.1;
+    mesh.userData.maxVerticalY = centerY + bounds.halfExtents.y + 0.1;
     return radius;
 }
 
@@ -481,7 +534,7 @@ export function getSavedWorldObjects() {
         if (raw) {
             const localUpdatedAt = Number(localStorage.getItem(STORAGE_UPDATED_KEY) || 0);
             const bakedUpdatedAt = Number(DEFAULT_PLACED_WORLD_OBJECTS_UPDATED_AT || 0);
-            if (bakedUpdatedAt > localUpdatedAt && Array.isArray(DEFAULT_PLACED_WORLD_OBJECTS) && DEFAULT_PLACED_WORLD_OBJECTS.length > 0) {
+            if (bakedUpdatedAt > localUpdatedAt && Array.isArray(DEFAULT_PLACED_WORLD_OBJECTS)) {
                 const bakedList = normalizeLegacyCopyNames(JSON.parse(JSON.stringify(DEFAULT_PLACED_WORLD_OBJECTS))).list;
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(bakedList));
                 localStorage.setItem(STORAGE_UPDATED_KEY, String(bakedUpdatedAt));
@@ -585,8 +638,7 @@ export function registerUploadedModel(modelInfo) {
  */
 export function computeGroundOffset(mesh) {
     if (!mesh) return 0;
-    mesh.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(mesh);
+    const box = computeVisibleBox3(mesh);
     if (box.isEmpty()) return 0;
     // La distancia desde la posición central/pivote Y actual hasta la base box.min.y
     return mesh.position.y - box.min.y;
@@ -664,7 +716,6 @@ export async function instantiateWorldObject(itemDesc) {
 
             return new Promise((resolve) => {
                 const loader = new GLTFLoader();
-                loader.setWithCredentials(true);
 
                 const setupModel = (gltf) => {
                     const model = gltf.scene || gltf.scenes[0];
@@ -957,6 +1008,9 @@ export function updatePlacedObjectTransform(id, { x, z, position, rotationY, sca
     if (typeof rotationY === 'number') {
         mesh.rotation.y = rotationY;
         data.rotationY = rotationY;
+        if (data.rotationXYZ && typeof data.rotationXYZ === 'object') {
+            data.rotationXYZ.y = rotationY;
+        }
         transformChanged = true;
     }
 
@@ -978,6 +1032,7 @@ export function updatePlacedObjectTransform(id, { x, z, position, rotationY, sca
         snapObjectToTerrain(mesh, newX, newZ, elevY);
         registerVisualInChunk(mesh, mesh.position.x, mesh.position.z);
 
+        updateObjectCollisionMetadata(mesh);
         data.position = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
         data.relativeGroundOffset = mesh.userData.relativeGroundOffset;
         transformChanged = true;
@@ -1038,12 +1093,12 @@ export function commitStagedWorldObjects() {
 /**
  * Conmuta entre estado Sólido (con colisión) y Traspasable (sin colisión)
  */
-export function toggleObjectSolidState(id) {
+export function toggleObjectSolidState(id, shouldPersist = true) {
     const entry = activeWorldObjects.get(id);
     if (!entry) return null;
     const currentSolid = entry.data.isSolid !== false;
     const newSolid = !currentSolid;
-    updatePlacedObjectTransform(id, { isSolid: newSolid });
+    updatePlacedObjectTransform(id, { isSolid: newSolid }, shouldPersist);
     return { id, isSolid: newSolid, name: entry.data.name };
 }
 
@@ -1335,7 +1390,7 @@ export function computeSnapPositionForObject(movingMesh, targetX, targetZ, curre
  * @param {{ name?: string, icon?: string, logicType?: string, logicConfig?: object, isSolid?: boolean }} logicData
  * @returns {object|null}
  */
-export function updateWorldObjectLogic(id, { name, icon, logicType, logicConfig, isSolid }) {
+export function updateWorldObjectLogic(id, { name, icon, logicType, logicConfig, isSolid }, shouldPersist = true) {
     const entry = activeWorldObjects.get(id);
     if (!entry) return null;
 
@@ -1357,15 +1412,17 @@ export function updateWorldObjectLogic(id, { name, icon, logicType, logicConfig,
         if (mesh) mesh.userData.logicConfig = data.logicConfig;
     }
     if (isSolid !== undefined) {
-        updatePlacedObjectTransform(id, { isSolid });
+        updatePlacedObjectTransform(id, { isSolid }, shouldPersist);
     }
 
-    // Guardar en persistencia
-    const all = getSavedWorldObjects();
-    const idx = all.findIndex(o => o.id === id);
-    if (idx >= 0) {
-        all[idx] = { ...data };
-        saveWorldObjects(all);
+    // Guardar en persistencia solo si se solicita explícitamente
+    if (shouldPersist) {
+        const all = getSavedWorldObjects();
+        const idx = all.findIndex(o => o.id === id);
+        if (idx >= 0) {
+            all[idx] = { ...data };
+            saveWorldObjects(all);
+        }
     }
 
     return entry;
@@ -1610,10 +1667,29 @@ export async function uploadLocalModelToServer(file) {
  * Elimina un modelo subido del catálogo local de modelos del PC.
  */
 export function deleteUploadedModel(id) {
-    const list = getUploadedModelsCatalog().filter(m => m.id !== id);
+    const current = getUploadedModelsCatalog();
+    const target = current.find(m => m.id === id);
+    const list = current.filter(m => m.id !== id);
     try {
         localStorage.setItem(UPLOADED_MODELS_KEY, JSON.stringify(list));
     } catch (_) {}
+
+    if (target) {
+        const filename = target.filename || (target.url ? (target.url.split('/').pop() || '').split('?')[0] : '');
+        if (String(target.url || '').startsWith('blob:')) {
+            try { URL.revokeObjectURL(target.url); } catch (_) {}
+        }
+        if (target.url) deleteGlbFromLocalCache(target.url);
+        if (filename) {
+            deleteGlbFromLocalCache(filename);
+            if (isLocalEditorRuntime() && !String(target.url || '').startsWith('blob:')) {
+                fetch(`/api/upload-custom-model?filename=${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                }).catch(() => {});
+            }
+        }
+    }
+
     return list;
 }
 
@@ -1645,14 +1721,14 @@ export async function importWorldObjectsJSON(jsonString) {
 /**
  * Deshace el último objeto colocado en el escenario.
  */
-export function undoLastPlacedObject() {
+export function undoLastPlacedObject(shouldPersist = true) {
     const list = getActiveWorldMeshes();
     if (list.length === 0) return null;
     
     // Buscar el que tenga mayor timestamp placedAt
     list.sort((a, b) => (b.data?.placedAt || 0) - (a.data?.placedAt || 0));
     const last = list[0];
-    removePlacedObjectFromWorld(last.id);
+    removePlacedObjectFromWorld(last.id, shouldPersist);
     return last;
 }
 
@@ -1797,10 +1873,11 @@ export function initWorldServerSync() {
     worldSyncPromise = (async () => {
         try {
             const localEditor = isLocalEditorRuntime();
-            if (localEditor) {
-                syncServerModelsCatalog().catch(() => {});
-                syncCachedModelsToServer().catch(() => {});
-            }
+            const catalogSyncPromise = localEditor
+                ? syncServerModelsCatalog()
+                    .then(() => syncCachedModelsToServer().catch(() => {}))
+                    .catch(() => {})
+                : Promise.resolve();
 
             let data = null;
             let isDevApi = false;
@@ -1837,6 +1914,8 @@ export function initWorldServerSync() {
                 }
             }
 
+            await catalogSyncPromise;
+
             if (!data) return;
 
             const rawServerObjects = Array.isArray(data.objects) ? data.objects : [];
@@ -1847,7 +1926,7 @@ export function initWorldServerSync() {
 
             // Modo jugador final o despliegue estático (GitHub Pages): nunca lee ni pisa con cachés locales de editor
             if (!localEditor) {
-                if (serverObjects.length > 0 && serverUpdatedAt > defaultTime) {
+                if (serverUpdatedAt > defaultTime) {
                     staticOfficialWorldObjects = serverObjects;
                     staticOfficialWorldUpdatedAt = serverUpdatedAt;
                     purgeStaleActiveObjects(serverObjects);
@@ -1856,7 +1935,9 @@ export function initWorldServerSync() {
             }
 
             if (isDevApi && serverNormalized && serverObjects.length > 0) {
-                sendWorldServerSync({ action: 'save-objects', objects: serverObjects });
+                const syncTs = serverUpdatedAt || Date.now();
+                localStorage.setItem(STORAGE_UPDATED_KEY, String(syncTs));
+                sendWorldServerSync({ action: 'save-objects', objects: serverObjects, updatedAt: syncTs });
             }
 
             const localRaw = localStorage.getItem(STORAGE_KEY);
@@ -1875,10 +1956,14 @@ export function initWorldServerSync() {
                     localStorage.setItem(STORAGE_UPDATED_KEY, String(serverUpdatedAt || Date.now()));
                     purgeStaleActiveObjects(serverObjects);
                 } else if (isDevApi) {
-                    sendWorldServerSync({ action: 'save-objects', objects: localObjects });
+                    const syncTs = effectiveLocalTime || Date.now();
+                    localStorage.setItem(STORAGE_UPDATED_KEY, String(syncTs));
+                    sendWorldServerSync({ action: 'save-objects', objects: localObjects, updatedAt: syncTs });
                 }
             } else if (isDevApi && localObjects.length > 0) {
-                sendWorldServerSync({ action: 'save-objects', objects: localObjects });
+                const syncTs = effectiveLocalTime || Date.now();
+                localStorage.setItem(STORAGE_UPDATED_KEY, String(syncTs));
+                sendWorldServerSync({ action: 'save-objects', objects: localObjects, updatedAt: syncTs });
             }
 
             if (isDevApi) {

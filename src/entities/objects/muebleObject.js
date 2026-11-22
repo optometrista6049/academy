@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { scene } from '../../core/scene.js';
 import { getHeightAt } from '../../terrain/terrainHeight.js';
 import { addCollidable } from '../collisions.js';
@@ -221,15 +221,18 @@ function applyMuebleModel(model, woodBodyMaterial, woodDrawerMaterial, metallicK
     const scaleY = baseScale;
     const scaleZ = baseScale * 1.60;
     const transform = getEntityTransform('furniture', 'mueble', { x: 14.77, z: 23.26, rotationY: Math.PI, scale: 1.0 });
-    const scaleFactor = typeof transform.scale === 'number' ? transform.scale : 1.0;
-    model.scale.set(scaleX * scaleFactor, scaleY * scaleFactor, scaleZ * scaleFactor);
+    const logicalXYZ = resolveLogicalScaleXYZ(transform);
+    model.scale.set(scaleX * logicalXYZ.x, scaleY * logicalXYZ.y, scaleZ * logicalXYZ.z);
 
     // Rotación guardada o por defecto
     model.rotation.y = typeof transform.rotationY === 'number' ? transform.rotationY : Math.PI;
 
     // Recalcular caja tras escalado y rotación para alineación vertical exacta
     box.setFromObject(model);
-    const groundOffset = -box.min.y;
+    const defaultGroundOffset = -box.min.y;
+    const groundOffset = (typeof transform.relativeGroundOffset === 'number' && Number.isFinite(transform.relativeGroundOffset))
+        ? transform.relativeGroundOffset
+        : defaultGroundOffset;
 
     // Coordenadas persistentes del layout
     const x = transform.x;
@@ -270,14 +273,26 @@ function applyMuebleModel(model, woodBodyMaterial, woodDrawerMaterial, metallicK
         }
     });
 
-    // Configuración de colisión física acorde a las nuevas dimensiones (más ancho y profundo)
-    model.userData.radius = 0.95;
+    // Configuración de colisión física OBB acorde a dimensiones reales (evita bloquear interacción al escalar)
+    model.userData.baseMuebleScale = { x: scaleX, y: scaleY, z: scaleZ };
+    model.userData.logicalScale = { ...logicalXYZ };
+    model.userData.relativeGroundOffset = groundOffset;
+    updateMuebleCollisionData(model, logicalXYZ);
     model.userData.type = 'mueble';
     model.userData.isFurniture = true;
     model.userData.displayName = 'Mueble con Cajón Secreto';
     model.userData.solid = true;
+    model.userData.hiddenByLayout = Boolean(transform.hidden);
+    model.visible = !model.userData.hiddenByLayout;
+    model.userData.onVisibilityChange = (isVis) => {
+        if (muebleDrawerData?.drawerGroup) {
+            muebleDrawerData.drawerGroup.visible = Boolean(isVis) && !model.userData.hiddenByLayout;
+        }
+    };
 
-    addCollidable(model);
+    if (!model.userData.hiddenByLayout) {
+        addCollidable(model);
+    }
     registerWorldObject(model, 'prop');
 
     scene.add(model);
@@ -288,10 +303,11 @@ function applyMuebleModel(model, woodBodyMaterial, woodDrawerMaterial, metallicK
         woodBodyMaterial,
         metallicKnobMaterial,
         groundY,
-        groundOffset
+        groundOffset,
+        { ...transform, scale: logicalXYZ.x, scaleXYZ: logicalXYZ }
     );
 
-    console.log('MUEBLE 3D LOADED: width=1.82m, height=0.90m, depth=0.78m at (14.77, 23.26)');
+    console.log(`MUEBLE 3D LOADED: width=1.82m, height=0.90m, depth=0.78m at (${x.toFixed(2)}, ${z.toFixed(2)})`);
 
     if(onLoaded){
         onLoaded(muebleObject);
@@ -309,19 +325,38 @@ function buildProceduralMuebleFallback(woodBodyMaterial, woodDrawerMaterial, met
     bodyMesh.receiveShadow = true;
     group.add(bodyMesh);
 
-    const x = 14.77;
-    const z = 23.26;
+    const transform = getEntityTransform('furniture', 'mueble', { x: 14.77, z: 23.26, rotationY: Math.PI, scale: 1.0 });
+    const logicalXYZ = resolveLogicalScaleXYZ(transform);
+    const x = transform.x;
+    const z = transform.z;
     const groundY = getHeightAt(x, z);
-    const groundOffset = 0.45;
+    const defaultGroundOffset = 0.45 * logicalXYZ.y;
+    const groundOffset = (typeof transform.relativeGroundOffset === 'number' && Number.isFinite(transform.relativeGroundOffset))
+        ? transform.relativeGroundOffset
+        : defaultGroundOffset;
 
+    group.scale.set(logicalXYZ.x, logicalXYZ.y, logicalXYZ.z);
+    group.rotation.y = typeof transform.rotationY === 'number' ? transform.rotationY : Math.PI;
     group.position.set(x, groundY + groundOffset, z);
-    group.userData.radius = 0.95;
+    group.userData.baseMuebleScale = { x: 1.0, y: 1.0, z: 1.0 };
+    group.userData.logicalScale = { ...logicalXYZ };
+    group.userData.relativeGroundOffset = groundOffset;
+    updateMuebleCollisionData(group, logicalXYZ);
     group.userData.type = 'mueble';
     group.userData.isFurniture = true;
     group.userData.displayName = 'Mueble con Cajón Secreto';
     group.userData.solid = true;
+    group.userData.hiddenByLayout = Boolean(transform.hidden);
+    group.visible = !group.userData.hiddenByLayout;
+    group.userData.onVisibilityChange = (isVis) => {
+        if (muebleDrawerData?.drawerGroup) {
+            muebleDrawerData.drawerGroup.visible = Boolean(isVis) && !group.userData.hiddenByLayout;
+        }
+    };
 
-    addCollidable(group);
+    if (!group.userData.hiddenByLayout) {
+        addCollidable(group);
+    }
     registerWorldObject(group, 'prop');
 
     scene.add(group);
@@ -332,7 +367,8 @@ function buildProceduralMuebleFallback(woodBodyMaterial, woodDrawerMaterial, met
         woodBodyMaterial,
         metallicKnobMaterial,
         groundY,
-        groundOffset
+        groundOffset,
+        { ...transform, scale: logicalXYZ.x, scaleXYZ: logicalXYZ }
     );
 
     if(onLoaded){
@@ -344,75 +380,81 @@ export function loadMuebleObject(onLoaded = null){
 
     console.log('LOADING MUEBLE 3D OBJECT (EXTRA WIDTH & DEPTH, VIVID METALLIC KNOBS)...');
 
-    const woodTexture = createEnhancedWoodTexture();
-    const metallicReflectionMap = createMetallicReflectionMap();
+    return new Promise((resolve) => {
+        const woodTexture = createEnhancedWoodTexture();
+        const metallicReflectionMap = createMetallicReflectionMap();
 
-    // Materiales especializados para estructura y cajones
-    const woodBodyMaterial = new THREE.MeshStandardMaterial({
-        map: woodTexture,
-        color: 0xffffff,
-        roughness: 0.38,
-        metalness: 0.02
-    });
+        // Materiales especializados para estructura y cajones
+        const woodBodyMaterial = new THREE.MeshStandardMaterial({
+            map: woodTexture,
+            color: 0xffffff,
+            roughness: 0.38,
+            metalness: 0.02
+        });
 
-    const woodDrawerMaterial = new THREE.MeshStandardMaterial({
-        map: woodTexture,
-        color: 0xfffcf7,
-        roughness: 0.35,
-        metalness: 0.02
-    });
+        const woodDrawerMaterial = new THREE.MeshStandardMaterial({
+            map: woodTexture,
+            color: 0xfffcf7,
+            roughness: 0.35,
+            metalness: 0.02
+        });
 
-    // Pomos metálicos de alto brillo y reflectividad (dorado resplandeciente / latón pulido)
-    const metallicKnobMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffea85,               // Tono dorado luminoso y limpio
-        roughness: 0.08,               // Acabado espejo ultra pulido
-        metalness: 0.85,               // Muy metálico
-        emissive: 0xffa726,            // Emisión cálida viva para que destaquen sobre la madera
-        emissiveIntensity: 0.32,       // Intensidad de emisión para máximo resalte visual
-        envMap: metallicReflectionMap, // Reflejo ambiental 360° para brillo constante
-        envMapIntensity: 2.8           // Resalta los destellos metálicos
-    });
+        // Pomos metálicos de alto brillo y reflectividad (dorado resplandeciente / latón pulido)
+        const metallicKnobMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffea85,               // Tono dorado luminoso y limpio
+            roughness: 0.08,               // Acabado espejo ultra pulido
+            metalness: 0.85,               // Muy metálico
+            emissive: 0xffa726,            // Emisión cálida viva para que destaquen sobre la madera
+            emissiveIntensity: 0.32,       // Intensidad de emisión para máximo resalte visual
+            envMap: metallicReflectionMap, // Reflejo ambiental 360° para brillo constante
+            envMapIntensity: 2.8           // Resalta los destellos metálicos
+        });
 
-    const loader = new GLTFLoader();
-    loader.setWithCredentials(true);
+        const finishLoad = (obj) => {
+            if (onLoaded) onLoaded(obj);
+            resolve(obj);
+        };
 
-    // 1. Prioridad: Cargar directamente desde el binario embebido en memoria
-    // Elimina peticiones de red, es 100% inmune a CORS, iframes, cookies o rutas de Vite
-    if (typeof MUEBLE_GLB_BASE64 === 'string' && MUEBLE_GLB_BASE64.length > 100) {
-        try {
-            const arrayBuffer = base64ToArrayBuffer(MUEBLE_GLB_BASE64);
-            loader.parse(
-                arrayBuffer,
-                '',
+        const loader = new GLTFLoader();
+
+        // 1. Prioridad: Cargar directamente desde el binario embebido en memoria
+        // Elimina peticiones de red, es 100% inmune a CORS, iframes, cookies o rutas de Vite
+        if (typeof MUEBLE_GLB_BASE64 === 'string' && MUEBLE_GLB_BASE64.length > 100) {
+            try {
+                const arrayBuffer = base64ToArrayBuffer(MUEBLE_GLB_BASE64);
+                loader.parse(
+                    arrayBuffer,
+                    '',
+                    (gltf) => {
+                        applyMuebleModel(gltf.scene, woodBodyMaterial, woodDrawerMaterial, metallicKnobMaterial, finishLoad);
+                    },
+                    (parseErr) => {
+                        console.warn('Error al procesar modelo embebido, reintentando vía red:', parseErr);
+                        tryLoadFromNetwork();
+                    }
+                );
+                return;
+            } catch (e) {
+                console.warn('Excepción al decodificar modelo embebido:', e);
+            }
+        }
+
+        tryLoadFromNetwork();
+
+        function tryLoadFromNetwork() {
+            loader.load(
+                'assets/models/mueble.glb',
                 (gltf) => {
-                    applyMuebleModel(gltf.scene, woodBodyMaterial, woodDrawerMaterial, metallicKnobMaterial, onLoaded);
+                    applyMuebleModel(gltf.scene, woodBodyMaterial, woodDrawerMaterial, metallicKnobMaterial, finishLoad);
                 },
-                (parseErr) => {
-                    console.warn('Error al procesar modelo embebido, reintentando vía red:', parseErr);
-                    tryLoadFromNetwork();
+                undefined,
+                (error) => {
+                    console.warn('Carga de mueble.glb por red falló, activando modelo procedural estilizado:', error);
+                    buildProceduralMuebleFallback(woodBodyMaterial, woodDrawerMaterial, metallicKnobMaterial, finishLoad);
                 }
             );
-            return;
-        } catch (e) {
-            console.warn('Excepción al decodificar modelo embebido:', e);
         }
-    }
-
-    tryLoadFromNetwork();
-
-    function tryLoadFromNetwork() {
-        loader.load(
-            'assets/models/mueble.glb',
-            (gltf) => {
-                applyMuebleModel(gltf.scene, woodBodyMaterial, woodDrawerMaterial, metallicKnobMaterial, onLoaded);
-            },
-            undefined,
-            (error) => {
-                console.warn('Carga de mueble.glb por red falló, activando modelo procedural estilizado:', error);
-                buildProceduralMuebleFallback(woodBodyMaterial, woodDrawerMaterial, metallicKnobMaterial, onLoaded);
-            }
-        );
-    }
+    });
 
 }
 
@@ -460,7 +502,7 @@ function createCardboardTexture() {
     return tex;
 }
 
-function setupInteractiveDrawer(woodDrawerMaterial, woodBodyMaterial, metallicKnobMaterial, groundY, groundOffset) {
+function setupInteractiveDrawer(woodDrawerMaterial, woodBodyMaterial, metallicKnobMaterial, groundY, groundOffset, transform = { x: 14.77, z: 23.26, rotationY: Math.PI, scale: 1.0 }) {
     const drawerGroup = new THREE.Group();
 
     // Frontal del cajón superior izquierdo
@@ -558,36 +600,85 @@ function setupInteractiveDrawer(woodDrawerMaterial, woodBodyMaterial, metallicKn
     boxGroup.position.set(0, -0.02, 0.22);
     drawerGroup.add(boxGroup);
 
-    // Posición del cajón en escena
-    const closedZ = 22.86;
-    const openZ = 22.48;
-    const baseY = groundY + groundOffset + 0.63;
-    drawerGroup.position.set(14.35, baseY, closedZ);
+    // Posición, orientación y escala 3 ejes del cajón relativas al mueble
+    const tx = typeof transform?.x === 'number' ? transform.x : 14.77;
+    const tz = typeof transform?.z === 'number' ? transform.z : 23.26;
+    const rotY = typeof transform?.rotationY === 'number' ? transform.rotationY : Math.PI;
+    const scaleXYZ = resolveLogicalScaleXYZ(transform);
+    const deltaRotY = rotY - Math.PI;
+    const cosR = Math.cos(deltaRotY);
+    const sinR = Math.sin(deltaRotY);
+
+    // Offset local calibrado respecto al centro del mueble (rotado por deltaRotY = 0 equivale exactamente a (14.35, 22.86 -> 22.48))
+    const localX = -0.42 * scaleXYZ.x;
+    const localClosedZ = -0.40 * scaleXYZ.z;
+    const localSlideZ = -0.38 * scaleXYZ.z;
+
+    const closedX = tx + localX * cosR + localClosedZ * sinR;
+    const closedZ = tz - localX * sinR + localClosedZ * cosR;
+    const openX = closedX + localSlideZ * sinR;
+    const openZ = closedZ + localSlideZ * cosR;
+    const baseY = groundY + groundOffset + 0.63 * scaleXYZ.y;
+
+    drawerGroup.scale.set(scaleXYZ.x, scaleXYZ.y, scaleXYZ.z);
+    drawerGroup.rotation.y = deltaRotY;
+    drawerGroup.position.set(closedX, baseY, closedZ);
+    drawerGroup.name = 'mueble_interactive_drawer';
+    drawerGroup.traverse((child) => {
+        child.userData.isMuebleDrawerPart = true;
+        child.userData.parentMueble = muebleObject;
+    });
     scene.add(drawerGroup);
 
-    const alreadyOpened = Boolean(gameState.flags.openedMueble);
-    if (alreadyOpened) {
-        drawerGroup.position.z = openZ;
-        keyGroup.visible = true;
-        keyGroup.position.z = -0.02;
-        keyGroup.rotation.z = Math.PI / 2;
-        boxGroup.visible = false;
-    } else {
-        drawerGroup.position.z = closedZ;
-        keyGroup.visible = false;
-        boxGroup.visible = true;
-    }
+    const applyDrawerStateFromFlags = () => {
+        const alreadyOpened = Boolean(gameState.flags.openedMueble);
+        if (boxGroup.parent !== drawerGroup) {
+            drawerGroup.add(boxGroup);
+        }
+        boxGroup.position.set(0, -0.02, 0.22);
+        boxGroup.rotation.set(0, 0, 0);
+        boxGroup.scale.set(1, 1, 1);
+        glowLight.intensity = 0;
+
+        const cx = muebleDrawerData ? muebleDrawerData.closedX : closedX;
+        const ox = muebleDrawerData ? muebleDrawerData.openX : openX;
+        const cz = muebleDrawerData ? muebleDrawerData.closedZ : closedZ;
+        const oz = muebleDrawerData ? muebleDrawerData.openZ : openZ;
+        const by = muebleDrawerData ? muebleDrawerData.baseY : baseY;
+
+        if (alreadyOpened) {
+            drawerGroup.position.set(ox, by, oz);
+            keyGroup.visible = true;
+            keyGroup.position.set(0, 0.02, -0.02);
+            keyGroup.rotation.set(0, 0, Math.PI / 2);
+            boxGroup.visible = false;
+        } else {
+            drawerGroup.position.set(cx, by, cz);
+            keyGroup.visible = false;
+            keyGroup.position.set(0, 0.02, -0.60);
+            keyGroup.rotation.set(0, 0, 0);
+            boxGroup.visible = true;
+        }
+    };
 
     muebleDrawerData = {
         drawerGroup,
         keyGroup,
         boxGroup,
         glowLight,
+        closedX,
+        openX,
         closedZ,
         openZ,
         baseY,
+        _cinematicOverride: false,
         setDrawerProgress(progress) {
-            drawerGroup.position.z = closedZ - (closedZ - openZ) * progress;
+            const cx = muebleDrawerData ? muebleDrawerData.closedX : closedX;
+            const ox = muebleDrawerData ? muebleDrawerData.openX : openX;
+            const cz = muebleDrawerData ? muebleDrawerData.closedZ : closedZ;
+            const oz = muebleDrawerData ? muebleDrawerData.openZ : openZ;
+            drawerGroup.position.x = cx + (ox - cx) * progress;
+            drawerGroup.position.z = cz + (oz - cz) * progress;
         },
         setKeyProgress(insertProgress, turnProgress, forceVisible = null) {
             if (forceVisible !== null) {
@@ -602,11 +693,179 @@ function setupInteractiveDrawer(woodDrawerMaterial, woodBodyMaterial, metallicKn
             boxGroup.position.y = -0.02 + liftProgress * 0.12;
             glowLight.intensity = liftProgress * 1.8;
         },
+        resetBoxToDrawer(visible = !gameState.flags.openedMueble) {
+            if (boxGroup.parent !== drawerGroup) {
+                drawerGroup.add(boxGroup);
+            }
+            boxGroup.position.set(0, -0.02, 0.22);
+            boxGroup.rotation.set(0, 0, 0);
+            boxGroup.scale.set(1, 1, 1);
+            boxGroup.visible = Boolean(visible);
+            glowLight.intensity = 0;
+        },
         hideBox() {
+            if (boxGroup.parent !== drawerGroup) {
+                drawerGroup.add(boxGroup);
+            }
+            boxGroup.position.set(0, -0.02, 0.22);
+            boxGroup.rotation.set(0, 0, 0);
+            boxGroup.scale.set(1, 1, 1);
             boxGroup.visible = false;
             glowLight.intensity = 0;
-        }
+        },
+        syncStateFromFlags: applyDrawerStateFromFlags
     };
+
+    applyDrawerStateFromFlags();
+    drawerGroup.visible = !muebleObject?.userData?.hiddenByLayout && muebleObject?.visible !== false;
+}
+
+function updateMuebleCollisionData(model, logicalXYZ) {
+    if (!model) return;
+    const lx = Math.max(0.05, Number(logicalXYZ?.x) || 1.0);
+    const ly = Math.max(0.05, Number(logicalXYZ?.y) || 1.0);
+    const lz = Math.max(0.05, Number(logicalXYZ?.z) || 1.0);
+    const isDrawerOpen = Boolean(gameState.flags?.openedMueble);
+    // Dimensiones base físicas del mueble: ancho 1.82m (halfX=0.91), fondo 0.78m (halfZ=0.39), alto 0.90m
+    model.userData.obbCollision = {
+        halfX: 0.91 * lx,
+        halfZ: 0.39 * lz,
+        offsetX: 0,
+        offsetZ: 0
+    };
+    // Si el cajón superior izquierdo está abierto (+0.38m en frente local +Z), añadir OBB específico solo en ese lateral
+    model.userData.extraObbCollisions = isDrawerOpen
+        ? [{
+            halfX: 0.38 * lx,
+            halfZ: 0.21 * lz,
+            offsetX: 0.42 * lx,
+            offsetZ: 0.58 * lz
+        }]
+        : [];
+    model.userData.radius = Math.max(0.45, Math.hypot(0.91 * lx, (isDrawerOpen ? 0.78 : 0.39) * lz));
+    // Limite vertical seguro relativo al terreno bajo el mueble
+    const gy = getHeightAt(model.position.x, model.position.z);
+    model.userData.minVerticalY = model.position.y - 0.65 * ly;
+    model.userData.maxVerticalY = Math.max(gy, model.position.y) + 0.90 * ly;
+}
+
+function resolveLogicalScaleXYZ(transform) {
+    if (transform?.scaleXYZ && typeof transform.scaleXYZ === 'object') {
+        const sx = Number(transform.scaleXYZ.x);
+        const sy = Number(transform.scaleXYZ.y);
+        const sz = Number(transform.scaleXYZ.z);
+        return {
+            x: Math.max(0.05, Number.isFinite(sx) && sx > 0 ? sx : 1.0),
+            y: Math.max(0.05, Number.isFinite(sy) && sy > 0 ? sy : 1.0),
+            z: Math.max(0.05, Number.isFinite(sz) && sz > 0 ? sz : 1.0)
+        };
+    }
+    const uniform = typeof transform?.scale === 'number' && Number.isFinite(transform.scale) && transform.scale > 0
+        ? transform.scale
+        : 1.0;
+    return { x: uniform, y: uniform, z: uniform };
+}
+
+export function getMuebleLogicalScale() {
+    if (muebleObject?.userData?.logicalScale) {
+        return { ...muebleObject.userData.logicalScale };
+    }
+    const t = getEntityTransform('furniture', 'mueble', { scale: 1.0 });
+    return resolveLogicalScaleXYZ(t);
+}
+
+export function applyMuebleLogicalScale(scaleInput) {
+    if (!muebleObject) return null;
+    const base = muebleObject.userData?.baseMuebleScale || { x: 1.0, y: 1.0, z: 1.0 };
+    const logical = (scaleInput && typeof scaleInput === 'object')
+        ? {
+            x: Math.max(0.05, Number(scaleInput.x) || 1.0),
+            y: Math.max(0.05, Number(scaleInput.y) || 1.0),
+            z: Math.max(0.05, Number(scaleInput.z) || 1.0)
+        }
+        : (() => {
+            const s = Math.max(0.05, Number(scaleInput) || 1.0);
+            return { x: s, y: s, z: s };
+        })();
+
+    const prevBaseOffset = (() => {
+        muebleObject.updateMatrixWorld(true);
+        const oldBox = new THREE.Box3().setFromObject(muebleObject);
+        return !oldBox.isEmpty() ? (muebleObject.position.y - oldBox.min.y) : 0;
+    })();
+    const manualDelta = typeof muebleObject.userData?.relativeGroundOffset === 'number'
+        ? (muebleObject.userData.relativeGroundOffset - prevBaseOffset)
+        : 0;
+
+    muebleObject.userData.logicalScale = { ...logical };
+    muebleObject.scale.set(
+        base.x * logical.x,
+        base.y * logical.y,
+        base.z * logical.z
+    );
+
+    // Recalcular altura base real desde Box3 en el terreno manteniendo elevación manual si existe
+    muebleObject.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(muebleObject);
+    if (!box.isEmpty()) {
+        const groundOffset = (muebleObject.position.y - box.min.y) + manualDelta;
+        muebleObject.userData.relativeGroundOffset = groundOffset;
+        const gy = getHeightAt(muebleObject.position.x, muebleObject.position.z);
+        muebleObject.position.y = gy + groundOffset;
+        muebleObject.updateMatrixWorld(true);
+    }
+
+    updateMuebleCollisionData(muebleObject, logical);
+    syncMuebleDrawerTransform();
+    return { ...logical };
+}
+
+export function syncMuebleDrawerTransform(options = {}) {
+    if (!muebleObject || !muebleDrawerData || !muebleDrawerData.drawerGroup) return;
+
+    const tx = muebleObject.position.x;
+    const tz = muebleObject.position.z;
+    const rotY = muebleObject.rotation.y;
+    const logical = muebleObject.userData?.logicalScale || { x: 1.0, y: 1.0, z: 1.0 };
+
+    const deltaRotY = rotY - Math.PI;
+    const cosR = Math.cos(deltaRotY);
+    const sinR = Math.sin(deltaRotY);
+
+    const localX = -0.42 * logical.x;
+    const localClosedZ = -0.40 * logical.z;
+    const localSlideZ = -0.38 * logical.z;
+
+    const closedX = tx + localX * cosR + localClosedZ * sinR;
+    const closedZ = tz - localX * sinR + localClosedZ * cosR;
+    const openX = closedX + localSlideZ * sinR;
+    const openZ = closedZ + localSlideZ * cosR;
+
+    const gy = getHeightAt(tx, tz);
+    const groundOffset = typeof muebleObject.userData?.relativeGroundOffset === 'number'
+        ? muebleObject.userData.relativeGroundOffset
+        : (muebleObject.position.y - gy);
+    const baseY = gy + groundOffset + 0.63 * logical.y;
+
+    muebleDrawerData.closedX = closedX;
+    muebleDrawerData.openX = openX;
+    muebleDrawerData.closedZ = closedZ;
+    muebleDrawerData.openZ = openZ;
+    muebleDrawerData.baseY = baseY;
+
+    updateMuebleCollisionData(muebleObject, logical);
+
+    const dg = muebleDrawerData.drawerGroup;
+    dg.scale.set(logical.x, logical.y, logical.z);
+    dg.rotation.y = deltaRotY;
+    dg.visible = !muebleObject.userData?.hiddenByLayout && muebleObject.visible !== false;
+
+    const forceState = Boolean(options?.syncState);
+    if (!muebleDrawerData._cinematicOverride || forceState) {
+        if (typeof muebleDrawerData.syncStateFromFlags === 'function') {
+            muebleDrawerData.syncStateFromFlags();
+        }
+    }
 }
 
 export function getMuebleDrawer(){

@@ -8,6 +8,8 @@ import { addCollidable }
 
 from '../collisions.js';
 
+import { getHeightAt } from '../../terrain/terrainHeight.js';
+
 import {
 
     registerWorldObject
@@ -30,7 +32,7 @@ export function loadTeleronNPC(){
     console.log('LOAD TELERON NPC');
     const transform = getEntityTransform('npcs', 'Telerón', { x: 0, z: 5, rotationY: 0, scale: 1.8 });
 
-    loadModel(
+    return loadModel(
 
         'assets/models/npc/TeleronNPC.glb',
 
@@ -43,8 +45,28 @@ export function loadTeleronNPC(){
 
             console.log('TELERON MODEL LOADED');
 
+            const initDesiredScale = transform.scale || 1.8;
+            const rawHeightFactor = (model.scale.x || initDesiredScale) / initDesiredScale;
+
             TeleronNPC = model;
-            TeleronNPC.userData = { isNPC: true, npcName: 'Telerón', type: 'npc' };
+            TeleronNPC.userData = { isNPC: true, npcName: 'Telerón', type: 'npc', rawHeightFactor };
+
+            if (transform.scaleXYZ && typeof transform.scaleXYZ === 'object') {
+                const sx = Number(transform.scaleXYZ.x) || initDesiredScale;
+                const sy = Number(transform.scaleXYZ.y) || initDesiredScale;
+                const sz = Number(transform.scaleXYZ.z) || initDesiredScale;
+                TeleronNPC.scale.set(sx * rawHeightFactor, sy * rawHeightFactor, sz * rawHeightFactor);
+                const b = new THREE.Box3().setFromObject(TeleronNPC);
+                if (!b.isEmpty()) {
+                    const gOff = TeleronNPC.position.y - b.min.y;
+                    TeleronNPC.position.y = getHeightAt(transform.x, transform.z) + gOff;
+                    TeleronNPC.userData.relativeGroundOffset = gOff;
+                }
+            }
+            if (typeof transform.relativeGroundOffset === 'number') {
+                TeleronNPC.userData.relativeGroundOffset = transform.relativeGroundOffset;
+                TeleronNPC.position.y = getHeightAt(transform.x, transform.z) + transform.relativeGroundOffset;
+            }
 
             // Personalizar color de pelo: Pelirrojo (#d05e26)
             TeleronNPC.traverse((child)=>{
@@ -68,7 +90,7 @@ export function loadTeleronNPC(){
 
             );
 
-            if (typeof transform.rotationY === 'number' && transform.rotationY !== 0) {
+            if (typeof transform.rotationY === 'number' && (transform.rotationY !== 0 || transform.explicitRotation === true)) {
                 TeleronNPC.rotation.y = transform.rotationY;
             } else {
                 TeleronNPC.lookAt(
@@ -83,8 +105,12 @@ export function loadTeleronNPC(){
             }
 
             TeleronNPC.userData.radius = 0.9;
+            TeleronNPC.userData.hiddenByLayout = Boolean(transform.hidden);
+            TeleronNPC.visible = !TeleronNPC.userData.hiddenByLayout;
 
-            addCollidable(TeleronNPC);
+            if (!TeleronNPC.userData.hiddenByLayout) {
+                addCollidable(TeleronNPC);
+            }
 
             mixer =
                 new THREE.AnimationMixer(

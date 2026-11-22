@@ -22,11 +22,11 @@ export async function generateThreeModelFromPrompt(prompt, suggestedSocket = 'ri
         throw new Error('Por favor ingresa una descripción o prompt para el modelo 3D.');
     }
 
-    // 1. Intentar endpoint de servidor si está activo con Gemini API (con timeout estricto de 600ms)
-    // para garantizar que la interfaz jamás se quede bloqueada esperando una conexión.
+    // 1. Intentar endpoint de servidor si está activo con Gemini API (con timeout seguro de 4500ms;
+    // sin API key responde HTTP 422 en <20ms pasando al sintetizador procedural offline).
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 600);
+        const timeoutId = setTimeout(() => controller.abort(), 4500);
 
         const response = await fetch('/api/generate-3d/', {
             method: 'POST',

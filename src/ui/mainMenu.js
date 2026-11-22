@@ -23,8 +23,18 @@ import {
     sessionBattery,
     isCooldownActive,
     showRestOverlay,
-    resetSessionBatteryForNewGame
+    resetSessionBatteryForNewGame,
+    syncSessionBatteryFromGameState
 } from '../systems/sessionBatterySystem.js';
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 export function createMainMenu(onStart) {
     const root = document.createElement('div');
@@ -79,13 +89,13 @@ export function createMainMenu(onStart) {
         card.innerHTML = `
             <div class="mainMenuTooltipHeader">
                 <div class="mainMenuTooltipTitle">
-                    <span style="font-size:1.3rem;">${icon}</span>
-                    <span>${title}</span>
+                    <span style="font-size:1.3rem;">${escapeHtml(icon)}</span>
+                    <span>${escapeHtml(title)}</span>
                 </div>
                 <button class="mainMenuTooltipCloseBtn" title="Cerrar (Esc)">✕</button>
             </div>
             <div class="mainMenuTooltipBody">
-                <div>${description}</div>
+                <div>${escapeHtml(description)}</div>
                 ${statusHtml ? `<div class="mainMenuTooltipStatusBox">${statusHtml}</div>` : ''}
             </div>
             <div class="mainMenuTooltipFooter">
@@ -129,8 +139,8 @@ export function createMainMenu(onStart) {
         });
 
         const info = getMissionCheckpointInfo();
-        const missionName = info?.missionTitle || 'Última Misión Guardada';
-        const dateStr = info?.dateFormatted ? ` (${info.dateFormatted})` : '';
+        const missionName = escapeHtml(info?.missionTitle || 'Última Misión Guardada');
+        const dateStr = info?.dateFormatted ? ` (${escapeHtml(info.dateFormatted)})` : '';
 
         const card = document.createElement('div');
         Object.assign(card.style, {
@@ -201,7 +211,7 @@ export function createMainMenu(onStart) {
         const cpInfo = getMissionCheckpointInfo();
         const cpDetail = (hasCp && cpInfo?.missionTitle)
             ? `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;font-size:0.78rem;color:#fca5a5;line-height:1.4;">
-                ⚠️ <strong>Aviso de progreso guardado:</strong> Ya tienes un punto seguro en <strong>"${cpInfo.missionTitle}"</strong>. Iniciar una nueva experiencia eliminará este punto de restauración para comenzar una partida 100% limpia.
+                ⚠️ <strong>Aviso de progreso guardado:</strong> Ya tienes un punto seguro en <strong>"${escapeHtml(cpInfo.missionTitle)}"</strong>. Iniciar una nueva experiencia eliminará este punto de restauración para comenzar una partida 100% limpia.
                </div>`
             : `<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;font-size:0.78rem;color:#94a3b8;line-height:1.4;">
                 ℹ️ Esta acción restablecerá tu posición, inventario y registros para comenzar la aventura desde el principio.
@@ -270,8 +280,8 @@ export function createMainMenu(onStart) {
         const actionBtn = document.createElement('button');
         actionBtn.className = `mainMenuActionBtn ${isCheckpoint ? 'btnCheckpoint' : ''} ${isLocked ? 'btnCheckpointLocked' : ''}`;
         actionBtn.innerHTML = `
-            <span>${text}</span>
-            ${subtext ? `<span class="mainMenuBtnSubtext">${subtext}</span>` : ''}
+            <span>${escapeHtml(text)}</span>
+            ${subtext ? `<span class="mainMenuBtnSubtext">${escapeHtml(subtext)}</span>` : ''}
         `;
         actionBtn.onclick = onClick;
 
@@ -305,12 +315,13 @@ export function createMainMenu(onStart) {
     const continueItem = createMenuRow({
         text: 'CONTINUAR EXPERIENCIA',
         onClick: () => {
+            loadGame();
+            syncSessionBatteryFromGameState();
             if (sessionBattery.enabled && isCooldownActive()) {
                 showRestOverlay();
                 return;
             }
             showLoadingScreen();
-            loadGame();
             cleanupMenu();
             setTimeout(() => {
                 onStart();
@@ -353,8 +364,13 @@ export function createMainMenu(onStart) {
                 }
 
                 showCheckpointConfirmModal(() => {
-                    showLoadingScreen();
                     loadMissionCheckpoint();
+                    syncSessionBatteryFromGameState();
+                    if (sessionBattery.enabled && isCooldownActive()) {
+                        showRestOverlay();
+                        return;
+                    }
+                    showLoadingScreen();
                     cleanupMenu();
                     setTimeout(() => {
                         onStart();
@@ -365,7 +381,7 @@ export function createMainMenu(onStart) {
                 title: 'Retomar Última Misión',
                 icon: '🛡️',
                 description: 'Restaura el estado seguro registrado al completar formalmente tu última misión.',
-                statusHtml: `<strong>Misión guardada:</strong> ${cpInfo?.missionTitle || 'Última misión completada'}<br><strong>Fecha de guardado:</strong> ${cpInfo?.dateFormatted || 'Reciente'}<br><br>💡 Diseñado como red de seguridad automática ante errores de sincronización o bloqueos sin perder todo tu progreso general.`
+                statusHtml: `<strong>Misión guardada:</strong> ${escapeHtml(cpInfo?.missionTitle || 'Última misión completada')}<br><strong>Fecha de guardado:</strong> ${escapeHtml(cpInfo?.dateFormatted || 'Reciente')}<br><br>💡 Diseñado como red de seguridad automática ante errores de sincronización o bloqueos sin perder todo tu progreso general.`
             }
         });
 
@@ -415,8 +431,8 @@ export function createMainMenu(onStart) {
         infoData: {
             title: 'Guía de Controles',
             icon: '🎮',
-            description: 'Consulta los botones de movimiento, salto, carrera, interacción y morral de inventario.',
-            statusHtml: '📱 En móvil dispones de joystick virtual y botones táctiles ergonómicos.<br>💻 En ordenador puedes usar teclado (WASD / Flechas, Espacio, Shift, E e I).'
+            description: 'Consulta los controles de movimiento, cámara, interacción y Registro de misiones.',
+            statusHtml: '📱 En móvil dispones de joystick virtual, cámara táctil y botón de interacción.<br>💻 En ordenador puedes usar <strong>WASD / Flechas</strong> (moverse), <strong>ratón</strong> (cámara y zoom), <strong>E</strong> (interactuar) y <strong>R</strong> (Registro e Inventario).'
         }
     });
     colRight.appendChild(controlsItem.row);

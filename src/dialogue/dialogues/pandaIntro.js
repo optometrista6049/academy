@@ -94,7 +94,25 @@ export const montyTurnInDialogue = {
 
         "Una vez descargado el carnet en tu dispositivo, abre su editor de imágenes, usa un rotulador de tinta blanca y firma en el recuadro que pone Registro de Aspirante.",
 
-        "De esa forma, en nuestra sede física podrás disfrutar de las ventajas que el carnet te otorga al identificarte como Aspirante. ¡Enhorabuena!"
+        "De esa forma, en nuestra sede física podrás disfrutar de las ventajas que el carnet te otorga al identificarte como Aspirante. ¡Enhorabuena!",
+
+        "Y ahora, para completar tu registro final en el sistema de entrada, debes buscar al Señor Alto y entregarle el carnet. Cruza alguno de los puentes a mi derecha y le encontrarás por allí. ¡Mucho ánimo!"
+
+    ]
+
+};
+
+export const montyMission2WaitingDialogue = {
+
+    speaker: 'Monty',
+
+    portrait: './assets/ui/portraits/panda.png',
+
+    pages: [
+
+        'Recuerda que debes buscar al Señor Alto para completar tu registro de entrada.',
+
+        'Solo tienes que cruzar alguno de los puentes a mi derecha y le verás por allí. ¡Enséñale tu carnet para terminar el proceso!'
 
     ]
 

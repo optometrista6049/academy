@@ -24,19 +24,25 @@ export function fixCameraCollision(targetPos, camDistance){
     raycaster.set(_focusPos, _dir);
     raycaster.far = camDistance;
 
-    // Solo comprobar obstáculos que estén a tiro de cámara (radio camDistance + 3m de margen)
-    const maxCheckDistSq = (camDistance + 3.0) * (camDistance + 3.0);
+    // Solo comprobar obstáculos que estén a tiro de cámara teniendo en cuenta su tamaño
     _tempObstacles.length = 0;
 
     for (let i = 0; i < cameraObstacles.length; i++) {
         const o = cameraObstacles[i];
-        if (!o || !o.isObject3D) continue;
+        if (!o || !o.isObject3D || o.visible === false) continue;
 
-        // Si el objeto tiene una posición explícita en el mundo, filtrar por distancia inmediata
+        // Si el objeto tiene una posición explícita en el mundo, filtrar incluyendo su extensión/radio
         if (o.position && (o.position.x !== 0 || o.position.z !== 0)) {
+            const extraExtent = Math.max(
+                Number(o.userData?.radius) || 0,
+                Number(o.userData?.obbCollision?.halfX) || 0,
+                Number(o.userData?.obbCollision?.halfZ) || 0,
+                8.0
+            );
+            const maxDist = camDistance + 3.0 + extraExtent;
             const dx = _focusPos.x - o.position.x;
             const dz = _focusPos.z - o.position.z;
-            if (dx * dx + dz * dz > maxCheckDistSq) {
+            if (dx * dx + dz * dz > maxDist * maxDist) {
                 continue;
             }
         }

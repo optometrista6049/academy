@@ -1,94 +1,74 @@
 import * as THREE from 'three';
 
-import { GLTFLoader } 
-
-from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 import { scene } from '../core/scene.js';
 
-import { getHeightAt } 
-
-from '../terrain/terrainHeight.js';
+import { getHeightAt } from '../terrain/terrainHeight.js';
 
 export function loadModel(
-
     url,
     x,
     z,
     desiredHeight = 2,
     onLoaded = null
+) {
+    return new Promise((resolve) => {
+        const loader = new GLTFLoader();
 
-){
+        loader.load(url, function(gltf) {
+            const model = gltf.scene;
 
-    const loader = new GLTFLoader();
-    loader.setWithCredentials(true);
+            // =========================
+            // AUTO SCALE
+            // =========================
 
-    loader.load(url, function(gltf){
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
 
-        const model = gltf.scene;
+            const safeHeight = size.y > 0.0001 ? size.y : 1;
+            const scale = desiredHeight / safeHeight;
 
-        // =========================
-        // AUTO SCALE
-        // =========================
+            model.scale.setScalar(scale);
 
-        const box = new THREE.Box3().setFromObject(model);
+            // recalcular box
+            box.setFromObject(model);
+            const groundOffset = -box.min.y;
 
-        const size = new THREE.Vector3();
+            // =========================
+            // POSITION
+            // =========================
 
-        box.getSize(size);
+            model.position.x = x;
+            model.position.z = z;
+            model.position.y = getHeightAt(x, z) + groundOffset;
 
-        const scale = desiredHeight / size.y;
+            // =========================
+            // SHADOWS
+            // =========================
 
-        model.scale.setScalar(scale);
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
 
-        // recalcular box
+            scene.add(model);
 
-        box.setFromObject(model);
-
-        const groundOffset = -box.min.y;
-
-        // =========================
-        // POSITION
-        // =========================
-
-        model.position.x = x;
-
-        model.position.z = z;
-
-        model.position.y =
-            getHeightAt(x,z)
-            + groundOffset;
-
-        // =========================
-        // SHADOWS
-        // =========================
-
-        model.traverse((child)=>{
-
-            if(child.isMesh){
-
-                child.castShadow = true;
-
-                child.receiveShadow = true;
-
+            if (onLoaded) {
+                onLoaded(
+                    model,
+                    gltf,
+                    groundOffset
+                );
             }
 
+            resolve(model);
+        }, undefined, function(err) {
+            console.warn('Failed loading model from ' + url + ':', err);
+            resolve(null);
         });
-
-        scene.add(model);
-
-        if(onLoaded){
-
-            onLoaded(
-                model,
-                gltf,
-                groundOffset
-            );
-
-        }
-
-    }, undefined, function(err){
-        console.warn('Failed loading model from ' + url + ':', err);
     });
-
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
-import { SkeletonUtils } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/utils/SkeletonUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 /**
  * Escenario Cinemático de Estudio para Diálogos con NPCs (Opción 1):
@@ -21,8 +21,10 @@ let currentClipAction = null;
 let idleAction = null;
 let isStageActive = false;
 let animFrameId = null;
+let hideTimerId = null;
 let clock = null;
 let currentSpeaker = '';
+let pendingLoadToken = 0;
 
 // Iluminación de estudio con matices esmeralda y oro suave
 let ambientLight = null;
@@ -34,7 +36,6 @@ let hairLight = null;
 // Caché de modelos y animaciones GLTF para apertura instantánea
 const npcModelCache = {};
 const gltfLoader = new GLTFLoader();
-gltfLoader.setWithCredentials(true);
 
 const NPC_MODELS_MAP = {
     'panda': 'assets/models/npc/PandaNPC.glb',
@@ -116,6 +117,15 @@ export function initDialogueStage() {
     document.body.appendChild(overlay);
 
     canvas = overlay.querySelector('#dialogueStageCanvas');
+    if (canvas) {
+        canvas.addEventListener('webglcontextlost', (e) => {
+            e.preventDefault();
+            if (animFrameId) {
+                cancelAnimationFrame(animFrameId);
+                animFrameId = null;
+            }
+        });
+    }
     clock = new THREE.Clock();
 
     // Configuración Three.js
@@ -130,6 +140,13 @@ export function initDialogueStage() {
     // Iluminación de estudio con matices esmeralda, luz principal cálida dorada y rim light
     createLights();
 
+    window.addEventListener('resize', onStageResize, { passive: true });
+}
+
+function ensureStageRenderer() {
+    if (renderer || !canvas) return;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
     renderer = new THREE.WebGLRenderer({
         canvas,
         alpha: true,
@@ -139,8 +156,6 @@ export function initDialogueStage() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(w, h);
     renderer.outputEncoding = THREE.sRGBEncoding;
-
-    window.addEventListener('resize', onStageResize, { passive: true });
 }
 
 function createLights() {
@@ -236,6 +251,7 @@ function loadAndCacheModel(url) {
 function setupNPCInStage(gltf, modelUrl, speakerName) {
     if (currentModel) {
         scene.remove(currentModel);
+        disposeClonedStageMaterials(currentModel);
         currentModel = null;
     }
     if (currentMixer) {
@@ -282,6 +298,7 @@ function setupNPCInStage(gltf, modelUrl, speakerName) {
                 }
                 hairMat.skinning = true;
                 hairMat.needsUpdate = true;
+                hairMat.userData = { ...(hairMat.userData || {}), _isClonedStageHair: true };
                 child.material = hairMat;
             }
         });
@@ -368,9 +385,14 @@ function renderStageLoop() {
  * Muestra el escenario de estudio cinemático con el NPC correspondiente
  */
 export function showDialogueStage(speakerName) {
+    if (hideTimerId) {
+        clearTimeout(hideTimerId);
+        hideTimerId = null;
+    }
     if (!overlay) {
         initDialogueStage();
     }
+    ensureStageRenderer();
 
     currentSpeaker = speakerName || '';
     const modelUrl = getNPCModelUrl(speakerName);
@@ -395,18 +417,37 @@ export function showDialogueStage(speakerName) {
 
     // Si el modelo actual ya corresponde a este NPC, reanimar gesto sin recargar
     if (currentModel && currentLoadedUrl === modelUrl) {
+        pendingLoadToken++;
         onDialoguePageAdvance();
+        if (!animFrameId) {
+            renderStageLoop();
+        }
         return;
     }
 
+    const loadToken = ++pendingLoadToken;
     loadAndCacheModel(modelUrl).then((gltf) => {
-        if (!isStageActive) return;
+        if (!isStageActive || loadToken !== pendingLoadToken) return;
         setupNPCInStage(gltf, modelUrl, speakerName);
     });
 
     if (!animFrameId) {
         renderStageLoop();
     }
+}
+
+function disposeClonedStageMaterials(model) {
+    if (!model) return;
+    model.traverse((child) => {
+        if (child.isMesh && child.material) {
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach((m) => {
+                if (m && m.userData?._isClonedStageHair && typeof m.dispose === 'function') {
+                    m.dispose();
+                }
+            });
+        }
+    });
 }
 
 /**
@@ -416,6 +457,7 @@ export function hideDialogueStage() {
     if (!overlay) return;
 
     isStageActive = false;
+    pendingLoadToken++;
     overlay.classList.remove('visible');
 
     if (animFrameId) {
@@ -423,18 +465,27 @@ export function hideDialogueStage() {
         animFrameId = null;
     }
 
-    // Esperar al fade-out completo (1200ms) antes de desmantelar
-    setTimeout(() => {
+    if (hideTimerId) {
+        clearTimeout(hideTimerId);
+        hideTimerId = null;
+    }
+
+    // Esperar al fade-out completo (1200ms) antes de desmontar la malla del diálogo manteniendo el contexto estable
+    hideTimerId = setTimeout(() => {
+        hideTimerId = null;
         if (!isStageActive && overlay) {
             overlay.style.display = 'none';
-            if (currentModel) {
+            if (currentModel && scene) {
                 scene.remove(currentModel);
+                disposeClonedStageMaterials(currentModel);
                 currentModel = null;
             }
             if (currentMixer) {
                 currentMixer.stopAllAction();
                 currentMixer = null;
             }
+            currentClipAction = null;
+            idleAction = null;
             currentLoadedUrl = null;
             currentSpeaker = '';
         }

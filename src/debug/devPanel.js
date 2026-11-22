@@ -133,9 +133,6 @@ function buildDevModal() {
 
             <!-- CONTENEDOR DE CONTENIDO -->
             <div id="devSuiteContent" class="devSuiteContent styledScrollbar"></div>
-
-            <!-- TOAST FEEDBACK -->
-            <div id="devToast" class="devToast"></div>
         </div>
     `;
 
@@ -221,9 +218,14 @@ function renderMissionsTab(container) {
     });
 }
 
-export function showDevToast(message) {
-    const toast = document.getElementById('devToast');
-    if (!toast) return;
+export function showDevToast(message, duration = 3200) {
+    let toast = document.getElementById('devToast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'devToast';
+        toast.className = 'devToast';
+        document.body.appendChild(toast);
+    }
 
     toast.textContent = message;
     toast.classList.add('visible');
@@ -231,5 +233,5 @@ export function showDevToast(message) {
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(() => {
         toast.classList.remove('visible');
-    }, 3200);
+    }, Number(duration) > 0 ? Number(duration) : 3200);
 }

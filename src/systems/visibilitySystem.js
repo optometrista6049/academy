@@ -27,13 +27,16 @@ export function updateVisibilitySystem(){
     }
     lastVisibilityUpdate = now;
 
-    // En Modo Dios, mantener siempre visibles todos los objetos para libre inspección
+    // En Modo Dios, mantener visibles los objetos activos salvo los ocultados explícitamente por el layout
     if (runtimeState.isGodMode) {
         worldObjects.forEach((entry) => {
             const object = entry.object;
             if (object) {
-                object.visible = true;
-                if (entry.originalScale && object.scale) object.scale.copy(entry.originalScale);
+                const vis = !object.userData?.hiddenByLayout;
+                object.visible = vis;
+                if (typeof object.userData?.onVisibilityChange === 'function') {
+                    object.userData.onVisibilityChange(vis);
+                }
             }
         });
         return;
@@ -46,25 +49,21 @@ export function updateVisibilitySystem(){
     worldObjects.forEach((entry)=>{
         const object = entry.object;
         if(!object || !object.position) return;
-
-        const distance = playerPos.distanceTo(object.position);
-
-        const fadeStart = 150;
-        const fadeEnd = 180;
-
-        if(distance >= fadeEnd){
+        if (object.userData?.hiddenByLayout) {
             object.visible = false;
+            if (typeof object.userData?.onVisibilityChange === 'function') {
+                object.userData.onVisibilityChange(false);
+            }
             return;
         }
 
-        object.visible = true;
+        const distance = playerPos.distanceTo(object.position);
+        const fadeEnd = 180;
+        const vis = distance < fadeEnd;
 
-        if(entry.originalScale){
-            if(distance > 60){
-                object.scale.copy(entry.originalScale).multiplyScalar(0.85);
-            } else {
-                object.scale.copy(entry.originalScale);
-            }
+        object.visible = vis;
+        if (typeof object.userData?.onVisibilityChange === 'function') {
+            object.userData.onVisibilityChange(vis);
         }
     });
 }

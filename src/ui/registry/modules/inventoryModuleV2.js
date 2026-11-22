@@ -8,6 +8,13 @@ import { openDocumentViewer } from "../../documentViewer.js";
 import { archiveItem, hasArchivedItem } from "./archiveModule.js";
 import { gameState } from "../../../state/gameState.js";
 import { saveGame } from "../../../systems/saveSystem.js";
+import {
+    playerEquipment,
+    equipItem,
+    unequipItem,
+    createProceduralItem
+} from "../../../player/playerEquipment.js";
+import { getCustomItemById } from "../../../systems/customItemStorage.js";
 
 let inventoryModule;
 
@@ -30,12 +37,29 @@ let selectedObject = null;
 // SINCRONIZACIÓN Y PERSISTENCIA
 // ======================================================
 
-function syncInventoryToGameState(){
+function ensureInventoryStructures() {
     if (!Array.isArray(gameState.inventory)) {
         gameState.inventory = [];
     }
+    if (!gameState.itemCounts || typeof gameState.itemCounts !== 'object') {
+        gameState.itemCounts = {};
+    }
+    if (!gameState.equipped || typeof gameState.equipped !== 'object') {
+        gameState.equipped = {
+            rightHand: null,
+            leftHand: null,
+            back: null,
+            head: null
+        };
+    }
+}
+
+function syncInventoryToGameState(shouldSave = true){
+    ensureInventoryStructures();
     gameState.inventory = inventoryObjects.map(item => item.id);
-    saveGame();
+    if (shouldSave) {
+        saveGame();
+    }
 }
 
 export function restoreInventoryFromGameState(){
@@ -77,13 +101,160 @@ export function restoreInventoryFromGameState(){
         }
     }
 
-    if (!Array.isArray(gameState.inventory)) {
-        gameState.inventory = [];
+    if (gameState.flags?.altoScannedCard) {
+        const detectorItem = registryCatalog['metalDetector'];
+        if (detectorItem && !inventoryObjects.some(it => it.id === detectorItem.id)) {
+            inventoryObjects.push(detectorItem);
+        }
     }
+
+    if (
+        gameState.flags?.altoScannedCard &&
+        !gameState.flags?.deliveredMicrochips &&
+        Array.isArray(gameState.flags?.collectedMicrochips) &&
+        gameState.flags.collectedMicrochips.length > 0
+    ) {
+        const chipItem = registryCatalog['microchip'];
+        const collectedCount = Math.min(7, gameState.flags.collectedMicrochips.length);
+        if (chipItem) {
+            if (!inventoryObjects.some(it => it.id === chipItem.id)) {
+                inventoryObjects.push(chipItem);
+            }
+            ensureInventoryStructures();
+            const storedCount = Number(gameState.itemCounts.microchip || 0);
+            if (storedCount < collectedCount) {
+                gameState.itemCounts.microchip = collectedCount;
+            }
+        }
+    }
+
+    if (gameState.flags?.deliveredMicrochips) {
+        ['visualHygieneDoc', 'timeControlDoc'].forEach((docId) => {
+            const docItem = registryCatalog[docId];
+            if (docItem && !inventoryObjects.some(it => it.id === docItem.id)) {
+                inventoryObjects.push(docItem);
+            }
+        });
+    }
+
+    ensureInventoryStructures();
     gameState.inventory = inventoryObjects.map(item => item.id);
 
     if (inventoryModule) {
         refreshGrid();
+        if (selectedObject && !inventoryObjects.some(it => it.id === selectedObject.id)) {
+            clearSelection();
+        } else if (selectedObject) {
+            displayItem(selectedObject);
+        }
+    }
+}
+
+// ======================================================
+// EQUIPO (EQUIPAR / DESEQUIPAR)
+// ======================================================
+
+export function isItemEquipped(itemId) {
+    const item = registryCatalog[itemId];
+    if (!item || !item.canEquip) return false;
+    const socket = item.equipSocket || 'rightHand';
+    return gameState.equipped?.[socket] === itemId;
+}
+
+function attachEquippedMeshToPlayer(item) {
+    if (!item || !playerEquipment.initialized) return false;
+    const socket = item.equipSocket || 'rightHand';
+    const customId = item.customItemId || item.proceduralType || item.id;
+    const customData = item.customItemId ? getCustomItemById(item.customItemId) : null;
+    const mesh = createProceduralItem(customId);
+    const transform = customData?.transform || item.equipTransform || {
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: customData?.scale ?? 1.0
+    };
+    return equipItem(socket, mesh, transform);
+}
+
+export function equipInventoryItem(itemId, { silent = false } = {}) {
+    const item = registryCatalog[itemId];
+    if (!item || !item.canEquip || !hasInventoryItem(itemId)) {
+        return false;
+    }
+
+    ensureInventoryStructures();
+    const socket = item.equipSocket || 'rightHand';
+    gameState.equipped[socket] = item.id;
+
+    if (playerEquipment.initialized) {
+        attachEquippedMeshToPlayer(item);
+    }
+
+    saveGame();
+    if (inventoryModule) {
+        refreshGrid();
+        if (selectedObject?.id === item.id) {
+            displayItem(selectedObject);
+        }
+    }
+    if (!silent) {
+        showInventoryNotice(`${item.title} equipado.`);
+    }
+    return true;
+}
+
+export function unequipInventoryItem(itemId, { silent = false } = {}) {
+    const item = registryCatalog[itemId];
+    if (!item || !item.canEquip) {
+        return false;
+    }
+
+    ensureInventoryStructures();
+    const socket = item.equipSocket || 'rightHand';
+    if (gameState.equipped[socket] === item.id) {
+        gameState.equipped[socket] = null;
+    }
+
+    if (playerEquipment.initialized) {
+        unequipItem(socket);
+    }
+
+    saveGame();
+    if (inventoryModule) {
+        refreshGrid();
+        if (selectedObject?.id === item.id) {
+            displayItem(selectedObject);
+        }
+    }
+    if (!silent) {
+        showInventoryNotice(`${item.title} guardado en el inventario.`);
+    }
+    return true;
+}
+
+export function restoreEquippedItemsFromGameState() {
+    ensureInventoryStructures();
+    const sockets = ['rightHand', 'leftHand', 'back', 'head'];
+    sockets.forEach((socket) => {
+        const equippedId = gameState.equipped?.[socket];
+        if (equippedId && hasInventoryItem(equippedId)) {
+            const item = registryCatalog[equippedId];
+            if (item && item.canEquip) {
+                attachEquippedMeshToPlayer(item);
+                return;
+            }
+        }
+        if (equippedId && !hasInventoryItem(equippedId)) {
+            gameState.equipped[socket] = null;
+        }
+        if (playerEquipment.initialized && playerEquipment.equipped?.[socket]) {
+            unequipItem(socket);
+        }
+    });
+    if (inventoryModule) {
+        refreshGrid();
+        if (selectedObject) {
+            displayItem(selectedObject);
+        }
     }
 }
 
@@ -91,7 +262,18 @@ export function restoreInventoryFromGameState(){
 // API DEL INVENTARIO
 // ======================================================
 
-export function addInventoryItem(itemId){
+export function getInventoryItemCount(itemId) {
+    const item = registryCatalog[itemId];
+    const exists = inventoryObjects.some(it => it.id === itemId);
+    if (!exists) return 0;
+    if (item?.stackable) {
+        const stored = Number(gameState.itemCounts?.[itemId]);
+        return Number.isFinite(stored) && stored > 0 ? stored : 1;
+    }
+    return 1;
+}
+
+export function addInventoryItem(itemId, amount = 1){
 
     const item = registryCatalog[itemId];
 
@@ -105,10 +287,27 @@ export function addInventoryItem(itemId){
 
     }
 
-    if(inventoryObjects.some(it => it.id === item.id)){
+    ensureInventoryStructures();
+    const addQty = Math.max(1, Number(amount) || 1);
+    const alreadyExists = inventoryObjects.some(it => it.id === item.id);
 
+    if(alreadyExists){
+        if (item.stackable) {
+            const maxStack = item.maxStack || 99;
+            const current = getInventoryItemCount(item.id);
+            const next = Math.min(maxStack, current + addQty);
+            if (next === current) {
+                return false;
+            }
+            gameState.itemCounts[item.id] = next;
+            syncInventoryToGameState();
+            refreshGrid();
+            if (selectedObject?.id === item.id) {
+                displayItem(selectedObject);
+            }
+            return true;
+        }
         return false;
-
     }
 
     if(inventoryObjects.length >= 20){
@@ -123,6 +322,11 @@ export function addInventoryItem(itemId){
 
     inventoryObjects.push(item);
 
+    if (item.stackable) {
+        const maxStack = item.maxStack || 99;
+        gameState.itemCounts[item.id] = Math.min(maxStack, addQty);
+    }
+
     syncInventoryToGameState();
 
     refreshGrid();
@@ -132,7 +336,7 @@ export function addInventoryItem(itemId){
 }
 
 
-export function removeInventoryItem(itemId){
+export function removeInventoryItem(itemId, amount = null){
 
     const index =
         inventoryObjects.findIndex(
@@ -145,8 +349,33 @@ export function removeInventoryItem(itemId){
 
     }
 
+    const item = inventoryObjects[index];
+    ensureInventoryStructures();
+
+    if (amount !== null && item.stackable) {
+        const current = getInventoryItemCount(itemId);
+        const remaining = current - Math.max(1, Number(amount) || 1);
+        if (remaining > 0) {
+            gameState.itemCounts[itemId] = remaining;
+            syncInventoryToGameState();
+            refreshGrid();
+            if (selectedObject?.id === itemId) {
+                displayItem(selectedObject);
+            }
+            return true;
+        }
+    }
+
     const removedItem =
         inventoryObjects.splice(index,1)[0];
+
+    if (gameState.itemCounts && itemId in gameState.itemCounts) {
+        delete gameState.itemCounts[itemId];
+    }
+
+    if (isItemEquipped(itemId)) {
+        unequipInventoryItem(itemId, { silent: true });
+    }
 
     if(selectedObject === removedItem){
 
@@ -211,52 +440,9 @@ export function createInventoryModuleV2() {
     return inventoryModule;
 }
 
-// ======================================================
-// MUESTRA UN OBJETO DEL REGISTRO EN EL PANEL DERECHO
-// ======================================================
-
-function showRegistryObject(objectData){
-
-    //-------------------------------------------------
-    // Miniatura
-    //-------------------------------------------------
-
-    previewImage.style.backgroundImage =
-        `url(${objectData.thumbnail})`;
-
-    previewImage.style.backgroundSize = "contain";
-
-    previewImage.style.backgroundRepeat = "no-repeat";
-
-    previewImage.style.backgroundPosition = "center";
-
-    //-------------------------------------------------
-    // Nombre
-    //-------------------------------------------------
-
-    previewTitle.textContent = objectData.title;
-
-    //-------------------------------------------------
-    // Descripción
-    //-------------------------------------------------
-
-    description.textContent = objectData.description;
-
-    //-------------------------------------------------
-    // Botones
-    //-------------------------------------------------
-
-    actions.style.display = "flex";
-
-    openButton.style.display =
-        objectData.canOpen ? "block" : "none";
-
-    saveButton.style.display =
-        objectData.canArchive ? "block" : "none";
-
-}
-
 function buildLayout(){
+
+    inventoryCells.length = 0;
 
     const body = document.createElement("div");
     body.id = "inventoryBody";
@@ -377,6 +563,19 @@ saveButton.onclick = () => {
     }
 };
 
+const equipButton = document.createElement("button");
+equipButton.id = "inventoryEquipButton";
+equipButton.textContent = "Equipar";
+equipButton.onclick = () => {
+    if (!selectedObject || !selectedObject.canEquip) return;
+    if (isItemEquipped(selectedObject.id)) {
+        unequipInventoryItem(selectedObject.id);
+    } else {
+        equipInventoryItem(selectedObject.id);
+    }
+};
+
+actions.appendChild(equipButton);
 actions.appendChild(openButton);
 actions.appendChild(saveButton);
 
@@ -425,6 +624,8 @@ refreshGrid();
 // ESTADO INICIAL PANEL DERECHO
 // ======================================================
 function initializeInfoPanel(){
+
+    if (!previewImage || !previewTitle || !description) return;
 
     // ------------------------------------------
     // Miniatura
@@ -586,22 +787,23 @@ function refreshGrid(){
 
         cell.appendChild(icon);
 
+        if (object.stackable) {
+            const count = getInventoryItemCount(object.id);
+            const countBadge = document.createElement("span");
+            countBadge.className = "inventoryCountBadge";
+            countBadge.textContent = `x${count}`;
+            cell.appendChild(countBadge);
+        }
+
+        if (object.canEquip && isItemEquipped(object.id)) {
+            cell.classList.add("equipped");
+            const eqBadge = document.createElement("span");
+            eqBadge.className = "inventoryEquippedBadge";
+            eqBadge.textContent = "EQ";
+            cell.appendChild(eqBadge);
+        }
+
     }
-
-}
-// ======================================================
-// MOSTRAR DOCUMENTO
-// ======================================================
-
-function displayDocument(documentData){
-
-    setPreviewImage(documentData.image);
-
-    setPreviewTitle(documentData.title);
-
-    setDescription(documentData.description);
-
-    showActions(true);
 
 }
 
@@ -625,26 +827,52 @@ function displayItem(itemData){
     setPreviewImage(itemData.thumbnail);
 
     //-------------------------------------------------
-    // Nombre
+    // Nombre (con contador si es apilable)
     //-------------------------------------------------
 
-    setPreviewTitle(itemData.title);
+    if (itemData.stackable) {
+        const count = getInventoryItemCount(itemData.id);
+        const suffix = itemData.maxStack
+            ? ` (${count} / ${itemData.maxStack})`
+            : ` (x${count})`;
+        setPreviewTitle(`${itemData.title}${suffix}`);
+    } else {
+        setPreviewTitle(itemData.title);
+    }
 
     //-------------------------------------------------
     // Descripción
     //-------------------------------------------------
 
-    setDescription(itemData.description);
+    if (itemData.stackable && itemData.maxStack) {
+        const count = getInventoryItemCount(itemData.id);
+        setDescription(`${itemData.description}\n\nProgreso actual: ${count} / ${itemData.maxStack} recogidos.`);
+    } else {
+        setDescription(itemData.description);
+    }
 
     //-------------------------------------------------
-    // Acciones (Abrir y Archivar)
+    // Acciones (Equipar, Abrir y Archivar)
     //-------------------------------------------------
 
+    const canEquip = Boolean(itemData.canEquip);
     const canOpen = Boolean(itemData.canOpen);
     const canArchive = Boolean(itemData.canArchive);
 
+    const equipBtn = document.getElementById("inventoryEquipButton");
     const openBtn = document.getElementById("inventoryOpenButton");
     const saveBtn = document.getElementById("inventorySaveButton");
+
+    if(equipBtn){
+        equipBtn.style.display = canEquip ? "" : "none";
+        if (canEquip) {
+            const equipped = isItemEquipped(itemData.id);
+            equipBtn.textContent = equipped ? "Desequipar" : "Equipar";
+            equipBtn.classList.toggle("equippedActive", equipped);
+        } else {
+            equipBtn.classList.remove("equippedActive");
+        }
+    }
 
     if(openBtn){
         openBtn.style.display = canOpen ? "" : "none";
@@ -655,7 +883,7 @@ function displayItem(itemData){
         saveBtn.textContent = "Archivar";
     }
 
-    showActions(canOpen || canArchive);
+    showActions(canEquip || canOpen || canArchive);
 
 }
 
@@ -664,6 +892,8 @@ function displayItem(itemData){
 // ======================================================
 
 function setPreviewImage(imageURL){
+
+    if (!previewImage) return;
 
     if(!imageURL){
 
@@ -674,7 +904,7 @@ function setPreviewImage(imageURL){
     }
 
     previewImage.style.backgroundImage =
-        `url(${imageURL})`;
+        `url("${imageURL}")`;
 
     previewImage.style.backgroundSize = "contain";
 
@@ -709,6 +939,8 @@ function setDescription(text){
 // ======================================================
 
 function showActions(show){
+
+    if (!actions) return;
 
     actions.style.display =
         show ? "flex" : "none";

@@ -14,9 +14,13 @@ let viewerOverlay = null;
 let viewerContainer = null;
 let viewerFrame = null;
 let viewerImg = null;
+let viewerPdfFrame = null;
 let viewerTitleEl = null;
 let zoomBadgeEl = null;
+let btnZoomOut = null;
+let btnZoomIn = null;
 let btnResetZoom = null;
+let isPdfMode = false;
 
 // Estado de transformación interactiva
 let currentScale = 1;
@@ -51,8 +55,38 @@ export function openDocumentViewer(imageSrc, title = 'Documento') {
 
     resetTransform(false);
 
-    viewerImg.src = imageSrc;
-    viewerImg.alt = title;
+    const isPdf = /\.pdf(\?.*|#.*)?$/i.test(String(imageSrc)) || String(imageSrc).startsWith('data:application/pdf');
+    isPdfMode = isPdf;
+
+    if (viewerContainer) {
+        viewerContainer.classList.toggle('pdfMode', isPdf);
+    }
+    if (viewerFrame) {
+        viewerFrame.classList.toggle('pdfMode', isPdf);
+    }
+
+    [zoomBadgeEl, btnZoomOut, btnZoomIn, btnResetZoom].forEach((el) => {
+        if (el) el.style.display = isPdf ? 'none' : '';
+    });
+
+    if (isPdf) {
+        viewerImg.style.display = 'none';
+        viewerImg.removeAttribute('src');
+        if (viewerPdfFrame) {
+            viewerPdfFrame.style.display = 'block';
+            viewerPdfFrame.title = title;
+            viewerPdfFrame.src = imageSrc;
+        }
+    } else {
+        if (viewerPdfFrame) {
+            viewerPdfFrame.style.display = 'none';
+            viewerPdfFrame.src = 'about:blank';
+        }
+        viewerImg.style.display = 'block';
+        viewerImg.src = imageSrc;
+        viewerImg.alt = title;
+    }
+
     if (viewerTitleEl) {
         viewerTitleEl.textContent = title;
     }
@@ -60,16 +94,58 @@ export function openDocumentViewer(imageSrc, title = 'Documento') {
     viewerOverlay.classList.add('visible');
     viewerOverlay.style.display = 'flex';
 
-    // Asegurar foco y captura de tecla ESC
+    // Asegurar foco y captura de tecla ESC y gestos globales
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    window.addEventListener('blur', handleWindowBlur);
 }
 
 export function closeDocumentViewer() {
     if (!viewerOverlay) return;
+    isDragging = false;
+    isPinching = false;
+    isPdfMode = false;
+    if (viewerContainer) viewerContainer.classList.remove('pdfMode');
+    if (viewerFrame) viewerFrame.classList.remove('pdfMode');
+    if (viewerPdfFrame) {
+        viewerPdfFrame.style.display = 'none';
+        viewerPdfFrame.src = 'about:blank';
+    }
     viewerOverlay.classList.remove('visible');
     viewerOverlay.style.display = 'none';
     resetTransform(false);
     window.removeEventListener('keydown', handleKeyDown, true);
+    window.removeEventListener('mousemove', handleWindowMouseMove);
+    window.removeEventListener('mouseup', handleWindowMouseUp);
+    window.removeEventListener('blur', handleWindowBlur);
+}
+
+function handleWindowMouseMove(e) {
+    if (!isDragging || currentScale <= 1) return;
+    e.preventDefault();
+    setTransform(currentScale, e.clientX - startPointerX, e.clientY - startPointerY, false);
+}
+
+function handleWindowMouseUp() {
+    if (!isDragging) return;
+    isDragging = false;
+    if (viewerImg && currentScale > 1) {
+        viewerImg.style.cursor = 'grab';
+    }
+    if (currentScale <= 1) {
+        resetTransform(true);
+    } else {
+        setTransform(currentScale, translateX, translateY, true);
+    }
+}
+
+function handleWindowBlur() {
+    isDragging = false;
+    isPinching = false;
+    if (viewerImg && currentScale > 1) {
+        viewerImg.style.cursor = 'grab';
+    }
 }
 
 function handleKeyDown(e) {
@@ -116,7 +192,7 @@ function buildDocumentViewer() {
     const toolbar = document.createElement('div');
     toolbar.className = 'documentViewerToolbar';
 
-    const btnZoomOut = document.createElement('button');
+    btnZoomOut = document.createElement('button');
     btnZoomOut.className = 'viewerToolBtn';
     btnZoomOut.innerHTML = '&#8722;'; // Minus symbol
     btnZoomOut.title = 'Alejar zoom';
@@ -126,7 +202,7 @@ function buildDocumentViewer() {
         stepZoom(-0.5);
     };
 
-    const btnZoomIn = document.createElement('button');
+    btnZoomIn = document.createElement('button');
     btnZoomIn.className = 'viewerToolBtn';
     btnZoomIn.innerHTML = '&#43;'; // Plus symbol
     btnZoomIn.title = 'Acercar zoom';
@@ -173,7 +249,13 @@ function buildDocumentViewer() {
     viewerImg.className = 'documentViewerImage';
     viewerImg.draggable = false;
 
+    viewerPdfFrame = document.createElement('iframe');
+    viewerPdfFrame.className = 'documentViewerPdfFrame';
+    viewerPdfFrame.style.display = 'none';
+    viewerPdfFrame.setAttribute('loading', 'eager');
+
     viewerFrame.appendChild(viewerImg);
+    viewerFrame.appendChild(viewerPdfFrame);
     viewerContainer.appendChild(header);
     viewerContainer.appendChild(viewerFrame);
     viewerOverlay.appendChild(viewerContainer);
@@ -274,6 +356,7 @@ function setupGestureInteractions(frame, img) {
 
     frame.addEventListener('touchstart', (e) => {
         e.stopPropagation();
+        if (isPdfMode) return;
         touchCount = e.touches.length;
 
         // Doble toque rápido con 1 dedo para zoom inteligente
@@ -311,6 +394,7 @@ function setupGestureInteractions(frame, img) {
 
     frame.addEventListener('touchmove', (e) => {
         e.stopPropagation();
+        if (isPdfMode) return;
         e.preventDefault(); // Prevenir scroll o zoom nativo del navegador
 
         if (e.touches.length === 2 && isPinching) {
@@ -334,6 +418,7 @@ function setupGestureInteractions(frame, img) {
 
     frame.addEventListener('touchend', (e) => {
         e.stopPropagation();
+        if (isPdfMode) return;
         touchCount = e.touches.length;
 
         if (touchCount === 0) {
@@ -356,6 +441,7 @@ function setupGestureInteractions(frame, img) {
 
     frame.addEventListener('touchcancel', (e) => {
         e.stopPropagation();
+        if (isPdfMode) return;
         isDragging = false;
         isPinching = false;
         if (currentScale <= 1) resetTransform(true);
@@ -366,6 +452,7 @@ function setupGestureInteractions(frame, img) {
     // --------------------------------------------------
 
     frame.addEventListener('wheel', (e) => {
+        if (isPdfMode) return;
         e.preventDefault();
         e.stopPropagation();
         const delta = e.deltaY < 0 ? 0.35 : -0.35;
@@ -373,6 +460,7 @@ function setupGestureInteractions(frame, img) {
     }, { passive: false });
 
     frame.addEventListener('mousedown', (e) => {
+        if (isPdfMode) return;
         if (e.button !== 0) return; // Solo clic izquierdo
         e.preventDefault();
         isDragging = true;
@@ -381,28 +469,10 @@ function setupGestureInteractions(frame, img) {
         img.style.cursor = 'grabbing';
     });
 
-    window.addEventListener('mousemove', (e) => {
-        if (!isDragging || currentScale <= 1) return;
-        e.preventDefault();
-        setTransform(currentScale, e.clientX - startPointerX, e.clientY - startPointerY, false);
-    });
-
-    window.addEventListener('mouseup', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        if (viewerImg && currentScale > 1) {
-            viewerImg.style.cursor = 'grab';
-        }
-        if (currentScale <= 1) {
-            resetTransform(true);
-        } else {
-            setTransform(currentScale, translateX, translateY, true);
-        }
-    });
-
     // Clic en la imagen cuando está al 100%: zoom directo al 2x
     img.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (isPdfMode) return;
         if (currentScale === 1) {
             setTransform(2.2, 0, 0, true);
         }

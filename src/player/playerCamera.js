@@ -43,7 +43,15 @@ let targetAy = cam.ay;
 
 let drag = false;
 
-addEventListener("mousedown",()=>{
+addEventListener("mousedown", (e) => {
+
+    if (e.button !== 0) return;
+
+    if (runtimeState.isGodMode || isInputLocked()) return;
+
+    if (e.target && e.target.tagName !== 'CANVAS' && e.target !== document.body && e.target !== document.documentElement) {
+        return;
+    }
 
     drag = true;
 
@@ -81,8 +89,9 @@ addEventListener("mousemove",e=>{
 // MOBILE
 // =====================================================
 
-let lastTouchX = 0;
-let lastTouchY = 0;
+let activeCameraTouchId = null;
+let lastTouchX = null;
+let lastTouchY = null;
 
 let pinchDistance = null;
 
@@ -92,7 +101,7 @@ let pinchDistance = null;
 
 addEventListener("touchmove",(e)=>{
 	
-	if(isInputLocked()) return;
+	if(runtimeState.isGodMode || isInputLocked()) return;
 
     // =====================================================
     // RIGHT SIDE TOUCHES
@@ -117,7 +126,11 @@ addEventListener("touchmove",(e)=>{
     // TWO FINGER ZOOM
     // =====================================================
 
-    if(rightTouches.length === 2){
+    if(rightTouches.length >= 2){
+
+        activeCameraTouchId = null;
+        lastTouchX = null;
+        lastTouchY = null;
 
         const avgY =
 
@@ -170,22 +183,19 @@ addEventListener("touchmove",(e)=>{
 
     let cameraTouch = null;
 
-    for(const touch of e.touches){
-
-        if(
-            touch.clientX >
-            window.innerWidth * 0.28
-        ){
-
-            cameraTouch = touch;
-
-        }
-
+    if (activeCameraTouchId !== null) {
+        cameraTouch = rightTouches.find(t => t.identifier === activeCameraTouchId) || null;
+    }
+    if (!cameraTouch && rightTouches.length > 0) {
+        cameraTouch = rightTouches[0];
+        activeCameraTouchId = cameraTouch.identifier;
+        lastTouchX = null;
+        lastTouchY = null;
     }
 
     if(cameraTouch){
 
-        if(!lastTouchX){
+        if(lastTouchX === null || lastTouchY === null){
 
             lastTouchX =
                 cameraTouch.clientX;
@@ -219,6 +229,10 @@ addEventListener("touchmove",(e)=>{
         lastTouchY =
             cameraTouch.clientY;
 
+    } else {
+        activeCameraTouchId = null;
+        lastTouchX = null;
+        lastTouchY = null;
     }
 
 },{ passive:true });
@@ -227,14 +241,42 @@ addEventListener("touchmove",(e)=>{
 // RESET TOUCH
 // =====================================================
 
-addEventListener("touchend",()=>{
+function handleTouchEndOrCancel(e){
+    let stillActive = false;
+    let rightCount = 0;
 
-    lastTouchX = 0;
-    lastTouchY = 0;
+    if (e && e.touches) {
+        for (const touch of e.touches) {
+            if (touch.identifier === activeCameraTouchId) {
+                stillActive = true;
+            }
+            if (touch.clientX > window.innerWidth * 0.28) {
+                rightCount++;
+            }
+        }
+    }
 
+    if (!stillActive) {
+        activeCameraTouchId = null;
+        lastTouchX = null;
+        lastTouchY = null;
+    }
+    if (rightCount < 2) {
+        pinchDistance = null;
+    }
+}
+
+function resetTouchAndDrag(){
+    drag = false;
+    activeCameraTouchId = null;
+    lastTouchX = null;
+    lastTouchY = null;
     pinchDistance = null;
+}
 
-});
+addEventListener("touchend", handleTouchEndOrCancel, { passive:true });
+addEventListener("touchcancel", handleTouchEndOrCancel, { passive:true });
+addEventListener("blur", resetTouchAndDrag, { passive:true });
 
 // =====================================================
 // WHEEL ZOOM
@@ -242,7 +284,11 @@ addEventListener("touchend",()=>{
 
 addEventListener("wheel", e => {
 	
-	if(isInputLocked()) return;
+	if(runtimeState.isGodMode || isInputLocked()) return;
+
+	if (e.target && e.target.tagName !== 'CANVAS' && e.target !== document.body && e.target !== document.documentElement) {
+		return;
+	}
 
     cam.targetDistance +=
         e.deltaY * 0.01;

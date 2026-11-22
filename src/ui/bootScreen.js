@@ -2,12 +2,7 @@
 // MOBILE / FULLSCREEN BOOT SCREEN
 // =====================================================
 
-function isMobile(){
-
-    return /Android|iPhone|iPad|iPod/i
-        .test(navigator.userAgent);
-
-}
+import { isMobile } from '../mobile/mobileDetection.js';
 
 // =====================================================
 // CREATE BOOT SCREEN
@@ -30,9 +25,7 @@ export function createBootScreen(onStart){
     const bg = document.createElement('div');
 
     bg.id = 'bootBackground';
-
-    // IMPORTANT:
-    // set AFTER append for mobile compatibility
+    bg.style.backgroundImage = 'url(./assets/ui/boot/bootBackground.jpg)';
 
     // =====================================================
     // OVERLAY
