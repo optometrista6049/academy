@@ -7,11 +7,98 @@ from '../utils/deviceDetection.js';
 
 let button = null;
 let label = null;
+let iconImg = null;
 
-export function createMobileInteractionButton(){
+let isVisible = false;
+let currentText = '';
+let currentType = '';
+let onInteractCallback = null;
+let lastTriggerTime = 0;
+
+function triggerInteraction() {
+    if (!isVisible) return;
+
+    const now = performance.now();
+    if (now - lastTriggerTime < 260) return;
+    lastTriggerTime = now;
+
+    if (typeof onInteractCallback === 'function') {
+        onInteractCallback();
+    }
+}
+
+function attachTouchAndClickHandlers(el) {
+    if (!el) return;
+
+    let activeTouchId = null;
+    let startX = 0;
+    let startY = 0;
+
+    el.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            const touch = e.changedTouches[0];
+            activeTouchId = touch.identifier;
+            startX = touch.clientX;
+            startY = touch.clientY;
+        }
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+        e.stopPropagation();
+    }, { passive: true });
+
+    el.addEventListener('touchcancel', (e) => {
+        e.stopPropagation();
+        activeTouchId = null;
+    }, { passive: true });
+
+    el.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+
+        let isTap = true;
+        if (activeTouchId !== null && e.changedTouches) {
+            for (const touch of e.changedTouches) {
+                if (touch.identifier === activeTouchId) {
+                    const dx = touch.clientX - startX;
+                    const dy = touch.clientY - startY;
+                    isTap = Math.hypot(dx, dy) <= 48;
+                    break;
+                }
+            }
+        }
+        activeTouchId = null;
+
+        if (!isTap) return;
+
+        if (e.cancelable) {
+            e.preventDefault();
+        }
+        triggerInteraction();
+    }, { passive: false });
+
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        triggerInteraction();
+    });
+}
+
+export function setMobileInteractionHandler(handler) {
+    onInteractCallback = typeof handler === 'function' ? handler : null;
+}
+
+export function createMobileInteractionButton(onInteract){
+
+    if (typeof onInteract === 'function') {
+        setMobileInteractionHandler(onInteract);
+    }
+
+    if (button && label) return;
 
     button =
         document.createElement('button');
+
+    button.type = 'button';
 
     button.id =
         'mobileInteractionButton';
@@ -23,7 +110,11 @@ export function createMobileInteractionButton(){
             width="64"
             height="64"
             alt="Interacción"
+            draggable="false"
+            style="pointer-events:none; user-select:none; -webkit-user-select:none; -webkit-user-drag:none; display:block;"
         >`;
+
+    iconImg = button.querySelector('#mobileInteractionIcon');
 
     Object.assign(
         button.style,
@@ -44,6 +135,9 @@ export function createMobileInteractionButton(){
             alignItems:'center',
             justifyContent:'center',
             boxShadow:'0 4px 14px rgba(0,0,0,0.5)',
+            userSelect:'none',
+            webkitUserSelect:'none',
+            webkitTapHighlightColor:'transparent',
             touchAction:'manipulation'
         }
     );
@@ -76,16 +170,21 @@ export function createMobileInteractionButton(){
             cursor:'pointer',
             boxShadow:'0 4px 12px rgba(0,0,0,0.5)',
             userSelect:'none',
+            webkitUserSelect:'none',
+            webkitTapHighlightColor:'transparent',
             touchAction:'manipulation'
         }
     );
 
-    label.addEventListener('click', () => {
-        if(button) button.click();
-    });
+    attachTouchAndClickHandlers(button);
+    attachTouchAndClickHandlers(label);
 
     document.body.appendChild(label);
     document.body.appendChild(button);
+
+    isVisible = false;
+    currentText = '';
+    currentType = 'talk';
 
 }
 
@@ -95,40 +194,51 @@ export function showMobileInteractionButton(text = '', type = 'talk'){
 
     if(!isMobileDevice()) return;
 
-    // Conmutar icono según el tipo de interacción (NPC, Objeto o Recoger)
-    const iconImg = button.querySelector('#mobileInteractionIcon');
-    if (iconImg) {
-        if (type === 'pickup') {
+    const nextText = text || '';
+    const nextType = type || 'talk';
+
+    if (iconImg && nextType !== currentType) {
+        if (nextType === 'pickup') {
             iconImg.src = './assets/ui/icons/pickup_hand.svg';
             iconImg.alt = 'Recoger objeto';
-        } else if (type === 'object') {
+        } else if (nextType === 'object') {
             iconImg.src = './assets/ui/icons/interact_object.svg';
             iconImg.alt = 'Examinar objeto';
         } else {
             iconImg.src = './assets/ui/icons/talk.svg';
             iconImg.alt = 'Hablar';
         }
+        currentType = nextType;
     }
 
-    button.style.display =
-        'flex';
+    if (!isVisible) {
+        button.style.display = 'flex';
+    }
 
     if(label){
-
-        if(text){
-            label.innerText = text;
-            label.style.display = 'block';
-        } else {
-            label.style.display = 'none';
+        if (!isVisible || nextText !== currentText) {
+            if(nextText){
+                label.textContent = nextText;
+                label.style.display = 'block';
+            } else {
+                label.textContent = '';
+                label.style.display = 'none';
+            }
+            currentText = nextText;
         }
-
     }
+
+    isVisible = true;
 
 }
 
 export function hideMobileInteractionButton(){
 
     if(!button) return;
+
+    if(!isVisible && button.style.display === 'none') return;
+
+    isVisible = false;
 
     button.style.display =
         'none';

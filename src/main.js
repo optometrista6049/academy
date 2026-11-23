@@ -77,7 +77,8 @@ from './interaction/interactionUI.js';
 
 import {
 
-    updateInteractionSystem
+    updateInteractionSystem,
+    tryInteraction
 
 }
 from './interaction/interactionManager.js';
@@ -105,7 +106,8 @@ from './interaction/interactionManager.js';
 import {
 
     createMobileInteractionButton,
-    getMobileInteractionButton
+    getMobileInteractionButton,
+    setMobileInteractionHandler
 
 }
 from './mobile/mobileInteractionButton.js';
@@ -355,24 +357,10 @@ async function startGame(){
     // BOTÓN INTERACCIÓN MÓVIL
     // =====================================
 
-    const interactionButton =
-
-        getMobileInteractionButton();
-
-    if(interactionButton){
-
-        interactionButton.addEventListener(
-
-            'click',
-
-            ()=>{
-
-                tryInteraction();
-
-            }
-
-        );
-
+    if (getMobileInteractionButton()) {
+        setMobileInteractionHandler(() => {
+            tryInteraction();
+        });
     }
     
     createPandaReminder();
