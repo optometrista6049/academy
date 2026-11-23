@@ -8630,40 +8630,170 @@ body.registry-open #metalDetectorHud {
     display: none !important;
 }
 
+.mdRadarArcSvg {
+    display: none;
+}
+
 @media (max-width: 900px), (max-height: 560px), (pointer: coarse) {
-    .metalDetectorHud {
-        left: 14px;
-        bottom: 112px;
-        padding: 7px 10px;
-        gap: 9px;
-        border-radius: 13px;
+    .metalDetectorHud,
+    .metalDetectorHud[data-level="weak"],
+    .metalDetectorHud[data-level="warm"],
+    .metalDetectorHud[data-level="hot"],
+    .metalDetectorHud[data-level="complete"] {
+        top: 6px;
+        bottom: auto;
+        left: calc(50% + 96px);
+        width: 54px;
+        height: 54px;
+        padding: 0;
+        gap: 0;
+        background: transparent;
+        border: none;
+        border-radius: 50%;
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        overflow: visible;
     }
+
     .mdCompassRing {
-        width: 40px;
-        height: 40px;
+        width: 54px;
+        height: 54px;
+        background: radial-gradient(circle at center, rgba(14, 165, 233, 0.16) 0%, rgba(7, 12, 20, 0.94) 74%);
+        border-color: rgba(148, 163, 184, 0.32);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), inset 0 0 12px rgba(0, 0, 0, 0.72);
     }
+
+    .metalDetectorHud[data-level="complete"] .mdCompassRing {
+        border-color: rgba(250, 204, 21, 0.85);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65), 0 0 12px rgba(250, 204, 21, 0.35);
+    }
+
+    .mdRadarArcSvg {
+        display: block;
+        position: absolute;
+        inset: -3px;
+        width: calc(100% + 6px);
+        height: calc(100% + 6px);
+        pointer-events: none;
+    }
+
+    .mdRadarArcSeg {
+        fill: none;
+        stroke: rgba(255, 255, 255, 0.12);
+        stroke-width: 3.6;
+        stroke-linecap: round;
+        transition: stroke 0.2s ease, filter 0.2s ease;
+    }
+
+    .mdRadarArcSeg.active {
+        stroke: #38bdf8;
+        filter: drop-shadow(0 0 3px rgba(56, 189, 248, 0.75));
+    }
+
+    .metalDetectorHud[data-level="warm"] .mdRadarArcSeg.active {
+        stroke: #f59e0b;
+        filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.8));
+    }
+
+    .metalDetectorHud[data-level="hot"] .mdRadarArcSeg.active {
+        stroke: #22c55e;
+        filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.9));
+    }
+
+    .metalDetectorHud[data-level="complete"] .mdRadarArcSeg.active {
+        stroke: #eab308;
+        filter: drop-shadow(0 0 3px rgba(234, 179, 8, 0.85));
+    }
+
+    .mdCompassCross {
+        inset: 8px;
+    }
+
+    .mdCompassNeedle {
+        width: 26px;
+        height: 26px;
+    }
+
     .mdCompassNeedle svg {
-        width: 28px;
-        height: 28px;
+        width: 26px;
+        height: 26px;
     }
-    .mdHudInfo {
-        min-width: 126px;
-        gap: 3px;
+
+    .mdCompassCenterDot {
+        width: 5px;
+        height: 5px;
     }
-    .mdHudTitle {
-        font-size: 0.58rem;
-    }
-    .mdHudCount {
-        font-size: 0.68rem;
-        padding: 1px 5px;
-    }
-    .mdSignalSeg {
-        height: 6px;
-    }
+
+    .mdHudInfo,
+    .mdHudTopRow,
     .mdHudBottomRow {
-        font-size: 0.68rem;
+        display: contents;
+    }
+
+    .mdHudTitle,
+    .mdSignalBars,
+    .mdSignalText {
+        display: none;
+    }
+
+    .mdHudCount {
+        position: absolute;
+        top: -3px;
+        right: -14px;
+        font-size: 0.58rem;
+        line-height: 1.2;
+        padding: 1px 5px;
+        border-radius: 999px;
+        background: rgba(7, 12, 20, 0.94);
+        border: 1px solid rgba(250, 204, 21, 0.65);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+        white-space: nowrap;
+        z-index: 2;
+    }
+
+    .mdDistanceText {
+        position: absolute;
+        left: 50%;
+        bottom: -8px;
+        transform: translateX(-50%);
+        font-size: 0.58rem;
+        line-height: 1.15;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: rgba(7, 12, 20, 0.94);
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+        z-index: 2;
+    }
+
+    .metalDetectorHud[data-level="warm"] .mdDistanceText {
+        color: #fde68a;
+        border-color: rgba(245, 158, 11, 0.65);
+    }
+
+    .metalDetectorHud[data-level="hot"] .mdDistanceText {
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.75);
+    }
+
+    .metalDetectorHud[data-level="complete"] .mdDistanceText {
+        color: #fef08a;
+        border-color: rgba(250, 204, 21, 0.75);
     }
 }
+
+@media (max-width: 650px), (max-height: 500px) {
+    .metalDetectorHud,
+    .metalDetectorHud[data-level="weak"],
+    .metalDetectorHud[data-level="warm"],
+    .metalDetectorHud[data-level="hot"],
+    .metalDetectorHud[data-level="complete"] {
+        top: 5px;
+        left: calc(50% + 74px);
+    }
+}
+
 
 
 

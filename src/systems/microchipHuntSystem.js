@@ -51,6 +51,7 @@ let hudSignalLabel = null;
 let hudDistanceLabel = null;
 let hudCountLabel = null;
 let hudSegments = [];
+let hudRadarArcs = [];
 let groundWaveRing = null;
 let wavePhase = 0;
 
@@ -269,6 +270,13 @@ function createDetectorHud() {
 
     hudRoot.innerHTML = `
         <div class="mdCompassRing" id="mdCompassDial">
+            <svg class="mdRadarArcSvg" viewBox="0 0 64 64" aria-hidden="true">
+                <circle class="mdRadarArcSeg" cx="32" cy="32" r="28" stroke-dasharray="27.37 148.56" transform="rotate(-82 32 32)" />
+                <circle class="mdRadarArcSeg" cx="32" cy="32" r="28" stroke-dasharray="27.37 148.56" transform="rotate(-10 32 32)" />
+                <circle class="mdRadarArcSeg" cx="32" cy="32" r="28" stroke-dasharray="27.37 148.56" transform="rotate(62 32 32)" />
+                <circle class="mdRadarArcSeg" cx="32" cy="32" r="28" stroke-dasharray="27.37 148.56" transform="rotate(134 32 32)" />
+                <circle class="mdRadarArcSeg" cx="32" cy="32" r="28" stroke-dasharray="27.37 148.56" transform="rotate(206 32 32)" />
+            </svg>
             <div class="mdCompassCross"></div>
             <div class="mdCompassNeedle" id="mdCompassNeedle">
                 <svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
@@ -304,6 +312,7 @@ function createDetectorHud() {
     hudDistanceLabel = hudRoot.querySelector('#mdDistanceLabel');
     hudCountLabel = hudRoot.querySelector('#mdHudCount');
     hudSegments = Array.from(hudRoot.querySelectorAll('.mdSignalSeg'));
+    hudRadarArcs = Array.from(hudRoot.querySelectorAll('.mdRadarArcSeg'));
 
     return hudRoot;
 }
@@ -383,6 +392,7 @@ function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, co
     if (!isHuntActive && collectedCount >= MICROCHIP_SPAWN_POINTS.length) {
         hudRoot.dataset.level = 'complete';
         hudSegments.forEach((seg) => seg.classList.add('active'));
+        hudRadarArcs.forEach((arc) => arc.classList.add('active'));
         if (hudSignalLabel) hudSignalLabel.textContent = '¡7/7 listos! Ve con Alto';
         if (hudDistanceLabel) hudDistanceLabel.textContent = '✓';
         if (hudCompassDial) hudCompassDial.classList.remove('hasSignal');
@@ -394,6 +404,7 @@ function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, co
     if (signalStrength <= 0 || !Number.isFinite(minDistance)) {
         hudRoot.dataset.level = 'none';
         hudSegments.forEach((seg) => seg.classList.remove('active'));
+        hudRadarArcs.forEach((arc) => arc.classList.remove('active'));
         if (hudSignalLabel) hudSignalLabel.textContent = isHuntActive ? 'Sin señal cercana' : 'En espera';
         if (hudDistanceLabel) hudDistanceLabel.textContent = `>${Math.round(MICROCHIP_DETECT_RANGE)} m`;
         if (hudCompassDial) hudCompassDial.classList.remove('hasSignal');
@@ -406,6 +417,9 @@ function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, co
     const activeSegments = Math.max(1, Math.min(5, Math.ceil(signalStrength * 5)));
     hudSegments.forEach((seg, idx) => {
         seg.classList.toggle('active', idx < activeSegments);
+    });
+    hudRadarArcs.forEach((arc, idx) => {
+        arc.classList.toggle('active', idx < activeSegments);
     });
 
     if (minDistance <= MICROCHIP_REVEAL_RANGE) {
