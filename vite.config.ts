@@ -544,6 +544,7 @@ export function getBundledCustomDocsList() {
           server.middlewares.use('/api/upload-pdf', async (req, res) => {
             const docsDir = path.resolve(__dirname, 'assets/docs');
             const publicDocsDir = path.resolve(__dirname, 'public/assets/docs');
+            const manifestFilename = 'docs_manifest.json';
 
             const sanitizePdfName = (rawName: string) => {
               const base = path.basename(String(rawName || '').trim());
@@ -556,8 +557,77 @@ export function getBundledCustomDocsList() {
               return clean;
             };
 
+            const sanitizeMetaText = (raw: unknown, maxLen: number = 120) =>
+              String(raw || '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, maxLen);
+
+            const inferDefaultMeta = (fname: string) => {
+              const lower = fname.toLowerCase();
+              if (lower === 'higiene_visual.pdf') {
+                return {
+                  missionId: 'mission002',
+                  missionLabel: 'Misión 2: El Registro de Entrada',
+                  title: 'Guía de Higiene Visual y Postural'
+                };
+              }
+              if (lower === 'control_tiempo.pdf') {
+                return {
+                  missionId: 'mission002',
+                  missionLabel: 'Misión 2: El Registro de Entrada',
+                  title: 'Sistema de Control de Tiempo'
+                };
+              }
+              const prefixMatch = lower.match(/^m(\d{2,3})_/);
+              if (prefixMatch) {
+                const num = Number(prefixMatch[1]);
+                const padded = String(num).padStart(3, '0');
+                return {
+                  missionId: `mission${padded}`,
+                  missionLabel: `Misión ${num}`,
+                  title: ''
+                };
+              }
+              return {
+                missionId: 'unassigned',
+                missionLabel: 'Sin misión asignada',
+                title: ''
+              };
+            };
+
+            type PdfManifestEntry = {
+              missionId: string;
+              missionLabel: string;
+              title: string;
+              updatedAt: number;
+            };
+
+            const readDocsManifest = (): Record<string, PdfManifestEntry> => {
+              const candidates = [
+                path.resolve(docsDir, manifestFilename),
+                path.resolve(publicDocsDir, manifestFilename)
+              ];
+              for (const p of candidates) {
+                try {
+                  if (!fs.existsSync(p)) continue;
+                  const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+                  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    return parsed as Record<string, PdfManifestEntry>;
+                  }
+                } catch (_) {}
+              }
+              return {};
+            };
+
+            const writeDocsManifest = (manifest: Record<string, PdfManifestEntry>) => {
+              const json = JSON.stringify(manifest, null, 2) + '\n';
+              fs.mkdirSync(docsDir, { recursive: true });
+              fs.mkdirSync(publicDocsDir, { recursive: true });
+              fs.writeFileSync(path.resolve(docsDir, manifestFilename), json, 'utf8');
+              fs.writeFileSync(path.resolve(publicDocsDir, manifestFilename), json, 'utf8');
+            };
+
             if (req.method === 'GET') {
               try {
+                const manifest = readDocsManifest();
                 const docsMap = new Map<string, {
                   filename: string;
                   url: string;
@@ -566,6 +636,9 @@ export function getBundledCustomDocsList() {
                   updatedAt: number;
                   inAssets: boolean;
                   inPublic: boolean;
+                  missionId: string;
+                  missionLabel: string;
+                  title: string;
                 }>();
 
                 const scanDir = (dir: string, sourceKey: 'inAssets' | 'inPublic') => {
@@ -577,6 +650,8 @@ export function getBundledCustomDocsList() {
                       const stat = fs.statSync(fullPath);
                       if (!stat.isFile()) continue;
                       const prev = docsMap.get(entry);
+                      const fallbackMeta = inferDefaultMeta(entry);
+                      const savedMeta = manifest[entry];
                       if (prev) {
                         prev[sourceKey] = true;
                         prev.size = Math.max(prev.size, stat.size);
@@ -589,7 +664,10 @@ export function getBundledCustomDocsList() {
                           size: stat.size,
                           updatedAt: stat.mtimeMs,
                           inAssets: sourceKey === 'inAssets',
-                          inPublic: sourceKey === 'inPublic'
+                          inPublic: sourceKey === 'inPublic',
+                          missionId: sanitizeMetaText(savedMeta?.missionId, 60) || fallbackMeta.missionId,
+                          missionLabel: sanitizeMetaText(savedMeta?.missionLabel, 120) || fallbackMeta.missionLabel,
+                          title: sanitizeMetaText(savedMeta?.title, 120) || fallbackMeta.title
                         });
                       }
                     } catch (_) {}
@@ -601,7 +679,7 @@ export function getBundledCustomDocsList() {
 
                 const docs = Array.from(docsMap.values()).sort((a, b) => a.filename.localeCompare(b.filename));
                 res.setHeader('Content-Type', 'application/json');
-                return res.end(JSON.stringify({ success: true, docs }));
+                return res.end(JSON.stringify({ success: true, docs, manifest }));
               } catch (err) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
@@ -612,7 +690,14 @@ export function getBundledCustomDocsList() {
             if (req.method === 'POST') {
               try {
                 const body = await readRequestBody(req);
-                const { filename, base64Data, overwrite = false } = JSON.parse(body || '{}');
+                const {
+                  filename,
+                  base64Data,
+                  overwrite = false,
+                  missionId,
+                  missionLabel,
+                  title
+                } = JSON.parse(body || '{}');
 
                 if (!filename || !base64Data) {
                   res.statusCode = 400;
@@ -638,6 +723,12 @@ export function getBundledCustomDocsList() {
 
                 const assetFilePath = path.resolve(docsDir, safeName);
                 const publicFilePath = path.resolve(publicDocsDir, safeName);
+                if (!assetFilePath.startsWith(docsDir + path.sep) || !publicFilePath.startsWith(publicDocsDir + path.sep)) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'Nombre de archivo no permitido.' }));
+                }
+
                 const alreadyExists = fs.existsSync(assetFilePath) || fs.existsSync(publicFilePath);
 
                 if (alreadyExists && !overwrite) {
@@ -655,6 +746,22 @@ export function getBundledCustomDocsList() {
                 fs.writeFileSync(assetFilePath, buffer);
                 fs.writeFileSync(publicFilePath, buffer);
 
+                const fallbackMeta = inferDefaultMeta(safeName);
+                const manifest = readDocsManifest();
+                const prevMeta = manifest[safeName];
+                const finalMissionId = sanitizeMetaText(missionId, 60) || prevMeta?.missionId || fallbackMeta.missionId;
+                const finalMissionLabel = sanitizeMetaText(missionLabel, 120) || prevMeta?.missionLabel || fallbackMeta.missionLabel;
+                const finalTitle = sanitizeMetaText(title, 120) || prevMeta?.title || fallbackMeta.title;
+                const now = Date.now();
+
+                manifest[safeName] = {
+                  missionId: finalMissionId,
+                  missionLabel: finalMissionLabel,
+                  title: finalTitle,
+                  updatedAt: now
+                };
+                writeDocsManifest(manifest);
+
                 const bundleStats = writeCustomAssetsBundle();
 
                 res.setHeader('Content-Type', 'application/json');
@@ -664,8 +771,60 @@ export function getBundledCustomDocsList() {
                   url: `./assets/docs/${encodeURIComponent(safeName)}`,
                   assetPath: `assets/docs/${safeName}`,
                   size: buffer.length,
-                  updatedAt: Date.now(),
+                  updatedAt: now,
+                  missionId: finalMissionId,
+                  missionLabel: finalMissionLabel,
+                  title: finalTitle,
                   bundleStats
+                }));
+              } catch (err) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({ error: String(err) }));
+              }
+            }
+
+            if (req.method === 'PATCH') {
+              try {
+                const body = await readRequestBody(req);
+                const { filename, missionId, missionLabel, title } = JSON.parse(body || '{}');
+                if (!filename) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: 'filename es requerido' }));
+                }
+                const safeName = sanitizePdfName(filename);
+                const assetFilePath = path.resolve(docsDir, safeName);
+                const publicFilePath = path.resolve(publicDocsDir, safeName);
+                if (!fs.existsSync(assetFilePath) && !fs.existsSync(publicFilePath)) {
+                  res.statusCode = 404;
+                  res.setHeader('Content-Type', 'application/json');
+                  return res.end(JSON.stringify({ error: `No existe el archivo "${safeName}".` }));
+                }
+
+                const fallbackMeta = inferDefaultMeta(safeName);
+                const manifest = readDocsManifest();
+                const prevMeta = manifest[safeName];
+                const finalMissionId = sanitizeMetaText(missionId, 60) || prevMeta?.missionId || fallbackMeta.missionId;
+                const finalMissionLabel = sanitizeMetaText(missionLabel, 120) || prevMeta?.missionLabel || fallbackMeta.missionLabel;
+                const finalTitle = title !== undefined
+                  ? sanitizeMetaText(title, 120)
+                  : (prevMeta?.title || fallbackMeta.title);
+                const now = Date.now();
+
+                manifest[safeName] = {
+                  missionId: finalMissionId,
+                  missionLabel: finalMissionLabel,
+                  title: finalTitle,
+                  updatedAt: now
+                };
+                writeDocsManifest(manifest);
+
+                res.setHeader('Content-Type', 'application/json');
+                return res.end(JSON.stringify({
+                  success: true,
+                  filename: safeName,
+                  entry: manifest[safeName]
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -686,6 +845,11 @@ export function getBundledCustomDocsList() {
                     deleted = true;
                   }
                 });
+                const manifest = readDocsManifest();
+                if (manifest[safeName]) {
+                  delete manifest[safeName];
+                  writeDocsManifest(manifest);
+                }
                 const bundleStats = writeCustomAssetsBundle({ deletedDoc: safeName, allowEmptyDocs: true });
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({ success: true, deleted, filename: safeName, bundleStats }));

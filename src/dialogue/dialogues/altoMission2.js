@@ -45,7 +45,7 @@ export const altoMission2TurnInDialogue = {
 
         '¡Excelente trabajo! Has encontrado los 7 microchips. Te agradezco enormemente la ayuda, ahora mismo los coloco en su sitio.',
 
-        'Estos microchips eran indispensables para activar tu Sistema de Control de Tiempo de Juego. A partir de este momento, queda integrado de forma automática entre los sistemas propios de tu interfaz de Aspirante, tal y me ocurrió con el Registro.',
+        'Estos microchips eran indispensables para activar tu Sistema de Control de Tiempo de Juego. A partir de este momento, queda integrado de forma automática entre los sistemas propios de tu interfaz de Aspirante, tal y como ocurrió con el Registro.',
 
         'Para que conozcas a fondo cómo cuidarte mientras juegas y aprendes con nosotros, te acabo de enviar dos documentos a tu Registro: uno sobre higiene visual y buenas costumbres posturales, y otro con el resumen explicativo de tu nuevo sistema de control de tiempo.',
 

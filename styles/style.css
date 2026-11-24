@@ -5551,6 +5551,109 @@ body.registry-open .devSuiteTriggerBtn,
     border-color:#dc2626;
 }
 
+.devPdfFilterSelect{
+    background:rgba(15, 25, 20, 0.95);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    color:#e2e8f0;
+    border-radius:5px;
+    padding:3px 7px;
+    font-size:0.68rem;
+    font-weight:600;
+    max-width:165px;
+    outline:none;
+}
+
+.devPdfFilterSelect:focus{
+    border-color:#ffd54f;
+}
+
+.devPdfMissionGroup{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    margin-bottom:6px;
+}
+
+.devPdfMissionGroup:last-child{
+    margin-bottom:0;
+}
+
+.devPdfMissionGroupHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:4px 8px;
+    border-radius:5px;
+    background:rgba(212, 175, 55, 0.12);
+    border-left:3px solid #ffd54f;
+    font-size:0.71rem;
+    font-weight:700;
+    color:#ffd54f;
+}
+
+.devPdfMissionGroupCount{
+    background:rgba(0, 0, 0, 0.35);
+    border:1px solid rgba(212, 175, 55, 0.3);
+    border-radius:999px;
+    padding:1px 7px;
+    font-size:0.64rem;
+    color:#fff8e7;
+}
+
+.devPdfItemTitle{
+    font-size:0.69rem;
+    color:#cbd5e1;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.devPdfLinkBadge{
+    padding:1px 5px;
+    border-radius:4px;
+    font-size:0.63rem;
+    font-weight:700;
+    background:rgba(56, 189, 248, 0.16);
+    color:#7dd3fc;
+    border:1px solid rgba(56, 189, 248, 0.35);
+}
+
+.devPdfLinkBadge.pending{
+    background:rgba(245, 158, 11, 0.14);
+    color:#fcd34d;
+    border-color:rgba(245, 158, 11, 0.32);
+}
+
+.devPdfActionRow{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+}
+
+.devSecondaryBtn{
+    background:rgba(255, 255, 255, 0.06);
+    border:1px solid rgba(212, 175, 55, 0.4);
+    color:#ffd54f;
+    border-radius:6px;
+    padding:7px 10px;
+    font-size:0.72rem;
+    font-weight:700;
+    cursor:pointer;
+    transition:all 0.15s ease;
+    width:100%;
+}
+
+.devSecondaryBtn:hover:not(:disabled){
+    background:rgba(212, 175, 55, 0.18);
+    border-color:#ffd54f;
+}
+
+.devSecondaryBtn:disabled{
+    opacity:0.45;
+    cursor:not-allowed;
+}
+
 .devToast{
     position:fixed;
     bottom:20px;
