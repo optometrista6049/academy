@@ -609,9 +609,6 @@ export function tryInteraction(){
                     startDialogue(altoMission2WaitingDialogue);
                 } else {
                     removeInventoryItem('microchip');
-                    addInventoryItem('visualHygieneDoc');
-                    addInventoryItem('timeControlDoc');
-                    unlockBatterySystem(true);
                     gameState.flags.deliveredMicrochips = true;
                     gameState.quests.mission_002 = 'completed';
                     completeObjective('findMicrochips');
@@ -628,31 +625,46 @@ export function tryInteraction(){
                     });
                     saveGame();
 
+                    let batteryActivated = false;
                     let docsBannerShown = false;
+
+                    const activateBatteryStep = () => {
+                        if (batteryActivated) return;
+                        batteryActivated = true;
+                        unlockBatterySystem(true);
+                        saveGame();
+                    };
+
+                    const grantDocsStep = () => {
+                        if (docsBannerShown) return;
+                        docsBannerShown = true;
+                        addInventoryItem('visualHygieneDoc');
+                        addInventoryItem('timeControlDoc');
+                        showItemObtainedBanner({
+                            title: '¡Documentos Recibidos!',
+                            itemName: '2 Guías Oficiales (PDF)',
+                            subtitle: 'Disponibles en tu Registro para abrir o archivar',
+                            thumbnail: 'assets/registry/inventory/docTimeControl.svg'
+                        });
+                        updateDiaryContent();
+                        saveGame();
+                    };
+
                     startDialogue({
                         ...altoMission2TurnInDialogue,
                         onPageChange(pageIndex) {
-                            if (pageIndex === 2 && !docsBannerShown) {
-                                docsBannerShown = true;
-                                showItemObtainedBanner({
-                                    title: '¡Documentos Recibidos!',
-                                    itemName: '2 Guías Oficiales (PDF)',
-                                    subtitle: 'Disponibles en tu Registro para abrir o archivar',
-                                    thumbnail: 'assets/registry/inventory/docTimeControl.svg'
-                                });
+                            if (pageIndex === 1) {
+                                activateBatteryStep();
+                            } else if (pageIndex === 2) {
+                                activateBatteryStep();
+                                grantDocsStep();
                             }
                         },
                         onComplete() {
-                            if (!docsBannerShown) {
-                                docsBannerShown = true;
-                                showItemObtainedBanner({
-                                    title: '¡Registro Completado!',
-                                    itemName: 'Control de Tiempo y Guías PDF',
-                                    subtitle: 'Sistema activado y documentos en Registro',
-                                    thumbnail: 'assets/registry/inventory/docTimeControl.svg'
-                                });
-                            }
+                            activateBatteryStep();
+                            grantDocsStep();
                             updateDiaryContent();
+                            saveGame();
                         }
                     });
                 }

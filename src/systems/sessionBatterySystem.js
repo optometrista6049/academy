@@ -11,6 +11,7 @@ import { saveGame } from './saveSystem.js';
 import { DEV_CONFIG } from '../config/devConfig.js';
 import { mountRestRobot3DStage, unmountRestRobot3DStage } from './restRobot3DStage.js';
 import { triggerFullscreen } from '../mobile/screenLockManager.js';
+import { isRegistryOpen } from '../ui/registry/registryUI.js';
 
 export const BATTERY_CONFIG = {
     MAX_SESSION_SEC: 60 * 60,         // 60 minutos = 3600 seg
@@ -295,7 +296,9 @@ export function updateSessionBattery(delta) {
         return;
     }
 
-    if (hudElement) hudElement.style.display = 'flex';
+    if (hudElement) {
+        hudElement.style.display = isRegistryOpen() ? 'none' : 'flex';
+    }
 
     // 1. Si está en enfriamiento de 3 horas
     if (isCooldownActive()) {

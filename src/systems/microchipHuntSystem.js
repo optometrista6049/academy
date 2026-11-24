@@ -60,6 +60,25 @@ let beepAudioCtx = null;
 let nextBeepAt = 0;
 let detectorElapsed = 0;
 
+const metalScanProviders = [];
+
+export function registerMetalScanProvider(provider) {
+    if (!provider || !provider.id) return;
+    const idx = metalScanProviders.findIndex((p) => p.id === provider.id);
+    if (idx >= 0) {
+        metalScanProviders[idx] = provider;
+    } else {
+        metalScanProviders.push(provider);
+    }
+}
+
+export function unregisterMetalScanProvider(providerId) {
+    const idx = metalScanProviders.findIndex((p) => p.id === providerId);
+    if (idx >= 0) {
+        metalScanProviders.splice(idx, 1);
+    }
+}
+
 const tmpCamDir = new THREE.Vector3();
 
 function ensureCollectedArray() {
@@ -366,7 +385,20 @@ function updateDetector3DMeshFeedback(signalStrength, isClose, elapsed) {
     });
 }
 
-function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, collectedCount, isHuntActive) {
+function updateHudVisuals(
+    equipped,
+    signalStrength,
+    minDistance,
+    relAngleDeg,
+    {
+        counterText = null,
+        waitingTurnIn = false,
+        hasActiveTargets = false,
+        detectRange = MICROCHIP_DETECT_RANGE,
+        closeRange = MICROCHIP_REVEAL_RANGE,
+        pickupRange = MICROCHIP_PICKUP_RANGE
+    } = {}
+) {
     if (!hudRoot) createDetectorHud();
 
     const shouldHideForUI =
@@ -385,11 +417,17 @@ function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, co
     hudRoot.style.display = 'flex';
 
     if (hudCountLabel) {
-        hudCountLabel.textContent = `${collectedCount} / ${MICROCHIP_SPAWN_POINTS.length}`;
+        if (counterText) {
+            hudCountLabel.style.display = '';
+            hudCountLabel.textContent = counterText;
+        } else {
+            hudCountLabel.style.display = 'none';
+            hudCountLabel.textContent = '';
+        }
     }
 
-    // Todos recogidos
-    if (!isHuntActive && collectedCount >= MICROCHIP_SPAWN_POINTS.length) {
+    // Misión 2 completada en recogida (7/7 reunidos, pendiente entregar a Alto)
+    if (waitingTurnIn) {
         hudRoot.dataset.level = 'complete';
         hudSegments.forEach((seg) => seg.classList.add('active'));
         hudRadarArcs.forEach((arc) => arc.classList.add('active'));
@@ -400,13 +438,23 @@ function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, co
         return;
     }
 
-    // Aún no activa la búsqueda o sin chips cerca (>45m)
+    // Sin objetivos en rango o escáner en modo libre
     if (signalStrength <= 0 || !Number.isFinite(minDistance)) {
         hudRoot.dataset.level = 'none';
         hudSegments.forEach((seg) => seg.classList.remove('active'));
         hudRadarArcs.forEach((arc) => arc.classList.remove('active'));
-        if (hudSignalLabel) hudSignalLabel.textContent = isHuntActive ? 'Sin señal cercana' : 'En espera';
-        if (hudDistanceLabel) hudDistanceLabel.textContent = `>${Math.round(MICROCHIP_DETECT_RANGE)} m`;
+        if (hudSignalLabel) {
+            if (hasActiveTargets) {
+                hudSignalLabel.textContent = 'Sin señal cercana';
+            } else if (gameState.flags?.deliveredMicrochips) {
+                hudSignalLabel.textContent = 'Escáner libre · Sin señal';
+            } else {
+                hudSignalLabel.textContent = 'En espera';
+            }
+        }
+        if (hudDistanceLabel) {
+            hudDistanceLabel.textContent = hasActiveTargets ? `>${Math.round(detectRange)} m` : '-- m';
+        }
         if (hudCompassDial) hudCompassDial.classList.remove('hasSignal');
         if (hudCompassNeedle) {
             hudCompassNeedle.style.opacity = '0.25';
@@ -422,9 +470,9 @@ function updateHudVisuals(equipped, signalStrength, minDistance, relAngleDeg, co
         arc.classList.toggle('active', idx < activeSegments);
     });
 
-    if (minDistance <= MICROCHIP_REVEAL_RANGE) {
+    if (minDistance <= closeRange) {
         hudRoot.dataset.level = 'hot';
-        if (hudSignalLabel) hudSignalLabel.textContent = minDistance <= MICROCHIP_PICKUP_RANGE ? '¡Justo aquí!' : '¡Señal muy fuerte!';
+        if (hudSignalLabel) hudSignalLabel.textContent = minDistance <= pickupRange ? '¡Justo aquí!' : '¡Señal muy fuerte!';
     } else if (signalStrength >= 0.45) {
         hudRoot.dataset.level = 'warm';
         if (hudSignalLabel) hudSignalLabel.textContent = 'Señal media';
@@ -504,7 +552,7 @@ export function updateMicrochipHuntSystem(delta = 0.016) {
         Math.max(ensureCollectedArray().length, getInventoryItemCount('microchip'))
     );
 
-    if (!player || !equipped || !huntPhase || collectedCount >= MICROCHIP_SPAWN_POINTS.length) {
+    if (!player || !equipped) {
         chipNodes.forEach((node) => {
             node.mesh.visible = false;
             node.mesh.userData.revealScale = 0.01;
@@ -513,92 +561,134 @@ export function updateMicrochipHuntSystem(delta = 0.016) {
             groundWaveRing.visible = false;
         }
         updateDetector3DMeshFeedback(0, false, detectorElapsed);
-        updateHudVisuals(equipped, 0, Infinity, 0, collectedCount, huntPhase);
+        updateHudVisuals(equipped, 0, Infinity, 0);
         return;
     }
 
     const px = player.position.x;
     const pz = player.position.z;
 
-    let nearestNode = null;
+    let nearestTarget = null;
     let nearestDist = Infinity;
-    let nearestPickupCandidate = null;
-    let nearestPickupDist = Infinity;
+    let detectRange = MICROCHIP_DETECT_RANGE;
+    let closeRange = MICROCHIP_REVEAL_RANGE;
+    let pickupRange = MICROCHIP_PICKUP_RANGE;
+    let counterText = null;
+    let waitingTurnIn = false;
+    let hasActiveTargets = false;
 
-    chipNodes.forEach((node) => {
-        if (node.collected) {
-            node.mesh.visible = false;
-            return;
-        }
+    if (huntPhase) {
+        counterText = `${collectedCount} / ${MICROCHIP_SPAWN_POINTS.length}`;
 
-        const dx = node.x - px;
-        const dz = node.z - pz;
-        const dist = Math.hypot(dx, dz);
-
-        if (dist < nearestDist) {
-            nearestDist = dist;
-            nearestNode = node;
-        }
-
-        if (dist <= MICROCHIP_PICKUP_RANGE && dist < nearestPickupDist) {
-            nearestPickupDist = dist;
-            nearestPickupCandidate = node;
-        }
-
-        // Revelar microchip en el suelo solo al acercarse (< 6 m) con el detector equipado
-        if (dist <= MICROCHIP_REVEAL_RANGE) {
-            node.mesh.visible = true;
-            const ud = node.mesh.userData;
-            ud.revealScale = Math.min(1, ud.revealScale + delta * 5.0);
-            node.mesh.scale.setScalar(ud.revealScale);
-
-            // Giro suave y flotación
-            if (ud.chipSpinGroup) {
-                ud.chipSpinGroup.rotation.y += delta * 2.2;
-                ud.chipSpinGroup.position.y = 0.28 + Math.sin(detectorElapsed * 3.4 + node.index) * 0.05;
-            }
-            // Pulso luminoso del anillo y haz en el suelo
-            const pulse = 0.5 + 0.5 * Math.sin(detectorElapsed * 5.0 + node.index);
-            if (ud.ring && ud.ringMat) {
-                const s = 0.9 + pulse * 0.35;
-                ud.ring.scale.set(s, s, 1);
-                ud.ringMat.opacity = 0.45 + pulse * 0.45;
-            }
-            if (ud.beamMat) {
-                ud.beamMat.opacity = 0.14 + pulse * 0.18;
-            }
+        if (collectedCount >= MICROCHIP_SPAWN_POINTS.length) {
+            waitingTurnIn = true;
+            chipNodes.forEach((node) => {
+                node.mesh.visible = false;
+                node.mesh.userData.revealScale = 0.01;
+            });
         } else {
+            hasActiveTargets = true;
+            let nearestPickupCandidate = null;
+            let nearestPickupDist = Infinity;
+
+            chipNodes.forEach((node) => {
+                if (node.collected) {
+                    node.mesh.visible = false;
+                    return;
+                }
+
+                const dx = node.x - px;
+                const dz = node.z - pz;
+                const dist = Math.hypot(dx, dz);
+
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestTarget = node;
+                }
+
+                if (dist <= MICROCHIP_PICKUP_RANGE && dist < nearestPickupDist) {
+                    nearestPickupDist = dist;
+                    nearestPickupCandidate = node;
+                }
+
+                // Revelar microchip en el suelo solo al acercarse (< 6 m) con el detector equipado
+                if (dist <= MICROCHIP_REVEAL_RANGE) {
+                    node.mesh.visible = true;
+                    const ud = node.mesh.userData;
+                    ud.revealScale = Math.min(1, ud.revealScale + delta * 5.0);
+                    node.mesh.scale.setScalar(ud.revealScale);
+
+                    if (ud.chipSpinGroup) {
+                        ud.chipSpinGroup.rotation.y += delta * 2.2;
+                        ud.chipSpinGroup.position.y = 0.28 + Math.sin(detectorElapsed * 3.4 + node.index) * 0.05;
+                    }
+                    const pulse = 0.5 + 0.5 * Math.sin(detectorElapsed * 5.0 + node.index);
+                    if (ud.ring && ud.ringMat) {
+                        const s = 0.9 + pulse * 0.35;
+                        ud.ring.scale.set(s, s, 1);
+                        ud.ringMat.opacity = 0.45 + pulse * 0.45;
+                    }
+                    if (ud.beamMat) {
+                        ud.beamMat.opacity = 0.14 + pulse * 0.18;
+                    }
+                } else {
+                    node.mesh.visible = false;
+                    node.mesh.userData.revealScale = 0.01;
+                }
+            });
+
+            activePickupChip = nearestPickupCandidate;
+        }
+    } else {
+        // Misión 2 finalizada o aún no iniciada: ocultar chips de Misión 2 y consultar misiones futuras
+        chipNodes.forEach((node) => {
             node.mesh.visible = false;
             node.mesh.userData.revealScale = 0.01;
-        }
-    });
+        });
 
-    activePickupChip = nearestPickupCandidate;
+        const activeProvider = metalScanProviders.find((p) => typeof p.isActive === 'function' && p.isActive());
+        if (activeProvider && typeof activeProvider.getTargets === 'function') {
+            const targets = activeProvider.getTargets() || [];
+            detectRange = Number(activeProvider.detectRange) || MICROCHIP_DETECT_RANGE;
+            closeRange = Number(activeProvider.closeRange) || MICROCHIP_REVEAL_RANGE;
+            pickupRange = Number(activeProvider.pickupRange) || MICROCHIP_PICKUP_RANGE;
+            if (typeof activeProvider.getCounterText === 'function') {
+                counterText = activeProvider.getCounterText();
+            }
+
+            targets.forEach((t) => {
+                if (!t || t.collected || typeof t.x !== 'number' || typeof t.z !== 'number') return;
+                hasActiveTargets = true;
+                const dist = Math.hypot(t.x - px, t.z - pz);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestTarget = t;
+                }
+            });
+        }
+    }
 
     let signalStrength = 0;
     let relAngleDeg = 0;
 
-    if (nearestNode && nearestDist <= MICROCHIP_DETECT_RANGE) {
-        signalStrength = Math.max(0.05, 1.0 - (nearestDist / MICROCHIP_DETECT_RANGE));
+    if (nearestTarget && nearestDist <= detectRange) {
+        signalStrength = Math.max(0.05, 1.0 - (nearestDist / detectRange));
 
-        // Calcular ángulo relativo respecto a la orientación actual de cámara en pantalla
         camera.getWorldDirection(tmpCamDir);
         const fLen = Math.hypot(tmpCamDir.x, tmpCamDir.z) || 1;
         const fx = tmpCamDir.x / fLen;
         const fz = tmpCamDir.z / fLen;
-        const dx = nearestNode.x - px;
-        const dz = nearestNode.z - pz;
+        const dx = nearestTarget.x - px;
+        const dz = nearestTarget.z - pz;
         const forwardComp = dx * fx + dz * fz;
         const rightComp = dx * (-fz) + dz * fx;
         relAngleDeg = Math.atan2(rightComp, forwardComp) * (180 / Math.PI);
     }
 
-    const isClose = nearestDist <= MICROCHIP_REVEAL_RANGE;
+    const isClose = nearestDist <= closeRange;
 
-    // Feedback 3D en pantalla LCD + bobina del detector equipado
     updateDetector3DMeshFeedback(signalStrength, isClose, detectorElapsed);
 
-    // Onda expansiva en el suelo bajo el robot cuando hay señal detectada
     if (groundWaveRing) {
         if (signalStrength > 0.12 && !dialogueState.active && !isInputLocked() && !isRegistryOpen()) {
             wavePhase = (wavePhase + delta * (0.9 + signalStrength * 2.2)) % 1.0;
@@ -614,7 +704,6 @@ export function updateMicrochipHuntSystem(delta = 0.016) {
         }
     }
 
-    // Pitidos Web Audio progresivos (silenciados en diálogos/menús/pausa)
     const canPlayAudio =
         signalStrength > 0 &&
         !dialogueState.active &&
@@ -628,12 +717,19 @@ export function updateMicrochipHuntSystem(delta = 0.016) {
         const nowMs = performance.now();
         if (nowMs >= nextBeepAt) {
             playDetectorBeep(signalStrength);
-            const intervalMs = 1350 - signalStrength * 1160; // ~1.35s lejos -> ~0.19s encima
+            const intervalMs = 1350 - signalStrength * 1160;
             nextBeepAt = nowMs + Math.max(170, intervalMs);
         }
     }
 
-    updateHudVisuals(equipped, signalStrength, nearestDist, relAngleDeg, collectedCount, huntPhase);
+    updateHudVisuals(equipped, signalStrength, nearestDist, relAngleDeg, {
+        counterText,
+        waitingTurnIn,
+        hasActiveTargets,
+        detectRange,
+        closeRange,
+        pickupRange
+    });
 }
 
 export function getNearbyMicrochipTarget() {

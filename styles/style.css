@@ -3596,10 +3596,11 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
 .documentViewerContainer{
     display:flex;
     flex-direction:column;
-    align-items:center;
-    justify-content:center;
+    align-items:stretch;
+    justify-content:flex-start;
     max-width:96vw;
     max-height:96vh;
+    max-height:96dvh;
     width:auto;
     height:auto;
     background:rgba(20, 15, 11, 0.96);
@@ -3614,18 +3615,21 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     display:flex;
     align-items:center;
     justify-content:space-between;
+    flex-shrink:0;
     width:100%;
     padding:0.6rem 1.2rem;
     background:rgba(32, 22, 15, 0.95);
     border-bottom:1px solid rgba(214, 176, 106, 0.3);
     box-sizing:border-box;
     z-index:5;
+    gap:12px;
 }
 
 .documentViewerTitleArea{
     display:flex;
     align-items:center;
     gap:10px;
+    min-width:0;
 }
 
 .documentViewerTitle{
@@ -3634,6 +3638,9 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     color:#f2d08a;
     letter-spacing:0.04em;
     text-transform:uppercase;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
 }
 
 .documentViewerZoomBadge{
@@ -3645,12 +3652,36 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     border:1px solid rgba(214, 176, 106, 0.35);
     padding:2px 7px;
     border-radius:12px;
+    flex-shrink:0;
 }
 
 .documentViewerToolbar{
     display:flex;
     align-items:center;
     gap:8px;
+    flex-shrink:0;
+}
+
+.viewerPdfControls{
+    display:none;
+    align-items:center;
+    gap:6px;
+    padding-right:6px;
+    margin-right:2px;
+    border-right:1px solid rgba(214, 176, 106, 0.25);
+}
+
+.viewerPdfPageBadge{
+    font-family:monospace, system-ui, sans-serif;
+    font-size:0.76rem;
+    font-weight:700;
+    color:#f8fafc;
+    background:rgba(255, 255, 255, 0.08);
+    border:1px solid rgba(214, 176, 106, 0.3);
+    padding:3px 8px;
+    border-radius:8px;
+    min-width:38px;
+    text-align:center;
 }
 
 .viewerToolBtn{
@@ -3668,17 +3699,30 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     justify-content:center;
     cursor:pointer;
     transition:all 0.15s ease;
+    flex-shrink:0;
 }
 
-.viewerToolBtn:hover{
+.viewerToolBtn:hover:not(:disabled){
     background:rgba(214, 176, 106, 0.3);
     border-color:#f2d08a;
     color:#fff;
     transform:scale(1.05);
 }
 
-.viewerToolBtn:active{
+.viewerToolBtn:active:not(:disabled){
     transform:scale(0.95);
+}
+
+.viewerToolBtn:disabled{
+    opacity:0.32;
+    cursor:default;
+}
+
+.viewerToolBtn.activeMode{
+    background:rgba(214, 176, 106, 0.32);
+    border-color:#ffd54f;
+    color:#fff;
+    box-shadow:0 0 10px rgba(214, 176, 106, 0.35);
 }
 
 .viewerResetBtn{
@@ -3700,6 +3744,7 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     cursor:pointer;
     transition:all 0.18s ease;
     margin-left:4px;
+    flex-shrink:0;
 }
 
 .documentViewerCloseBtn:hover{
@@ -3714,21 +3759,24 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
 }
 
 .documentViewerFrame{
+    flex:1;
+    min-width:0;
+    min-height:0;
     display:flex;
     align-items:center;
     justify-content:center;
     width:100%;
     padding:clamp(6px, 1.2vw, 14px);
     background:rgba(0, 0, 0, 0.45);
-    max-height:calc(96vh - 58px);
     box-sizing:border-box;
     overflow:hidden;
     touch-action:none;
+    position:relative;
 }
 
 .documentViewerImage{
-    max-width:88vw;
-    max-height:calc(92vh - 75px);
+    max-width:100%;
+    max-height:calc(92vh - 82px);
     width:auto;
     height:auto;
     object-fit:contain;
@@ -3742,31 +3790,73 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
 }
 
 .documentViewerContainer.pdfMode{
-    width:min(92vw, 1024px);
-    height:88vh;
-    height:88dvh;
+    width:min(94vw, 1080px);
+    height:90vh;
+    height:90dvh;
 }
 
 .documentViewerFrame.pdfMode{
     flex:1;
     width:100%;
     height:100%;
-    max-height:none;
-    padding:8px;
-    touch-action:auto;
+    padding:10px;
+    overflow:hidden;
+    touch-action:pan-x pan-y;
 }
 
-.documentViewerPdfFrame{
-    width:100%;
-    height:100%;
-    border:none;
+.documentViewerFrame.pdfMode.pdfScrollable{
+    overflow:auto;
+    align-items:flex-start;
+    justify-content:flex-start;
+    -webkit-overflow-scrolling:touch;
+}
+
+.documentViewerPdfStage{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-width:100%;
+    min-height:100%;
+    position:relative;
+}
+
+.documentViewerFrame.pdfMode.pdfScrollable .documentViewerPdfStage{
+    min-width:max-content;
+    margin:0 auto;
+}
+
+.documentViewerPdfCanvas{
+    display:block;
+    background:#ffffff;
+    border-radius:6px;
+    box-shadow:0 6px 28px rgba(0, 0, 0, 0.72);
+    transform-origin:center center;
+    will-change:transform;
+}
+
+.documentViewerPdfStatus{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:20px;
+    color:#f2d08a;
+    font-size:0.95rem;
+    font-weight:600;
+    background:rgba(10, 8, 6, 0.7);
     border-radius:8px;
-    background:#1e293b;
+}
+
+.documentViewerPdfStatus.error{
+    color:#fca5a5;
 }
 
 /* =========================================================
-   DOCUMENT VIEWER · RESPONSIVE MÓVIL (PANTALLA COMPLETA 100%)
-   Horizontal (Landscape) y Vertical (Portrait) en smartphones
+   DOCUMENT VIEWER · RESPONSIVE MÓVIL (SIN SOLAPAMIENTOS)
+   - En Vertical (Portrait): Barra arriba en flujo Flex normal
+   - En Apaisado (Landscape): Rail vertical en lateral derecho
    ========================================================= */
 @media (max-width: 900px), (max-height: 560px) {
     .documentViewerOverlay{
@@ -3774,7 +3864,8 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
         background:rgba(3, 3, 4, 0.98) !important;
     }
 
-    .documentViewerContainer{
+    .documentViewerContainer,
+    .documentViewerContainer.pdfMode{
         width:100vw !important;
         height:100vh !important;
         height:100dvh !important;
@@ -3788,63 +3879,135 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     }
 
     .documentViewerHeader{
-        position:absolute !important;
-        top:0 !important;
-        left:0 !important;
-        right:0 !important;
-        padding:8px 12px !important;
-        background:linear-gradient(180deg, rgba(12, 9, 6, 0.88) 0%, rgba(12, 9, 6, 0.5) 80%, transparent 100%) !important;
-        border-bottom:none !important;
-        backdrop-filter:blur(8px) !important;
-        -webkit-backdrop-filter:blur(8px) !important;
+        position:relative !important;
+        padding:8px 10px !important;
+        background:rgba(16, 12, 8, 0.96) !important;
+        border-bottom:1px solid rgba(214, 176, 106, 0.28) !important;
     }
 
     .documentViewerTitle{
         font-size:0.8rem !important;
-        max-width:38vw !important;
-        white-space:nowrap !important;
-        overflow:hidden !important;
-        text-overflow:ellipsis !important;
+        max-width:34vw !important;
     }
 
-    .documentViewerFrame{
-        width:100vw !important;
-        height:100vh !important;
-        height:100dvh !important;
-        max-height:100vh !important;
-        max-height:100dvh !important;
-        padding:0 !important;
+    .documentViewerFrame,
+    .documentViewerFrame.pdfMode{
+        flex:1 !important;
+        min-width:0 !important;
+        min-height:0 !important;
+        width:100% !important;
+        height:auto !important;
+        max-height:none !important;
+        padding:6px !important;
         background:transparent !important;
     }
 
-    .documentViewerFrame.pdfMode{
-        padding:52px 0 0 0 !important;
-        box-sizing:border-box !important;
-    }
-
     .documentViewerImage{
-        max-width:100vw !important;
-        max-height:100vh !important;
-        max-height:100dvh !important;
-        width:100% !important;
-        height:100% !important;
+        max-width:100% !important;
+        max-height:100% !important;
+        width:auto !important;
+        height:auto !important;
         object-fit:contain !important;
-        border-radius:0 !important;
+        border-radius:4px !important;
         box-shadow:none !important;
     }
 
     .documentViewerCloseBtn{
-        width:42px !important;
-        height:42px !important;
-        font-size:1.85rem !important;
+        width:36px !important;
+        height:36px !important;
+        font-size:1.6rem !important;
         background:rgba(239, 68, 68, 0.3) !important;
         border-color:rgba(239, 68, 68, 0.6) !important;
     }
 
     .viewerToolBtn{
-        width:34px !important;
-        height:34px !important;
-        font-size:1.05rem !important;
+        width:32px !important;
+        height:32px !important;
+        font-size:1rem !important;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 560px), (orientation: landscape) and (max-width: 900px) {
+    .documentViewerContainer,
+    .documentViewerContainer.pdfMode{
+        flex-direction:row !important;
+        align-items:stretch !important;
+    }
+
+    .documentViewerFrame,
+    .documentViewerFrame.pdfMode{
+        order:1 !important;
+        flex:1 !important;
+        width:auto !important;
+        height:100% !important;
+        padding:6px !important;
+    }
+
+    .documentViewerHeader{
+        order:2 !important;
+        width:58px !important;
+        height:100% !important;
+        flex-direction:column !important;
+        justify-content:space-between !important;
+        align-items:center !important;
+        padding:8px 4px !important;
+        border-bottom:none !important;
+        border-left:1px solid rgba(214, 176, 106, 0.32) !important;
+        overflow-y:auto !important;
+        gap:6px !important;
+    }
+
+    .documentViewerTitle{
+        display:none !important;
+    }
+
+    .documentViewerTitleArea{
+        order:2 !important;
+        justify-content:center !important;
+        width:100%;
+    }
+
+    .documentViewerZoomBadge{
+        font-size:0.66rem !important;
+        padding:2px 5px !important;
+    }
+
+    .documentViewerToolbar{
+        order:1 !important;
+        flex-direction:column !important;
+        align-items:center !important;
+        gap:5px !important;
+        width:100%;
+    }
+
+    .documentViewerCloseBtn{
+        order:-1 !important;
+        margin-left:0 !important;
+        margin-bottom:3px !important;
+    }
+
+    .viewerPdfControls{
+        flex-direction:column !important;
+        align-items:center !important;
+        gap:4px !important;
+        padding-right:0 !important;
+        margin-right:0 !important;
+        padding-bottom:5px !important;
+        margin-bottom:2px !important;
+        border-right:none !important;
+        border-bottom:1px solid rgba(214, 176, 106, 0.25) !important;
+    }
+
+    .viewerPdfPageBadge{
+        font-size:0.66rem !important;
+        padding:2px 4px !important;
+        min-width:34px !important;
+    }
+
+    .viewerToolBtn{
+        width:32px !important;
+        height:30px !important;
+        font-size:0.95rem !important;
     }
 }
 
@@ -5697,6 +5860,10 @@ body.registry-open .devSuiteTriggerBtn,
     overflow-y:auto;
 }
 
+.devGenLeft > *{
+    flex-shrink:0;
+}
+
 .devGenRight{
     width:52%;
     display:flex;
@@ -5800,6 +5967,8 @@ body.registry-open .devSuiteTriggerBtn,
 .devCodeEditorWrap{
     display:flex;
     flex-direction:column;
+    flex-shrink:0;
+    min-height:180px;
     border:1px solid rgba(212, 175, 55, 0.35);
     border-radius:8px;
     background:#080d0a;
@@ -6915,7 +7084,7 @@ body.registry-open .devSuiteTriggerBtn,
     top: 12px;
     left: 50%;
     transform: translateX(-50%);
-    z-index: 20050;
+    z-index: 19000;
     display: none; /* Inactivo por defecto hasta activación */
     align-items: center;
     gap: 8px;
@@ -6928,6 +7097,10 @@ body.registry-open .devSuiteTriggerBtn,
     cursor: pointer;
     user-select: none;
     transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+body.registry-open .robotBatteryHUD {
+    display: none !important;
 }
 
 .robotBatteryHUD:hover {
