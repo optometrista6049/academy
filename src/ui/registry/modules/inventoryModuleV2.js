@@ -546,7 +546,7 @@ openButton.id = "inventoryOpenButton";
 openButton.textContent = "Abrir";
 openButton.onclick = () => {
     if (selectedObject && (selectedObject.canOpen || selectedObject.documentImage)) {
-        openDocumentViewer(selectedObject.documentImage || selectedObject.thumbnail, selectedObject.title);
+        openDocumentViewer(selectedObject.documentImage || selectedObject.thumbnail, selectedObject.title, selectedObject.id);
     }
 };
 

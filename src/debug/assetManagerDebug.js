@@ -10,6 +10,22 @@ import { showDevModalDialog, escapeHtml } from './devModalDialog.js';
 import { showDevToast } from './devPanel.js';
 import { getBundledCustomDocsList, getBundledCustomDocDataUri } from '../systems/customAssetsBundle.js';
 import { missions } from '../systems/missions/missionData.js';
+import {
+    initPdfDocumentStore,
+    setServerManifestCache,
+    saveLocalPdfOverride,
+    updateLocalPdfMetadata,
+    setLocalCatalogBinding,
+    clearLocalBindingForFilename,
+    removeLocalPdfOverride,
+    getLocalPdfRecord,
+    getAllLocalPdfRecords,
+    getPdfCatalogSlots,
+    getActivePdfCatalogLinkMap,
+    isLocalOverrideNewerThanServer,
+    buildExportableDocsPackage,
+    base64ToPdfBlob
+} from '../systems/pdfDocumentStore.js';
 
 const DEFAULT_KNOWN_PDF_META = {
     'higiene_visual.pdf': {
@@ -122,20 +138,7 @@ function buildMissionChoices(docs = []) {
 }
 
 function buildRegistryPdfLinkMap() {
-    const map = new Map();
-    Object.entries(registryCatalog || {}).forEach(([catalogId, entry]) => {
-        if (!entry || typeof entry.documentImage !== 'string') return;
-        const cleanPath = entry.documentImage.split('?')[0].split('#')[0];
-        if (!cleanPath.toLowerCase().endsWith('.pdf')) return;
-        const fname = cleanPath.split('/').pop();
-        if (!fname) return;
-        map.set(fname.toLowerCase(), {
-            catalogId,
-            title: entry.title || catalogId,
-            downloadFilename: entry.downloadFilename || fname
-        });
-    });
-    return map;
+    return getActivePdfCatalogLinkMap();
 }
 
 function getEffectiveDocMeta(doc) {
@@ -254,8 +257,10 @@ export function renderAssetManagerTab(container) {
                     </span>
                 </div>
                 <p class="devSlotDesc">
-                    Organiza los archivos <strong>.PDF</strong> por misión al subirlos o reemplazarlos y comprueba cuáles están enlazados en el Registro del juego.
+                    Organiza los archivos <strong>.PDF</strong> por misión, asígnalos a documentos del juego con un clic y consérvalos en tu navegador mientras desarrollas.
                 </p>
+
+                <div id="devPdfEnvBanner" class="devPdfEnvBanner" style="display:none;"></div>
 
                 <div class="devPdfWorkbench">
                     <!-- COLUMNA IZQUIERDA: FORMULARIO DE SUBIDA Y ORGANIZACIÓN -->
@@ -353,7 +358,10 @@ export function renderAssetManagerTab(container) {
                                     <option value="all">Todas las misiones</option>
                                     <option value="__pending__">⏳ Pendientes de enlazar</option>
                                 </select>
-                                <button type="button" id="devRefreshPdfListBtn" class="devPdfMiniBtn" title="Actualizar lista desde disco">
+                                <button type="button" id="devExportPdfPackBtn" class="devPdfMiniBtn" title="Exportar manifiesto, bundle y copias locales para GitHub / Proyecto">
+                                    📦 Exportar
+                                </button>
+                                <button type="button" id="devRefreshPdfListBtn" class="devPdfMiniBtn" title="Actualizar lista desde disco y navegador">
                                     ↻
                                 </button>
                             </div>
@@ -362,6 +370,8 @@ export function renderAssetManagerTab(container) {
                         <div id="devPdfListContainer" class="devPdfListContainer styledScrollbar">
                             <div class="devPdfEmptyMsg">Cargando documentos del servidor...</div>
                         </div>
+
+                        <div id="devPdfExportBox" class="devPdfExportBox" style="display:none;"></div>
                     </div>
                 </div>
             </div>
@@ -561,6 +571,9 @@ function setupPdfManagerEvents() {
     const listContainer = document.getElementById('devPdfListContainer');
     const countEl = document.getElementById('devPdfCount');
     const refreshBtn = document.getElementById('devRefreshPdfListBtn');
+    const exportPackBtn = document.getElementById('devExportPdfPackBtn');
+    const exportBox = document.getElementById('devPdfExportBox');
+    const envBanner = document.getElementById('devPdfEnvBanner');
 
     let pendingBase64 = null;
     let pendingOriginalName = '';
@@ -568,6 +581,7 @@ function setupPdfManagerEvents() {
     let uploadMode = 'existing'; // 'existing' | 'new'
     let activeTargetFilename = 'higiene_visual.pdf';
     let isManualFilename = false;
+    let isDevServerAvailable = true;
 
     function getSelectedMissionMeta() {
         const rawSelect = missionSelect ? missionSelect.value : selectedMissionId;
@@ -802,18 +816,74 @@ function setupPdfManagerEvents() {
         reader.readAsDataURL(file);
     }
 
+    function updateEnvBanner() {
+        if (!envBanner) return;
+        const localOverrideDocs = existingServerPdfs.filter((d) => d.hasLocalOverride);
+        if (!isDevServerAvailable) {
+            envBanner.style.display = 'flex';
+            envBanner.className = 'devPdfEnvBanner warning';
+            envBanner.innerHTML = `<span>⚠️ <strong>Vista estática / sin servidor dev:</strong> los PDFs subidos se guardan solo en tu navegador (<code>IndexedDB</code>). Usa <strong>📦 Exportar</strong> para llevarlos a GitHub/Proyecto.</span>`;
+            return;
+        }
+        if (localOverrideDocs.length > 0) {
+            envBanner.style.display = 'flex';
+            envBanner.className = 'devPdfEnvBanner info';
+            envBanner.innerHTML = `<span>💾 Tienes <strong>${localOverrideDocs.length}</strong> cambio(s) en <code>IndexedDB</code> más recientes que el disco (protegidos frente a recargas y resyncs de AI Studio). Usa <strong>📦 Exportar</strong> para fijarlos en tu repo.</span>`;
+            return;
+        }
+        envBanner.style.display = 'none';
+        envBanner.innerHTML = '';
+    }
+
+    function triggerTextFileDownload(filename, textContent, mimeType = 'text/plain;charset=utf-8') {
+        const blob = new Blob([textContent], { type: mimeType });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+    }
+
     async function performUpload(overwrite = false) {
         const targetFilename = normalizePdfFilenameInput(targetNameInput?.value || '');
         if (!pendingBase64 || !targetFilename) return;
 
         const { missionId, missionLabel } = getSelectedMissionMeta();
         const docTitle = (titleInput?.value || '').trim();
+        const existingMatch = existingServerPdfs.find((d) => d.filename.toLowerCase() === targetFilename.toLowerCase());
+
+        if (existingMatch && !overwrite) {
+            showDevModalDialog({
+                title: 'Reemplazar Documento PDF',
+                message: `Ya existe <strong>${escapeHtml(targetFilename)}</strong> en el proyecto.<br><br>¿Deseas sobrescribirlo con <strong>${escapeHtml(pendingOriginalName)}</strong> y asociarlo a <strong>${escapeHtml(missionLabel)}</strong>?`,
+                confirmText: 'Sí, reemplazar',
+                cancelText: 'Cancelar',
+                onConfirm: () => {
+                    performUpload(true);
+                },
+                onCancel: () => {
+                    setStatus('Subida cancelada. Cambia el nombre de destino si quieres conservar ambos.', 'warning');
+                    updatePathHintAndUploadState();
+                }
+            });
+            return;
+        }
 
         if (uploadBtn) {
             uploadBtn.disabled = true;
             uploadBtn.textContent = '⏳ Guardando PDF...';
         }
-        setStatus('Escribiendo archivo binario e índice de misión en disco...', '');
+        setStatus('Guardando PDF en servidor y en almacenamiento local (IndexedDB)...', '');
+
+        let savedToServer = false;
+        let finalFilename = targetFilename;
+        let finalSize = 0;
+        let finalUpdatedAt = Date.now();
+        let finalUrl = `./assets/docs/${encodeURIComponent(targetFilename)}`;
+        let finalCatalogId = existingMatch?.catalogId || '';
 
         try {
             const res = await fetch('/api/upload-pdf', {
@@ -829,7 +899,8 @@ function setupPdfManagerEvents() {
                 })
             });
 
-            const data = await res.json().catch(() => ({}));
+            const ctype = (res.headers.get('content-type') || '').toLowerCase();
+            const data = ctype.includes('application/json') ? await res.json().catch(() => ({})) : {};
 
             if (res.status === 409 && !overwrite) {
                 showDevModalDialog({
@@ -848,34 +919,76 @@ function setupPdfManagerEvents() {
                 return;
             }
 
-            if (!res.ok || !data.success) {
+            if (res.ok && data.success) {
+                savedToServer = true;
+                isDevServerAvailable = true;
+                finalFilename = data.filename || targetFilename;
+                finalSize = Number(data.size) || 0;
+                finalUpdatedAt = Number(data.updatedAt) || Date.now();
+                finalUrl = data.url || finalUrl;
+                finalCatalogId = data.catalogId || finalCatalogId;
+            } else if (!ctype.includes('application/json')) {
+                isDevServerAvailable = false;
+            } else {
                 throw new Error(data.error || `Error HTTP ${res.status}`);
             }
-
-            if (verifyLink) {
-                verifyLink.href = `${data.url}?v=${Date.now()}`;
-            }
-            if (verifyBox) {
-                verifyBox.style.display = 'flex';
-            }
-
-            setStatus(`✅ "${data.filename}" guardado en ${missionLabel} (${formatBytes(data.size)}).`, 'success');
-            showDevToast(`📄 PDF guardado (${missionLabel}): ${data.filename}`);
-
-            pendingBase64 = null;
-            pendingOriginalName = '';
-            uploadMode = 'existing';
-            activeTargetFilename = data.filename;
-            isManualFilename = false;
-            if (fileInput) fileInput.value = '';
-            if (metaBox) metaBox.style.display = 'none';
-
-            await fetchPdfLibrary();
         } catch (err) {
-            setStatus(`❌ Error al guardar PDF: ${err.message || err}`, 'error');
-        } finally {
-            updatePathHintAndUploadState();
+            if (err && /Error HTTP|cabecera PDF|límite|permitido/i.test(String(err.message || ''))) {
+                setStatus(`❌ Error al guardar PDF: ${err.message || err}`, 'error');
+                updatePathHintAndUploadState();
+                return;
+            }
+            isDevServerAvailable = false;
         }
+
+        // Guardar siempre copia binaria en IndexedDB para resistir recargas y resyncs de AI Studio
+        const localRec = await saveLocalPdfOverride({
+            filename: finalFilename,
+            base64Data: pendingBase64,
+            size: finalSize,
+            updatedAt: finalUpdatedAt,
+            missionId,
+            missionLabel,
+            title: docTitle || existingMatch?.title || '',
+            catalogId: finalCatalogId
+        });
+
+        finalSize = finalSize || localRec?.size || 0;
+
+        if (verifyLink) {
+            if (savedToServer) {
+                verifyLink.href = `${finalUrl}?v=${Date.now()}`;
+                verifyLink.onclick = null;
+            } else if (localRec?.base64Data) {
+                const blobUrl = URL.createObjectURL(base64ToPdfBlob(localRec.base64Data));
+                verifyLink.href = blobUrl;
+                verifyLink.onclick = () => {
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                };
+            }
+        }
+        if (verifyBox) {
+            verifyBox.style.display = 'flex';
+        }
+
+        if (savedToServer) {
+            setStatus(`✅ "${finalFilename}" guardado en disco y en IndexedDB (${missionLabel} · ${formatBytes(finalSize)}).`, 'success');
+            showDevToast(`📄 PDF guardado (${missionLabel}): ${finalFilename}`);
+        } else {
+            setStatus(`💾 "${finalFilename}" guardado en tu navegador (IndexedDB · ${formatBytes(finalSize)}). Usa 📦 Exportar para llevarlo a GitHub/Proyecto.`, 'warning');
+            showDevToast(`💾 PDF guardado en navegador: ${finalFilename}`);
+        }
+
+        pendingBase64 = null;
+        pendingOriginalName = '';
+        uploadMode = 'existing';
+        activeTargetFilename = finalFilename;
+        isManualFilename = false;
+        if (fileInput) fileInput.value = '';
+        if (metaBox) metaBox.style.display = 'none';
+
+        await fetchPdfLibrary();
+        updatePathHintAndUploadState();
     }
 
     async function saveMetadataOnly() {
@@ -889,6 +1002,7 @@ function setupPdfManagerEvents() {
             saveMetaBtn.textContent = '⏳ Guardando etiqueta...';
         }
 
+        let serverSaved = false;
         try {
             const res = await fetch('/api/upload-pdf', {
                 method: 'PATCH',
@@ -900,21 +1014,65 @@ function setupPdfManagerEvents() {
                     title: docTitle
                 })
             });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) {
-                throw new Error(data.error || `HTTP ${res.status}`);
+            const ctype = (res.headers.get('content-type') || '').toLowerCase();
+            const data = ctype.includes('application/json') ? await res.json().catch(() => ({})) : {};
+            if (res.ok && data.success) {
+                serverSaved = true;
+                if (data.manifest) setServerManifestCache(data.manifest);
             }
+        } catch (_) {}
+
+        await updateLocalPdfMetadata(targetFilename, { missionId, missionLabel, title: docTitle });
+
+        if (serverSaved) {
             setStatus(`✅ Misión y título actualizados para "${targetFilename}" (${missionLabel}).`, 'success');
-            showDevToast(`🏷️ Organizado en ${missionLabel}: ${targetFilename}`);
-            await fetchPdfLibrary();
-        } catch (err) {
-            setStatus(`❌ No se pudo actualizar la etiqueta: ${err.message || err}`, 'error');
-        } finally {
-            if (saveMetaBtn) {
-                saveMetaBtn.disabled = false;
-                saveMetaBtn.textContent = '🏷️ Actualizar solo Misión / Título (sin resubir PDF)';
-            }
+        } else {
+            setStatus(`💾 Misión y título actualizados en copia local para "${targetFilename}".`, 'warning');
         }
+        showDevToast(`🏷️ Organizado en ${missionLabel}: ${targetFilename}`);
+        await fetchPdfLibrary();
+
+        if (saveMetaBtn) {
+            saveMetaBtn.disabled = false;
+            saveMetaBtn.textContent = '🏷️ Actualizar solo Misión / Título (sin resubir PDF)';
+        }
+    }
+
+    async function assignPdfToCatalog(filename, catalogId) {
+        const doc = existingServerPdfs.find((d) => d.filename === filename);
+        const meta = doc ? getEffectiveDocMeta(doc) : { missionId: 'unassigned', missionLabel: '', title: '' };
+        const now = Date.now();
+
+        if (catalogId) {
+            await setLocalCatalogBinding(catalogId, filename, now);
+        } else {
+            await clearLocalBindingForFilename(filename);
+        }
+
+        if (isDevServerAvailable && !doc?.localOnly) {
+            try {
+                const res = await fetch('/api/upload-pdf', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename,
+                        missionId: meta.missionId,
+                        missionLabel: meta.missionLabel,
+                        title: meta.title,
+                        catalogId
+                    })
+                });
+                const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                if (res.ok && ctype.includes('application/json')) {
+                    const data = await res.json();
+                    if (data.manifest) setServerManifestCache(data.manifest);
+                }
+            } catch (_) {}
+        }
+
+        const slotTitle = catalogId ? (registryCatalog?.[catalogId]?.title || catalogId) : 'Sin enlace fijo';
+        showDevToast(catalogId ? `🔗 ${filename} → ${slotTitle}` : `🔗 Enlace quitado de ${filename}`);
+        await fetchPdfLibrary();
     }
 
     async function copyToClipboard(text, toastPrefix = '📋 Copiado') {
@@ -1032,6 +1190,8 @@ function setupPdfManagerEvents() {
             return a.missionLabel.localeCompare(b.missionLabel);
         });
 
+        const catalogSlots = getPdfCatalogSlots();
+
         listContainer.innerHTML = sortedGroups.map((group) => `
             <div class="devPdfMissionGroup">
                 <div class="devPdfMissionGroupHeader">
@@ -1042,6 +1202,20 @@ function setupPdfManagerEvents() {
                     const bothSynced = doc.inAssets && doc.inPublic;
                     const linked = linkMap.get(doc.filename.toLowerCase());
                     const displayTitle = linked?.title || meta.title;
+                    const selectedCatId = linked ? linked.catalogId : '';
+                    const syncBadgeHtml = doc.hasLocalOverride
+                        ? `<span class="devPdfSyncBadge localOnly" title="Copia guardada en IndexedDB de tu navegador (sobrevive a recargas/resyncs)">💾 Local (navegador)</span>`
+                        : `<span class="devPdfSyncBadge ${bothSynced ? '' : 'partial'}" title="${bothSynced ? 'Sincronizado en assets/docs y public/assets/docs' : 'Falta copia en una de las carpetas'}">${bothSynced ? '✓ Dev + GitHub' : (doc.inPublic ? 'Solo public/' : 'Solo assets/')}</span>`;
+
+                    const assignOptionsHtml = [
+                        `<option value="">— Sin enlace en Registro —</option>`,
+                        ...catalogSlots.map((slot) => {
+                            const isSel = selectedCatId === slot.catalogId;
+                            const suffix = isSel && linked && !linked.isExplicit ? ' (Por defecto)' : '';
+                            return `<option value="${escapeHtml(slot.catalogId)}" ${isSel ? 'selected' : ''}>${escapeHtml(slot.title)}${suffix}</option>`;
+                        })
+                    ].join('');
+
                     return `
                         <div class="devPdfItemRow">
                             <div class="devPdfItemInfo">
@@ -1049,28 +1223,37 @@ function setupPdfManagerEvents() {
                                 ${displayTitle ? `<div class="devPdfItemTitle" title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</div>` : ''}
                                 <div class="devPdfItemMeta">
                                     <span>${formatBytes(doc.size)}</span>
-                                    <span class="devPdfSyncBadge ${bothSynced ? '' : 'partial'}" title="${bothSynced ? 'Sincronizado en assets/docs y public/assets/docs' : 'Falta copia en una de las carpetas'}">
-                                        ${bothSynced ? '✓ Dev + GitHub' : (doc.inPublic ? 'Solo public/' : 'Solo assets/')}
-                                    </span>
-                                    <span class="devPdfLinkBadge ${linked ? '' : 'pending'}" title="${linked ? `Conectado en registryCatalog.js como "${linked.catalogId}"` : 'Subido al proyecto pero aún no enlazado en registryCatalog.js'}">
+                                    ${syncBadgeHtml}
+                                    <span class="devPdfLinkBadge ${linked ? '' : 'pending'}" title="${linked ? `Conectado en el juego como "${linked.title}" (${linked.catalogId})` : 'Subido al proyecto pero aún no enlazado a ningún documento del Registro'}">
                                         ${linked ? `✓ Enlazado (${escapeHtml(linked.catalogId)})` : '⏳ Pendiente enlazar'}
                                     </span>
                                 </div>
+                                <div class="devPdfAssignRow">
+                                    <span class="devPdfAssignLabel">🔗 Usar como:</span>
+                                    <select class="devPdfAssignSelect" data-filename="${escapeHtml(doc.filename)}" title="Asignar este PDF a un documento del Registro del juego">
+                                        ${assignOptionsHtml}
+                                    </select>
+                                </div>
                             </div>
                             <div class="devPdfItemActions">
-                                <a href="${escapeHtml(doc.url)}?v=${Date.now()}" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn devOpenPdfBtn" data-filename="${escapeHtml(doc.filename)}" data-url="${escapeHtml(doc.url)}" title="Abrir PDF en nueva pestaña">
+                                <a href="${escapeHtml(doc.url)}?v=${Number(doc.updatedAt) || Date.now()}" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn devOpenPdfBtn" data-filename="${escapeHtml(doc.filename)}" data-url="${escapeHtml(doc.url)}" title="Abrir PDF en nueva pestaña">
                                     👁️
                                 </a>
                                 <button type="button" class="devPdfMiniBtn devSelectForEditBtn" data-filename="${escapeHtml(doc.filename)}" title="Reemplazar PDF o cambiar su misión/título">
                                     🔄
                                 </button>
+                                ${doc.hasLocalOverride ? `
+                                    <button type="button" class="devPdfMiniBtn devClearLocalBtn" data-filename="${escapeHtml(doc.filename)}" title="Descartar copia local del navegador y volver a la versión del proyecto">
+                                        🧹
+                                    </button>
+                                ` : ''}
                                 <button type="button" class="devPdfMiniBtn devCopySnippetBtn" data-filename="${escapeHtml(doc.filename)}" title="Copiar bloque listo para registryCatalog.js">
                                     🧩
                                 </button>
                                 <button type="button" class="devPdfMiniBtn devCopyPdfPathBtn" data-path="${escapeHtml(doc.assetPath)}" title="Copiar ruta del proyecto">
                                     📋
                                 </button>
-                                <button type="button" class="devPdfMiniBtn danger devDeletePdfBtn" data-filename="${escapeHtml(doc.filename)}" title="Eliminar PDF de assets/ y public/">
+                                <button type="button" class="devPdfMiniBtn danger devDeletePdfBtn" data-filename="${escapeHtml(doc.filename)}" title="Eliminar PDF de assets/, public/ y navegador">
                                     🗑️
                                 </button>
                             </div>
@@ -1080,28 +1263,50 @@ function setupPdfManagerEvents() {
             </div>
         `).join('');
 
+        listContainer.querySelectorAll('.devPdfAssignSelect').forEach((sel) => {
+            sel.onchange = () => {
+                const fname = sel.getAttribute('data-filename');
+                if (fname) assignPdfToCatalog(fname, sel.value || '');
+            };
+        });
+
         listContainer.querySelectorAll('.devOpenPdfBtn').forEach((link) => {
             link.onclick = async (e) => {
                 const rawUrl = link.getAttribute('data-url');
                 const fname = link.getAttribute('data-filename');
-                const bundledDataUri = getBundledCustomDocDataUri(rawUrl) || getBundledCustomDocDataUri(fname);
-                if (!bundledDataUri) return;
+                const localRec = getLocalPdfRecord(fname);
+                const docEntry = existingServerPdfs.find((d) => d.filename === fname);
 
-                try {
-                    const headRes = await fetch(rawUrl, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
-                    const ctype = (headRes?.headers?.get('content-type') || '').toLowerCase();
-                    if (headRes && headRes.ok && ctype.includes('application/pdf')) {
-                        return;
-                    }
+                if (docEntry?.hasLocalOverride && localRec?.base64Data) {
                     e.preventDefault();
-                    const blob = await fetch(bundledDataUri).then(r => r.blob());
-                    const blobUrl = URL.createObjectURL(blob);
-                    link.href = blobUrl;
+                    const blobUrl = URL.createObjectURL(base64ToPdfBlob(localRec.base64Data));
                     const a = document.createElement('a');
                     a.href = blobUrl;
                     a.target = '_blank';
                     a.rel = 'noopener noreferrer';
                     a.click();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                    return;
+                }
+
+                const bundledDataUri = getBundledCustomDocDataUri(rawUrl) || getBundledCustomDocDataUri(fname);
+                if (!bundledDataUri) return;
+
+                try {
+                    const headRes = await fetch(`${rawUrl}?v=${Date.now()}`, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+                    const ctype = (headRes?.headers?.get('content-type') || '').toLowerCase();
+                    if (headRes && headRes.ok && ctype.includes('application/pdf')) {
+                        return;
+                    }
+                    e.preventDefault();
+                    const blob = base64ToPdfBlob(bundledDataUri);
+                    const blobUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = blobUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
                 } catch (_) {}
             };
         });
@@ -1111,6 +1316,16 @@ function setupPdfManagerEvents() {
                 const fname = btn.getAttribute('data-filename');
                 const doc = existingServerPdfs.find((d) => d.filename === fname);
                 if (doc) loadDocIntoForm(doc);
+            };
+        });
+
+        listContainer.querySelectorAll('.devClearLocalBtn').forEach((btn) => {
+            btn.onclick = async () => {
+                const fname = btn.getAttribute('data-filename');
+                if (!fname) return;
+                await removeLocalPdfOverride(fname);
+                showDevToast(`🧹 Copia local eliminada para ${fname}`);
+                await fetchPdfLibrary();
             };
         });
 
@@ -1135,20 +1350,28 @@ function setupPdfManagerEvents() {
             btn.onclick = () => {
                 const fname = btn.getAttribute('data-filename');
                 if (!fname) return;
+                const docEntry = existingServerPdfs.find((d) => d.filename === fname);
                 showDevModalDialog({
                     title: 'Eliminar Documento PDF',
-                    message: `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> tanto de <code>assets/docs/</code> como de <code>public/assets/docs/</code>?`,
+                    message: docEntry?.localOnly
+                        ? `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> del almacenamiento local del navegador?`
+                        : `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> tanto de <code>assets/docs/</code> como de <code>public/assets/docs/</code> y del navegador?`,
                     confirmText: 'Eliminar PDF',
                     cancelText: 'Cancelar',
                     isDanger: true,
                     onConfirm: async () => {
                         try {
-                            const res = await fetch(`/api/upload-pdf?filename=${encodeURIComponent(fname)}`, {
-                                method: 'DELETE'
-                            });
-                            const data = await res.json().catch(() => ({}));
-                            if (!res.ok || !data.success) {
-                                throw new Error(data.error || 'No se pudo eliminar');
+                            await removeLocalPdfOverride(fname);
+                            await clearLocalBindingForFilename(fname);
+                            if (isDevServerAvailable && !docEntry?.localOnly) {
+                                const res = await fetch(`/api/upload-pdf?filename=${encodeURIComponent(fname)}`, {
+                                    method: 'DELETE'
+                                });
+                                const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                                const data = ctype.includes('application/json') ? await res.json().catch(() => ({})) : {};
+                                if (!res.ok || !data.success) {
+                                    throw new Error(data.error || 'No se pudo eliminar en disco');
+                                }
                             }
                             showDevToast(`🗑️ Eliminado: ${fname}`);
                             await fetchPdfLibrary();
@@ -1162,31 +1385,70 @@ function setupPdfManagerEvents() {
     }
 
     async function fetchPdfLibrary() {
+        await initPdfDocumentStore();
+        let baseDocs = [];
+
         try {
             const res = await fetch('/api/upload-pdf', { cache: 'no-store' });
             const ctype = (res.headers.get('content-type') || '').toLowerCase();
             if (!res.ok || !ctype.includes('application/json')) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            existingServerPdfs = Array.isArray(data.docs) ? data.docs : [];
-        } catch (err) {
-            const bundledDocs = getBundledCustomDocsList();
-            if (bundledDocs.length > 0) {
-                existingServerPdfs = bundledDocs;
-            } else {
-                populateMissionSelect(false);
-                renderQuickMissionDocsRow();
-                updatePathHintAndUploadState();
-                if (listContainer) {
-                    listContainer.innerHTML = `<div class="devPdfEmptyMsg">No se pudo consultar <code>/api/upload-pdf</code> (${escapeHtml(err.message || err)}).</div>`;
-                }
-                return;
-            }
+            isDevServerAvailable = true;
+            if (data.manifest) setServerManifestCache(data.manifest);
+            baseDocs = Array.isArray(data.docs) ? data.docs : [];
+        } catch (_) {
+            isDevServerAvailable = false;
+            baseDocs = getBundledCustomDocsList();
         }
+
+        // Fusionar copias locales guardadas en IndexedDB
+        const mergedMap = new Map();
+        baseDocs.forEach((doc) => {
+            mergedMap.set(doc.filename.toLowerCase(), { ...doc, hasLocalOverride: false, localOnly: false });
+        });
+
+        const localRecords = getAllLocalPdfRecords();
+        localRecords.forEach((rec) => {
+            const lower = rec.filename.toLowerCase();
+            const existing = mergedMap.get(lower);
+            if (existing) {
+                const overrideNewer = isLocalOverrideNewerThanServer(rec.filename, existing) || !isDevServerAvailable;
+                if (overrideNewer) {
+                    existing.hasLocalOverride = true;
+                    existing.size = rec.size || existing.size;
+                    existing.updatedAt = rec.updatedAt || existing.updatedAt;
+                    existing.missionId = rec.missionId || existing.missionId;
+                    existing.missionLabel = rec.missionLabel || existing.missionLabel;
+                    existing.title = rec.title || existing.title;
+                    existing.localBase64 = rec.base64Data;
+                }
+            } else {
+                mergedMap.set(lower, {
+                    filename: rec.filename,
+                    url: `./assets/docs/${encodeURIComponent(rec.filename)}`,
+                    assetPath: `assets/docs/${rec.filename}`,
+                    size: rec.size || 0,
+                    updatedAt: rec.updatedAt || Date.now(),
+                    inAssets: false,
+                    inPublic: false,
+                    missionId: rec.missionId || 'unassigned',
+                    missionLabel: rec.missionLabel || 'Sin misión asignada',
+                    title: rec.title || '',
+                    catalogId: rec.catalogId || '',
+                    hasLocalOverride: true,
+                    localOnly: true,
+                    localBase64: rec.base64Data
+                });
+            }
+        });
+
+        existingServerPdfs = Array.from(mergedMap.values()).sort((a, b) => a.filename.localeCompare(b.filename));
 
         populateMissionSelect(true);
         populateLibraryFilter();
         renderQuickMissionDocsRow();
         renderPdfLibraryList(existingServerPdfs);
+        updateEnvBanner();
         updatePathHintAndUploadState();
     }
 
@@ -1283,6 +1545,71 @@ function setupPdfManagerEvents() {
 
     if (refreshBtn) {
         refreshBtn.onclick = () => fetchPdfLibrary();
+    }
+
+    if (exportPackBtn && exportBox) {
+        exportPackBtn.onclick = async () => {
+            if (exportBox.style.display !== 'none') {
+                exportBox.style.display = 'none';
+                return;
+            }
+            const pkg = await buildExportableDocsPackage(existingServerPdfs);
+            const localBtnsHtml = pkg.localOnlyFiles.map((f) => `
+                <button type="button" class="devPdfMiniBtn devExportPdfFileBtn" data-filename="${escapeHtml(f.filename)}">
+                    ⬇️ ${escapeHtml(f.filename)} (${formatBytes(f.size)})
+                </button>
+            `).join('');
+
+            exportBox.innerHTML = `
+                <div class="devPdfExportHeader">
+                    <span>📦 Exportar para GitHub / Proyecto (${pkg.localOnlyFiles.length} copia(s) local(es))</span>
+                    <button type="button" id="devCloseExportBoxBtn" class="devPdfMiniBtn">✕</button>
+                </div>
+                <div class="devPdfExportActions">
+                    <button type="button" id="devDownloadManifestBtn" class="devPdfMiniBtn">📄 Descargar docs_manifest.json</button>
+                    <button type="button" id="devDownloadBundleBtn" class="devPdfMiniBtn">📦 Descargar customAssetsBundle.js</button>
+                    ${localBtnsHtml}
+                </div>
+            `;
+            exportBox.style.display = 'flex';
+
+            const closeBtn = document.getElementById('devCloseExportBoxBtn');
+            if (closeBtn) closeBtn.onclick = () => { exportBox.style.display = 'none'; };
+
+            const dlManifestBtn = document.getElementById('devDownloadManifestBtn');
+            if (dlManifestBtn) {
+                dlManifestBtn.onclick = () => {
+                    triggerTextFileDownload('docs_manifest.json', pkg.manifestJson, 'application/json;charset=utf-8');
+                    showDevToast('📄 Descargado docs_manifest.json');
+                };
+            }
+
+            const dlBundleBtn = document.getElementById('devDownloadBundleBtn');
+            if (dlBundleBtn) {
+                dlBundleBtn.onclick = () => {
+                    triggerTextFileDownload('customAssetsBundle.js', pkg.bundleJs, 'application/javascript;charset=utf-8');
+                    showDevToast('📦 Descargado customAssetsBundle.js');
+                };
+            }
+
+            exportBox.querySelectorAll('.devExportPdfFileBtn').forEach((btn) => {
+                btn.onclick = () => {
+                    const fname = btn.getAttribute('data-filename');
+                    const fileObj = pkg.localOnlyFiles.find((x) => x.filename === fname);
+                    if (!fileObj) return;
+                    const blob = base64ToPdfBlob(fileObj.base64Data);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileObj.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 15000);
+                    showDevToast(`⬇️ Descargado ${fileObj.filename}`);
+                };
+            });
+        };
     }
 
     populateMissionSelect(false);

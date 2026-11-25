@@ -5793,6 +5793,94 @@ body.registry-open .devSuiteTriggerBtn,
     flex-wrap:wrap;
 }
 
+.devPdfEnvBanner{
+    display:none;
+    align-items:center;
+    gap:8px;
+    padding:7px 10px;
+    border-radius:7px;
+    font-size:0.72rem;
+    line-height:1.35;
+    margin-bottom:6px;
+}
+
+.devPdfEnvBanner.warning{
+    background:rgba(245, 158, 11, 0.14);
+    border:1px solid rgba(245, 158, 11, 0.45);
+    color:#fde68a;
+}
+
+.devPdfEnvBanner.info{
+    background:rgba(56, 189, 248, 0.14);
+    border:1px solid rgba(56, 189, 248, 0.42);
+    color:#bae6fd;
+}
+
+.devPdfSyncBadge.localOnly{
+    background:rgba(56, 189, 248, 0.18);
+    color:#7dd3fc;
+    border-color:rgba(56, 189, 248, 0.42);
+}
+
+.devPdfAssignRow{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin-top:4px;
+    flex-wrap:wrap;
+}
+
+.devPdfAssignLabel{
+    font-size:0.66rem;
+    color:#94a3b8;
+    font-weight:600;
+    flex-shrink:0;
+}
+
+.devPdfAssignSelect{
+    background:rgba(10, 18, 14, 0.95);
+    border:1px solid rgba(212, 175, 55, 0.35);
+    color:#e2e8f0;
+    border-radius:5px;
+    padding:2px 6px;
+    font-size:0.67rem;
+    font-weight:600;
+    max-width:230px;
+    outline:none;
+    cursor:pointer;
+}
+
+.devPdfAssignSelect:focus{
+    border-color:#ffd54f;
+}
+
+.devPdfExportBox{
+    display:none;
+    flex-direction:column;
+    gap:6px;
+    margin-top:6px;
+    padding:8px 10px;
+    background:rgba(15, 25, 20, 0.92);
+    border:1px solid rgba(212, 175, 55, 0.38);
+    border-radius:7px;
+}
+
+.devPdfExportHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    font-size:0.71rem;
+    font-weight:700;
+    color:#ffd54f;
+}
+
+.devPdfExportActions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+}
+
 .devSecondaryBtn{
     background:rgba(255, 255, 255, 0.06);
     border:1px solid rgba(212, 175, 55, 0.4);

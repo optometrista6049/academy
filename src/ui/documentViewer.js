@@ -9,6 +9,12 @@
 
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import {
+    resolveDocumentAsset,
+    base64ToUint8Array,
+    isPdfSource,
+    getPdfCatalogSlots
+} from '../systems/pdfDocumentStore.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -71,12 +77,12 @@ export function isDocumentViewerOpen() {
     return Boolean(viewerOverlay && viewerOverlay.classList.contains('visible') && viewerOverlay.style.display !== 'none');
 }
 
-export function openDocumentViewer(docSrc, title = 'Documento') {
+export function openDocumentViewer(docSrc, title = 'Documento', catalogId = '') {
     if (!viewerOverlay) {
         buildDocumentViewer();
     }
 
-    if (!docSrc) {
+    if (!docSrc && !catalogId) {
         console.warn('openDocumentViewer: docSrc no proporcionado.');
         return;
     }
@@ -84,7 +90,7 @@ export function openDocumentViewer(docSrc, title = 'Documento') {
     cleanupPdfResources();
     resetTransform(false);
 
-    const isPdf = /\.pdf(\?.*|#.*)?$/i.test(String(docSrc)) || String(docSrc).startsWith('data:application/pdf');
+    const isPdf = isPdfSource(String(docSrc || '')) || getPdfCatalogSlots().some((slot) => slot.catalogId === catalogId);
     isPdfMode = isPdf;
     pdfFitMode = 'page';
     pdfCurrentPage = 1;
@@ -132,7 +138,7 @@ export function openDocumentViewer(docSrc, title = 'Documento') {
         updatePdfControlsUI();
         // Esperar un frame para que viewerFrame tenga medidas reales antes de calcular escala PDF
         requestAnimationFrame(() => {
-            loadPdfDocument(docSrc);
+            loadPdfDocument(docSrc, catalogId);
         });
     } else {
         if (viewerPdfStage) viewerPdfStage.style.display = 'none';
@@ -216,7 +222,7 @@ function setPdfStatus(msg, isError = false) {
     viewerPdfStatus.classList.toggle('error', isError);
 }
 
-async function loadPdfDocument(pdfSrc) {
+async function loadPdfDocument(pdfSrc, catalogId = '') {
     const token = ++pdfLoadToken;
     setPdfStatus('Cargando documento PDF...');
 
@@ -225,14 +231,42 @@ async function loadPdfDocument(pdfSrc) {
         if (srcStr.startsWith('data:') || srcStr.startsWith('blob:')) {
             pdfLoadingTask = pdfjsLib.getDocument(srcStr);
         } else {
-            const response = await fetch(srcStr, { cache: 'no-cache' });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status} al cargar ${srcStr}`);
+            const resolved = await resolveDocumentAsset({
+                catalogId,
+                defaultSrc: srcStr
+            });
+            if (token !== pdfLoadToken || !isDocumentViewerOpen()) return;
+
+            let pdfBytes = null;
+
+            if (resolved.localBase64) {
+                pdfBytes = base64ToUint8Array(resolved.localBase64);
+            } else {
+                try {
+                    const response = await fetch(resolved.url, { cache: 'no-cache' });
+                    const ctype = (response.headers.get('content-type') || '').toLowerCase();
+                    if (response.ok && !ctype.includes('text/html')) {
+                        const buffer = await response.arrayBuffer();
+                        if (buffer && buffer.byteLength > 0) {
+                            pdfBytes = new Uint8Array(buffer);
+                        }
+                    }
+                } catch (_) {
+                    // Fallback al bundle si la red/estático falla
+                }
+
+                if (!pdfBytes && resolved.bundleDataUri) {
+                    pdfBytes = base64ToUint8Array(resolved.bundleDataUri);
+                }
+
+                if (!pdfBytes) {
+                    throw new Error(`No se pudo obtener el PDF (${resolved.url})`);
+                }
             }
-            const buffer = await response.arrayBuffer();
+
             if (token !== pdfLoadToken || !isDocumentViewerOpen()) return;
             pdfLoadingTask = pdfjsLib.getDocument({
-                data: new Uint8Array(buffer)
+                data: pdfBytes
             });
         }
 

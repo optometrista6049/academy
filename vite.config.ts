@@ -593,10 +593,14 @@ export function getBundledCustomDocsList() {
               };
             };
 
+            const sanitizeCatalogId = (raw: unknown) =>
+              sanitizeMetaText(raw, 60).replace(/[^a-zA-Z0-9_-]/g, '');
+
             type PdfManifestEntry = {
               missionId: string;
               missionLabel: string;
               title: string;
+              catalogId?: string;
               updatedAt: number;
             };
 
@@ -639,6 +643,8 @@ export function getBundledCustomDocsList() {
                   missionId: string;
                   missionLabel: string;
                   title: string;
+                  catalogId: string;
+                  manifestUpdatedAt: number;
                 }>();
 
                 const scanDir = (dir: string, sourceKey: 'inAssets' | 'inPublic') => {
@@ -667,7 +673,9 @@ export function getBundledCustomDocsList() {
                           inPublic: sourceKey === 'inPublic',
                           missionId: sanitizeMetaText(savedMeta?.missionId, 60) || fallbackMeta.missionId,
                           missionLabel: sanitizeMetaText(savedMeta?.missionLabel, 120) || fallbackMeta.missionLabel,
-                          title: sanitizeMetaText(savedMeta?.title, 120) || fallbackMeta.title
+                          title: sanitizeMetaText(savedMeta?.title, 120) || fallbackMeta.title,
+                          catalogId: sanitizeCatalogId(savedMeta?.catalogId),
+                          manifestUpdatedAt: Number(savedMeta?.updatedAt || 0)
                         });
                       }
                     } catch (_) {}
@@ -696,7 +704,8 @@ export function getBundledCustomDocsList() {
                   overwrite = false,
                   missionId,
                   missionLabel,
-                  title
+                  title,
+                  catalogId
                 } = JSON.parse(body || '{}');
 
                 if (!filename || !base64Data) {
@@ -752,12 +761,24 @@ export function getBundledCustomDocsList() {
                 const finalMissionId = sanitizeMetaText(missionId, 60) || prevMeta?.missionId || fallbackMeta.missionId;
                 const finalMissionLabel = sanitizeMetaText(missionLabel, 120) || prevMeta?.missionLabel || fallbackMeta.missionLabel;
                 const finalTitle = sanitizeMetaText(title, 120) || prevMeta?.title || fallbackMeta.title;
+                const finalCatalogId = catalogId !== undefined
+                  ? sanitizeCatalogId(catalogId)
+                  : sanitizeCatalogId(prevMeta?.catalogId);
                 const now = Date.now();
+
+                if (finalCatalogId) {
+                  for (const [k, entry] of Object.entries(manifest)) {
+                    if (k !== safeName && entry?.catalogId === finalCatalogId) {
+                      delete entry.catalogId;
+                    }
+                  }
+                }
 
                 manifest[safeName] = {
                   missionId: finalMissionId,
                   missionLabel: finalMissionLabel,
                   title: finalTitle,
+                  ...(finalCatalogId ? { catalogId: finalCatalogId } : {}),
                   updatedAt: now
                 };
                 writeDocsManifest(manifest);
@@ -775,6 +796,7 @@ export function getBundledCustomDocsList() {
                   missionId: finalMissionId,
                   missionLabel: finalMissionLabel,
                   title: finalTitle,
+                  catalogId: finalCatalogId,
                   bundleStats
                 }));
               } catch (err) {
@@ -787,7 +809,7 @@ export function getBundledCustomDocsList() {
             if (req.method === 'PATCH') {
               try {
                 const body = await readRequestBody(req);
-                const { filename, missionId, missionLabel, title } = JSON.parse(body || '{}');
+                const { filename, missionId, missionLabel, title, catalogId } = JSON.parse(body || '{}');
                 if (!filename) {
                   res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
@@ -810,12 +832,24 @@ export function getBundledCustomDocsList() {
                 const finalTitle = title !== undefined
                   ? sanitizeMetaText(title, 120)
                   : (prevMeta?.title || fallbackMeta.title);
+                const finalCatalogId = catalogId !== undefined
+                  ? sanitizeCatalogId(catalogId)
+                  : sanitizeCatalogId(prevMeta?.catalogId);
                 const now = Date.now();
+
+                if (finalCatalogId) {
+                  for (const [k, entry] of Object.entries(manifest)) {
+                    if (k !== safeName && entry?.catalogId === finalCatalogId) {
+                      delete entry.catalogId;
+                    }
+                  }
+                }
 
                 manifest[safeName] = {
                   missionId: finalMissionId,
                   missionLabel: finalMissionLabel,
                   title: finalTitle,
+                  ...(finalCatalogId ? { catalogId: finalCatalogId } : {}),
                   updatedAt: now
                 };
                 writeDocsManifest(manifest);
@@ -824,7 +858,8 @@ export function getBundledCustomDocsList() {
                 return res.end(JSON.stringify({
                   success: true,
                   filename: safeName,
-                  entry: manifest[safeName]
+                  entry: manifest[safeName],
+                  manifest
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -901,8 +936,11 @@ export function getBundledCustomDocsList() {
             const target = fs.existsSync(pubFile) ? pubFile : (fs.existsSync(assetFile) ? assetFile : null);
             if (target) {
               const stat = fs.statSync(target);
-              res.setHeader('Content-Type', 'application/pdf');
-              res.setHeader('Content-Disposition', `inline; filename="${safeFile}"`);
+              const isJson = safeFile.toLowerCase().endsWith('.json');
+              res.setHeader('Content-Type', isJson ? 'application/json; charset=utf-8' : 'application/pdf');
+              if (!isJson) {
+                res.setHeader('Content-Disposition', `inline; filename="${safeFile}"`);
+              }
               res.setHeader('Content-Length', String(stat.size));
               res.setHeader('Cache-Control', 'no-cache');
               if (req.method === 'HEAD') {

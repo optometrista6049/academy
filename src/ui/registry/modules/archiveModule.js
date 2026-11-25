@@ -8,6 +8,7 @@ import { registryCatalog } from "../registryCatalog.js";
 import { openDocumentViewer } from "../../documentViewer.js";
 import { gameState } from "../../../state/gameState.js";
 import { saveGame } from "../../../systems/saveSystem.js";
+import { triggerResolvedDocumentDownload } from "../../../systems/pdfDocumentStore.js";
 
 let archiveRoot = null;
 let archivePanel = null;
@@ -324,7 +325,7 @@ function renderSelectedDocument() {
     openBtn.innerHTML = `<span>👁️ Abrir</span>`;
     openBtn.title = "Abrir documento a pantalla completa";
     openBtn.onclick = () => {
-        openDocumentViewer(docSource, doc.title);
+        openDocumentViewer(docSource, doc.title, doc.id);
     };
 
     const downloadBtn = document.createElement("button");
@@ -333,7 +334,11 @@ function renderSelectedDocument() {
     downloadBtn.title = "Descargar documento al dispositivo";
     downloadBtn.onclick = () => {
         const defaultName = isPdfDoc ? `${doc.id || 'documento'}.pdf` : "Carnet_Aspirante_Monteserin.jpg";
-        triggerDeviceDownload(docSource, doc.downloadFilename || defaultName);
+        triggerResolvedDocumentDownload({
+            catalogId: doc.id,
+            defaultSrc: docSource,
+            downloadFilename: doc.downloadFilename || defaultName
+        });
     };
 
     actionsRow.appendChild(openBtn);
@@ -342,17 +347,4 @@ function renderSelectedDocument() {
 
     card.appendChild(infoWrap);
     detailContainer.appendChild(card);
-}
-
-/* ======================================================
-   DESCARGA DIRECTA AL DISPOSITIVO (PC / MÓVIL)
-   ====================================================== */
-
-function triggerDeviceDownload(fileUrl, fileName) {
-    const link = document.createElement("a");
-    link.href = fileUrl;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }

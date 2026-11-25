@@ -47,6 +47,11 @@ import {
 from './systems/sessionBatterySystem.js';
 
 import {
+    initPdfDocumentStore
+}
+from './systems/pdfDocumentStore.js';
+
+import {
     initScreenLockManager
 }
 from './mobile/screenLockManager.js';
@@ -475,6 +480,8 @@ if (DEV_CONFIG.enabled) {
 }
 
 initSessionBatterySystem();
+
+initPdfDocumentStore();
 
 initScreenLockManager();
 
