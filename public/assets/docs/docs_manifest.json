@@ -4,13 +4,19 @@
     "missionLabel": "Misión 2: El Registro de Entrada",
     "title": "Guía de Higiene Visual y Postural",
     "catalogId": "visualHygieneDoc",
-    "updatedAt": 1795343600000
+    "updatedAt": 1795597200000
   },
   "control_tiempo.pdf": {
     "missionId": "mission002",
     "missionLabel": "Misión 2: El Registro de Entrada",
     "title": "Sistema de Control de Tiempo",
     "catalogId": "timeControlDoc",
-    "updatedAt": 1795343600000
+    "updatedAt": 1795597200000
+  },
+  "higiene_visual.pdf": {
+    "missionId": "mission002",
+    "missionLabel": "Misión 2: El Registro de Entrada",
+    "title": "Guía de Higiene Visual y Postural",
+    "updatedAt": 1795600001080
   }
 }
