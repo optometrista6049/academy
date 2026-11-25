@@ -8,11 +8,9 @@
    ====================================================== */
 
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-).href;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 let viewerOverlay = null;
 let viewerContainer = null;
@@ -223,7 +221,21 @@ async function loadPdfDocument(pdfSrc) {
     setPdfStatus('Cargando documento PDF...');
 
     try {
-        pdfLoadingTask = pdfjsLib.getDocument(pdfSrc);
+        const srcStr = String(pdfSrc || '');
+        if (srcStr.startsWith('data:') || srcStr.startsWith('blob:')) {
+            pdfLoadingTask = pdfjsLib.getDocument(srcStr);
+        } else {
+            const response = await fetch(srcStr, { cache: 'no-cache' });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status} al cargar ${srcStr}`);
+            }
+            const buffer = await response.arrayBuffer();
+            if (token !== pdfLoadToken || !isDocumentViewerOpen()) return;
+            pdfLoadingTask = pdfjsLib.getDocument({
+                data: new Uint8Array(buffer)
+            });
+        }
+
         const loadedDoc = await pdfLoadingTask.promise;
 
         if (token !== pdfLoadToken || !isDocumentViewerOpen()) {

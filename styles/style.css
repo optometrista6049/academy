@@ -3296,7 +3296,6 @@ Arquitectura Sidebar Lateral Izquierda (Opción A)
     }
 
     #inventoryActions {
-        display: flex !important;
         gap: 8px !important;
         flex-shrink: 0 !important;
         margin-top: auto !important;

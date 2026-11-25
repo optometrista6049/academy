@@ -651,6 +651,22 @@ function initializeInfoPanel(){
     // Acciones
     // ------------------------------------------
 
+    const equipBtn = document.getElementById("inventoryEquipButton");
+    const openBtn = document.getElementById("inventoryOpenButton");
+    const saveBtn = document.getElementById("inventorySaveButton");
+
+    if (equipBtn) {
+        equipBtn.style.display = "none";
+        equipBtn.textContent = "Equipar";
+        equipBtn.classList.remove("equippedActive");
+    }
+    if (openBtn) {
+        openBtn.style.display = "none";
+    }
+    if (saveBtn) {
+        saveBtn.style.display = "none";
+    }
+
     showActions(false);
 
     if (inventoryNotice) {
