@@ -182,7 +182,7 @@ export const registryCatalog = {
             "assets/registry/inventory/docHygiene.svg",
 
         documentImage:
-            "assets/docs/higiene_visual.pdf",
+            "assets/docs/guia-higienes-postural-2.pdf",
 
         downloadFilename:
             "Higiene_Visual_y_Postural_Monteserin.pdf",

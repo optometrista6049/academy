@@ -20,7 +20,7 @@ import { createIndividualTree } from '../environment/trees.js';
 import { createIndividualRock } from '../environment/rocks.js';
 import { DEFAULT_PLACED_WORLD_OBJECTS, DEFAULT_PLACED_WORLD_OBJECTS_UPDATED_AT } from './worldObjectsDefaults.js';
 import { DEV_CONFIG, isLocalEditorRuntime } from '../config/devConfig.js';
-import { getBundledCustomModelDataUri } from './customAssetsBundle.js';
+import { resolveVersionedAssetUrl } from './repoAssetResolver.js';
 
 const STORAGE_KEY = 'monteserin_world_placed_objects_v1';
 const STORAGE_UPDATED_KEY = 'monteserin_world_placed_objects_updated_v1';
@@ -165,10 +165,14 @@ export async function checkGlbAvailability(rawUrl, filenameHint = '') {
     const url = normalizeCustomModelUrl(rawUrl || '');
     const filename = (filenameHint || (url ? url.split('/').pop() : '') || '').split('?')[0];
 
+    const versionedUrl = (url && !url.startsWith('blob:') && !url.startsWith('data:'))
+        ? (resolveVersionedAssetUrl(url) || url)
+        : url;
+
     let onServer = false;
-    if (url && !url.startsWith('blob:') && !url.startsWith('data:')) {
+    if (versionedUrl && !versionedUrl.startsWith('blob:') && !versionedUrl.startsWith('data:')) {
         try {
-            const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+            const res = await fetch(versionedUrl, { method: 'HEAD', cache: 'no-store' });
             const ctype = (res.headers.get('content-type') || '').toLowerCase();
             onServer = res.ok && !ctype.includes('text/html');
         } catch (_) {
@@ -176,10 +180,7 @@ export async function checkGlbAvailability(rawUrl, filenameHint = '') {
         }
     }
 
-    const bundledData =
-        (url ? getBundledCustomModelDataUri(url) : null) ||
-        (filename ? getBundledCustomModelDataUri(filename) : null);
-    const inBundle = Boolean(bundledData);
+    const inBundle = false;
 
     const cachedData =
         (url ? await getGlbFromLocalCache(url) : null) ||
@@ -194,7 +195,7 @@ export async function checkGlbAvailability(rawUrl, filenameHint = '') {
         }
     }
 
-    const status = onServer ? 'server' : (inBundle ? 'bundle' : (inCache ? 'cache' : 'missing'));
+    const status = onServer ? 'server' : (inCache ? 'cache' : 'missing');
     return { status, onServer, inBundle, inCache, url, filename };
 }
 
@@ -777,26 +778,16 @@ export async function instantiateWorldObject(itemDesc) {
                     handleMissing();
                 };
 
+                const loadUrl = (url && !url.startsWith('blob:') && !url.startsWith('data:'))
+                    ? (resolveVersionedAssetUrl(url) || url)
+                    : url;
+
                 loader.load(
-                    url,
+                    loadUrl,
                     setupModel,
                     undefined,
                     async (err) => {
-                        console.warn('[WorldObjectsManager] URL GLB no disponible, intentando bundle embebido / caché:', url, err?.message || err);
-
-                        const bundledDataUri = getBundledCustomModelDataUri(url) || getBundledCustomModelDataUri(itemDesc.name || '');
-                        if (bundledDataUri) {
-                            loader.load(
-                                bundledDataUri,
-                                setupModel,
-                                undefined,
-                                async () => {
-                                    await tryIndexedDbRescue();
-                                }
-                            );
-                            return;
-                        }
-
+                        console.warn('[WorldObjectsManager] URL GLB no disponible, intentando caché IndexedDB:', loadUrl, err?.message || err);
                         await tryIndexedDbRescue();
                     }
                 );

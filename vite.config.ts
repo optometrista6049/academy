@@ -2,14 +2,148 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
+  const VIRTUAL_REPO_ASSETS_ID = 'virtual:repo-assets';
+  const RESOLVED_VIRTUAL_REPO_ASSETS_ID = '\0' + VIRTUAL_REPO_ASSETS_ID;
+
+  const computeSha256Short = (input: Buffer | string) =>
+    crypto.createHash('sha256').update(input).digest('hex').slice(0, 12);
+
+  type RepoAssetHashInfo = { hash: string; size: number; mtimeMs: number };
+  type PdfManifestEntry = {
+    missionId: string;
+    missionLabel: string;
+    title: string;
+    catalogId?: string;
+    updatedAt: number;
+    sha256?: string;
+    size?: number;
+  };
+  type RepoModelEntry = {
+    filename: string;
+    assetPath: string;
+    url: string;
+    size: number;
+    hash: string;
+  };
+
+  const scanPublicAssetsState = () => {
+    const publicAssetsDir = path.resolve(__dirname, 'public/assets');
+    const hashes: Record<string, RepoAssetHashInfo> = {};
+
+    const walkAssets = (dir: string) => {
+      if (!fs.existsSync(dir)) return;
+      for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) {
+          walkAssets(full);
+        } else if (ent.isFile()) {
+          if (/\.backup/i.test(ent.name) || ent.name === 'dev_world_versions.json' || ent.name === 'world_layout_versions.json') {
+            continue;
+          }
+          try {
+            const stat = fs.statSync(full);
+            if (stat.size <= 50 * 1024 * 1024) {
+              const relFromPublic = path.relative(path.resolve(__dirname, 'public'), full).replace(/\\/g, '/');
+              const buf = fs.readFileSync(full);
+              hashes[relFromPublic] = {
+                hash: computeSha256Short(buf),
+                size: stat.size,
+                mtimeMs: stat.mtimeMs
+              };
+            }
+          } catch (_) {}
+        }
+      }
+    };
+
+    walkAssets(publicAssetsDir);
+
+    const docsManifestPath = path.resolve(publicAssetsDir, 'docs/docs_manifest.json');
+    const docsManifest: Record<string, PdfManifestEntry> = {};
+    try {
+      if (fs.existsSync(docsManifestPath)) {
+        const parsed = JSON.parse(fs.readFileSync(docsManifestPath, 'utf8'));
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (const [fname, entry] of Object.entries(parsed)) {
+            if (!entry || typeof entry !== 'object') continue;
+            const e = entry as Record<string, unknown>;
+            const info = hashes[`assets/docs/${fname}`];
+            docsManifest[fname] = {
+              missionId: String(e.missionId || 'unassigned'),
+              missionLabel: String(e.missionLabel || 'Sin misión asignada'),
+              title: String(e.title || ''),
+              ...(e.catalogId ? { catalogId: String(e.catalogId) } : {}),
+              updatedAt: Number(e.updatedAt || 0),
+              ...(info ? { sha256: info.hash, size: info.size } : {})
+            };
+          }
+        }
+      }
+    } catch (_) {}
+
+    const modelsList: RepoModelEntry[] = Object.entries(hashes)
+      .filter(([assetPath]) => assetPath.toLowerCase().startsWith('assets/models/custom/') && /\.(glb|gltf)$/i.test(assetPath))
+      .map(([assetPath, info]) => {
+        const filename = path.basename(assetPath);
+        return {
+          filename,
+          assetPath,
+          url: `./${assetPath}`,
+          size: info.size,
+          hash: info.hash
+        };
+      })
+      .sort((a, b) => a.filename.localeCompare(b.filename));
+
+    return {
+      buildTimestamp: Date.now(),
+      hashes,
+      docsManifest,
+      modelsList
+    };
+  };
+
+  const baselineRepoAssets = scanPublicAssetsState();
+
   return {
     base: './',
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'repo-assets-manifest-plugin',
+        resolveId(id) {
+          if (id === VIRTUAL_REPO_ASSETS_ID) {
+            return RESOLVED_VIRTUAL_REPO_ASSETS_ID;
+          }
+        },
+        load(id) {
+          if (id === RESOLVED_VIRTUAL_REPO_ASSETS_ID) {
+            const snapshot = scanPublicAssetsState();
+            return `
+export const REPO_BUILD_TIMESTAMP = ${snapshot.buildTimestamp};
+export const REPO_ASSET_HASHES = ${JSON.stringify(snapshot.hashes, null, 2)};
+export const REPO_DOCS_MANIFEST = ${JSON.stringify(snapshot.docsManifest, null, 2)};
+export const REPO_MODELS_LIST = ${JSON.stringify(snapshot.modelsList, null, 2)};
+`;
+          }
+        },
+        buildStart() {
+          const snapshot = scanPublicAssetsState();
+          const missingManifestDocs = Object.keys(snapshot.docsManifest).filter(
+            (fname) => !snapshot.hashes[`assets/docs/${fname}`]
+          );
+          if (missingManifestDocs.length > 0) {
+            this.warn(
+              `[RepoAssets] docs_manifest.json referencia archivos ausentes en public/assets/docs/: ${missingManifestDocs.join(', ')}`
+            );
+          }
+        }
+      },
       {
         name: 'logo-upload-server',
         configureServer(server) {
@@ -48,260 +182,43 @@ export default defineConfig(() => {
             });
           };
 
-          const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = 5 * 1024 * 1024;
-          const BUNDLE_FILE_PATH = path.resolve(__dirname, 'src/systems/customAssetsBundle.js');
-
-          const readExistingBundleMaps = () => {
-            const prevModels: Record<string, string> = {};
-            const prevDocs: Record<string, string> = {};
+          server.middlewares.use('/api/repo-assets-status', (_req, res) => {
             try {
-              if (!fs.existsSync(BUNDLE_FILE_PATH)) return { prevModels, prevDocs };
-              const raw = fs.readFileSync(BUNDLE_FILE_PATH, 'utf8');
-              const mMatch = raw.match(/export const BUNDLED_CUSTOM_MODELS = (\{[\s\S]*?\n\});/);
-              if (mMatch) Object.assign(prevModels, JSON.parse(mMatch[1]));
-              const dMatch = raw.match(/export const BUNDLED_CUSTOM_DOCS = (\{[\s\S]*?\n\});/);
-              if (dMatch) Object.assign(prevDocs, JSON.parse(dMatch[1]));
-            } catch (_) {}
-            return { prevModels, prevDocs };
-          };
-
-          const restoreMissingAssetsFromBundle = (opts: { deletedModel?: string; deletedDoc?: string } = {}) => {
-            const { prevModels, prevDocs } = readExistingBundleMaps();
-            const customModelsDir = path.resolve(__dirname, 'assets/models/custom');
-            const publicCustomModelsDir = path.resolve(__dirname, 'public/assets/models/custom');
-            const docsDir = path.resolve(__dirname, 'assets/docs');
-            const publicDocsDir = path.resolve(__dirname, 'public/assets/docs');
-
-            for (const [fname, dataUri] of Object.entries(prevModels)) {
-              if (!fname || fname === opts.deletedModel || typeof dataUri !== 'string') continue;
-              const p1 = path.resolve(customModelsDir, fname);
-              const p2 = path.resolve(publicCustomModelsDir, fname);
-              if (!fs.existsSync(p1) && !fs.existsSync(p2)) {
-                const b64 = dataUri.replace(/^data:.*?;base64,/, '');
-                if (b64) {
-                  const buf = Buffer.from(b64, 'base64');
-                  fs.mkdirSync(customModelsDir, { recursive: true });
-                  fs.mkdirSync(publicCustomModelsDir, { recursive: true });
-                  fs.writeFileSync(p1, buf);
-                  fs.writeFileSync(p2, buf);
-                }
-              }
+              const live = scanPublicAssetsState();
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({
+                success: true,
+                baseline: baselineRepoAssets,
+                live
+              }));
+            } catch (err) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              return res.end(JSON.stringify({ error: String(err) }));
             }
-
-            for (const [fname, dataUri] of Object.entries(prevDocs)) {
-              if (!fname || fname === opts.deletedDoc || typeof dataUri !== 'string') continue;
-              const p1 = path.resolve(docsDir, fname);
-              const p2 = path.resolve(publicDocsDir, fname);
-              if (!fs.existsSync(p1) && !fs.existsSync(p2)) {
-                const b64 = dataUri.replace(/^data:.*?;base64,/, '');
-                if (b64) {
-                  const buf = Buffer.from(b64, 'base64');
-                  fs.mkdirSync(docsDir, { recursive: true });
-                  fs.mkdirSync(publicDocsDir, { recursive: true });
-                  fs.writeFileSync(p1, buf);
-                  fs.writeFileSync(p2, buf);
-                }
-              }
-            }
-          };
-
-          const writeCustomAssetsBundle = (opts: { deletedModel?: string; deletedDoc?: string; allowEmptyModels?: boolean; allowEmptyDocs?: boolean } = {}) => {
-            const now = Date.now();
-            restoreMissingAssetsFromBundle(opts);
-
-            const scanBinaryDir = (dirs: string[], regex: RegExp) => {
-              const found = new Map<string, { filename: string; fullPath: string; size: number; mtimeMs: number }>();
-              for (const dir of dirs) {
-                if (!fs.existsSync(dir)) continue;
-                for (const entry of fs.readdirSync(dir)) {
-                  if (!regex.test(entry)) continue;
-                  const full = path.resolve(dir, entry);
-                  try {
-                    const stat = fs.statSync(full);
-                    if (!stat.isFile()) continue;
-                    const prev = found.get(entry);
-                    if (!prev || stat.mtimeMs > prev.mtimeMs) {
-                      found.set(entry, { filename: entry, fullPath: full, size: stat.size, mtimeMs: stat.mtimeMs });
-                    }
-                  } catch (_) {}
-                }
-              }
-              // Asegurar espejo mutuo entre assets/ y public/assets/
-              if (dirs.length === 2) {
-                for (const item of found.values()) {
-                  const aPath = path.resolve(dirs[0], item.filename);
-                  const bPath = path.resolve(dirs[1], item.filename);
-                  try {
-                    if (!fs.existsSync(aPath)) {
-                      fs.mkdirSync(dirs[0], { recursive: true });
-                      fs.copyFileSync(item.fullPath, aPath);
-                    }
-                    if (!fs.existsSync(bPath)) {
-                      fs.mkdirSync(dirs[1], { recursive: true });
-                      fs.copyFileSync(item.fullPath, bPath);
-                    }
-                  } catch (_) {}
-                }
-              }
-              return Array.from(found.values()).sort((a, b) => a.filename.localeCompare(b.filename));
-            };
-
-            const models = scanBinaryDir(
-              [path.resolve(__dirname, 'assets/models/custom'), path.resolve(__dirname, 'public/assets/models/custom')],
-              /\.(glb|gltf)$/i
-            );
-            const docs = scanBinaryDir(
-              [path.resolve(__dirname, 'assets/docs'), path.resolve(__dirname, 'public/assets/docs')],
-              /\.pdf$/i
-            );
-
-            const { prevModels, prevDocs } = readExistingBundleMaps();
-            const modelData: Record<string, string> = {};
-            const modelMeta: Record<string, { filename: string; size: number; skippedOversize: boolean }> = {};
-            const skippedOversize: string[] = [];
-            let bundledModelCount = 0;
-
-            for (const m of models) {
-              const skipped = m.size > CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES;
-              modelMeta[m.filename] = { filename: m.filename, size: m.size, skippedOversize: skipped };
-              if (skipped) {
-                skippedOversize.push(m.filename);
-              } else {
-                const mime = m.filename.toLowerCase().endsWith('.gltf') ? 'model/gltf+json' : 'model/gltf-binary';
-                modelData[m.filename] = `data:${mime};base64,${fs.readFileSync(m.fullPath).toString('base64')}`;
-                bundledModelCount++;
-              }
-            }
-
-            if (models.length === 0 && Object.keys(prevModels).length > 0 && !opts.allowEmptyModels && !opts.deletedModel) {
-              Object.assign(modelData, prevModels);
-              bundledModelCount = Object.keys(modelData).length;
-            }
-
-            const docData: Record<string, string> = {};
-            const docMeta: Record<string, { filename: string; size: number; skippedOversize: boolean }> = {};
-            let bundledDocCount = 0;
-
-            for (const d of docs) {
-              const skipped = d.size > CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES;
-              docMeta[d.filename] = { filename: d.filename, size: d.size, skippedOversize: skipped };
-              if (skipped) {
-                skippedOversize.push(d.filename);
-              } else {
-                docData[d.filename] = `data:application/pdf;base64,${fs.readFileSync(d.fullPath).toString('base64')}`;
-                bundledDocCount++;
-              }
-            }
-
-            if (docs.length === 0 && Object.keys(prevDocs).length > 0 && !opts.allowEmptyDocs && !opts.deletedDoc) {
-              Object.assign(docData, prevDocs);
-              bundledDocCount = Object.keys(docData).length;
-            }
-
-            const bundleCode = `/* ======================================================
-   MONTESERIN ACADEMY - CUSTOM ASSETS FALLBACK BUNDLE (AUTO-GENERATED)
-   Contiene copias Data-URI Base64 en texto plano (.js) de modelos .GLB/.GLTF
-   y documentos .PDF personalizados para garantizar disponibilidad total en
-   GitHub Pages aunque el sincronizador omita binarios creados en tiempo de ejecución.
-   Regenerado automáticamente por vite.config.ts al subir, borrar u hornear.
-   ====================================================== */
-
-export const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = ${CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES};
-export const CUSTOM_ASSETS_BUNDLE_UPDATED_AT = ${now};
-
-export const BUNDLED_CUSTOM_MODELS_META = ${JSON.stringify(modelMeta, null, 4)};
-export const BUNDLED_CUSTOM_DOCS_META = ${JSON.stringify(docMeta, null, 4)};
-
-export const BUNDLED_CUSTOM_MODELS = ${JSON.stringify(modelData, null, 4)};
-export const BUNDLED_CUSTOM_DOCS = ${JSON.stringify(docData, null, 4)};
-
-function extractAssetFilename(urlOrFilename) {
-    if (!urlOrFilename || typeof urlOrFilename !== "string") return "";
-    const noHash = urlOrFilename.split("#")[0].split("?")[0].trim();
-    if (!noHash || noHash.startsWith("data:") || noHash.startsWith("blob:")) return "";
-    const parts = noHash.split("/");
-    const last = parts[parts.length - 1] || "";
-    try {
-        return decodeURIComponent(last);
-    } catch (_) {
-        return last;
-    }
-}
-
-function findInBundleMap(map, urlOrFilename) {
-    const fname = extractAssetFilename(urlOrFilename);
-    if (!fname || !map) return null;
-    if (map[fname]) return map[fname];
-    const lower = fname.toLowerCase();
-    for (const key of Object.keys(map)) {
-        if (key.toLowerCase() === lower) return map[key];
-    }
-    return null;
-}
-
-export function getBundledCustomModelDataUri(urlOrFilename) {
-    return findInBundleMap(BUNDLED_CUSTOM_MODELS, urlOrFilename);
-}
-
-export function getBundledCustomDocDataUri(urlOrFilename) {
-    return findInBundleMap(BUNDLED_CUSTOM_DOCS, urlOrFilename);
-}
-
-export function getBundledCustomDocsList() {
-    return Object.keys(BUNDLED_CUSTOM_DOCS_META).map((fname) => {
-        const meta = BUNDLED_CUSTOM_DOCS_META[fname] || {};
-        return {
-            filename: fname,
-            url: "./assets/docs/" + encodeURIComponent(fname),
-            assetPath: "assets/docs/" + fname,
-            size: Number(meta.size || 0),
-            updatedAt: CUSTOM_ASSETS_BUNDLE_UPDATED_AT,
-            inAssets: true,
-            inPublic: true,
-            inBundle: Boolean(BUNDLED_CUSTOM_DOCS[fname]),
-            skippedOversize: Boolean(meta.skippedOversize)
-        };
-    }).sort((a, b) => a.filename.localeCompare(b.filename));
-}
-`;
-
-            const tmpPath = `${BUNDLE_FILE_PATH}.tmp`;
-            fs.mkdirSync(path.dirname(BUNDLE_FILE_PATH), { recursive: true });
-            fs.writeFileSync(tmpPath, bundleCode, 'utf8');
-            fs.renameSync(tmpPath, BUNDLE_FILE_PATH);
-
-            return {
-              modelCount: models.length,
-              docCount: docs.length,
-              bundledModelCount,
-              bundledDocCount,
-              skippedOversize,
-              updatedAt: now
-            };
-          };
-
-          restoreMissingAssetsFromBundle();
+          });
 
           server.middlewares.use('/api/upload-logo', async (req, res) => {
             if (req.method === 'POST') {
               try {
                 const body = await readRequestBody(req);
                 const data = JSON.parse(body || '{}');
+                let logoHash = '';
+                let logoSize = 0;
+                const publicUiDir = path.resolve(__dirname, 'public/assets/ui');
+                fs.mkdirSync(publicUiDir, { recursive: true });
+
                 if (data.cleanBase64Data) {
                   const cleanBuffer = Buffer.from(
                     data.cleanBase64Data.replace(/^data:image\/\w+;base64,/, ''),
                     'base64'
                   );
-                  fs.mkdirSync(path.resolve(__dirname, 'assets/ui'), { recursive: true });
-                  fs.mkdirSync(path.resolve(__dirname, 'public/assets/ui'), { recursive: true });
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_clean.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_trans.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_official_logo.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo_clean.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo_trans.png'), cleanBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_official_logo.png'), cleanBuffer);
+                  logoHash = computeSha256Short(cleanBuffer);
+                  logoSize = cleanBuffer.length;
+                  fs.writeFileSync(path.resolve(publicUiDir, 'monteserin_academy_logo_clean.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(publicUiDir, 'monteserin_academy_logo.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(publicUiDir, 'monteserin_academy_logo_trans.png'), cleanBuffer);
+                  fs.writeFileSync(path.resolve(publicUiDir, 'monteserin_official_logo.png'), cleanBuffer);
                   try {
                     fs.mkdirSync(path.resolve(__dirname, 'src/assets/images'), { recursive: true });
                     fs.writeFileSync(path.resolve(__dirname, 'src/assets/images/monteserin_official_logo.png'), cleanBuffer);
@@ -312,11 +229,16 @@ export function getBundledCustomDocsList() {
                     data.rawBase64Data.replace(/^data:image\/\w+;base64,/, ''),
                     'base64'
                   );
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/monteserin_academy_logo_raw.png'), rawBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/monteserin_academy_logo_raw.png'), rawBuffer);
+                  fs.writeFileSync(path.resolve(publicUiDir, 'monteserin_academy_logo_raw.png'), rawBuffer);
                 }
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, message: 'Logotipo guardado exitosamente en el servidor' }));
+                res.end(JSON.stringify({
+                  success: true,
+                  message: 'Logotipo guardado en public/assets/ui/',
+                  hash: logoHash,
+                  size: logoSize,
+                  url: './assets/ui/monteserin_academy_logo_clean.png'
+                }));
               } catch (err) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
@@ -333,25 +255,29 @@ export function getBundledCustomDocsList() {
               try {
                 const body = await readRequestBody(req);
                 const data = JSON.parse(body || '{}');
+                let carnetHash = '';
+                let carnetSize = 0;
                 if (data.carnetBase64Data) {
                   const carnetBuffer = Buffer.from(
                     data.carnetBase64Data.replace(/^data:image\/\w+;base64,/, ''),
                     'base64'
                   );
-                  fs.mkdirSync(path.resolve(__dirname, 'assets/carnet'), { recursive: true });
-                  fs.mkdirSync(path.resolve(__dirname, 'public/assets/carnet'), { recursive: true });
-                  fs.mkdirSync(path.resolve(__dirname, 'assets/ui'), { recursive: true });
-                  fs.mkdirSync(path.resolve(__dirname, 'public/assets/ui'), { recursive: true });
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/carnet/carnet_oficial.jpg'), carnetBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/carnet/carnet_oficial.jpg'), carnetBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'assets/ui/ASPIRANTE.jpg'), carnetBuffer);
-                  fs.writeFileSync(path.resolve(__dirname, 'public/assets/ui/ASPIRANTE.jpg'), carnetBuffer);
+                  carnetHash = computeSha256Short(carnetBuffer);
+                  carnetSize = carnetBuffer.length;
+                  const publicCarnetDir = path.resolve(__dirname, 'public/assets/carnet');
+                  const publicUiDir = path.resolve(__dirname, 'public/assets/ui');
+                  fs.mkdirSync(publicCarnetDir, { recursive: true });
+                  fs.mkdirSync(publicUiDir, { recursive: true });
+                  fs.writeFileSync(path.resolve(publicCarnetDir, 'carnet_oficial.jpg'), carnetBuffer);
+                  fs.writeFileSync(path.resolve(publicUiDir, 'ASPIRANTE.jpg'), carnetBuffer);
                 }
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ 
-                  success: true, 
-                  message: 'Carnet JPG oficial guardado con total exactitud binaria',
-                  url: './assets/carnet/carnet_oficial.jpg'
+                res.end(JSON.stringify({
+                  success: true,
+                  message: 'Carnet JPG guardado en public/assets/',
+                  hash: carnetHash,
+                  size: carnetSize,
+                  url: './assets/ui/ASPIRANTE.jpg'
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -365,35 +291,34 @@ export function getBundledCustomDocsList() {
           });
 
           server.middlewares.use('/api/upload-custom-model', async (req, res) => {
+            const publicCustomDir = path.resolve(__dirname, 'public/assets/models/custom');
+
             if (req.method === 'GET') {
               try {
-                const publicCustomDir = path.resolve(__dirname, 'public/assets/models/custom');
-                const customDir = path.resolve(__dirname, 'assets/models/custom');
-                const seen = new Map<string, { filename: string; url: string; size: number }>();
-
-                [publicCustomDir, customDir].forEach((dir) => {
-                  if (fs.existsSync(dir)) {
-                    for (const entry of fs.readdirSync(dir)) {
-                      if (!/\.(glb|gltf)$/i.test(entry)) continue;
-                      const fullPath = path.resolve(dir, entry);
-                      try {
-                        const stat = fs.statSync(fullPath);
-                        if (stat.isFile() && !seen.has(entry)) {
-                          seen.set(entry, {
-                            filename: entry,
-                            url: `./assets/models/custom/${entry}`,
-                            size: stat.size
-                          });
-                        }
-                      } catch (_) {}
-                    }
+                const seen = new Map<string, { filename: string; url: string; assetPath: string; size: number; hash: string }>();
+                if (fs.existsSync(publicCustomDir)) {
+                  for (const entry of fs.readdirSync(publicCustomDir)) {
+                    if (!/\.(glb|gltf)$/i.test(entry)) continue;
+                    const fullPath = path.resolve(publicCustomDir, entry);
+                    try {
+                      const stat = fs.statSync(fullPath);
+                      if (stat.isFile() && !seen.has(entry)) {
+                        seen.set(entry, {
+                          filename: entry,
+                          assetPath: `assets/models/custom/${entry}`,
+                          url: `./assets/models/custom/${entry}`,
+                          size: stat.size,
+                          hash: computeSha256Short(fs.readFileSync(fullPath))
+                        });
+                      }
+                    } catch (_) {}
                   }
-                });
+                }
 
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
-                  models: Array.from(seen.values())
+                  models: Array.from(seen.values()).sort((a, b) => a.filename.localeCompare(b.filename))
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -421,30 +346,23 @@ export function getBundledCustomDocsList() {
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({ error: 'filename inválido (solo se permiten .glb o .gltf)' }));
                 }
-                const customDir = path.resolve(__dirname, 'assets/models/custom');
-                const publicCustomDir = path.resolve(__dirname, 'public/assets/models/custom');
-                fs.mkdirSync(customDir, { recursive: true });
                 fs.mkdirSync(publicCustomDir, { recursive: true });
 
                 const buffer = Buffer.from(
                   base64Data.replace(/^data:.*?;base64,/, ''),
                   'base64'
                 );
-
-                const filePath = path.resolve(customDir, safeName);
                 const publicFilePath = path.resolve(publicCustomDir, safeName);
-                fs.writeFileSync(filePath, buffer);
                 fs.writeFileSync(publicFilePath, buffer);
-
-                const bundleStats = writeCustomAssetsBundle();
 
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
                   url: `./assets/models/custom/${safeName}`,
+                  assetPath: `assets/models/custom/${safeName}`,
                   filename: safeName,
                   size: buffer.length,
-                  bundleStats
+                  hash: computeSha256Short(buffer)
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -464,18 +382,14 @@ export function getBundledCustomDocsList() {
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({ error: 'filename inválido' }));
                 }
-                const customDir = path.resolve(__dirname, 'assets/models/custom');
-                const publicCustomDir = path.resolve(__dirname, 'public/assets/models/custom');
                 let deleted = false;
-                [path.resolve(customDir, safeName), path.resolve(publicCustomDir, safeName)].forEach((p) => {
-                  if (fs.existsSync(p)) {
-                    fs.unlinkSync(p);
-                    deleted = true;
-                  }
-                });
-                const bundleStats = writeCustomAssetsBundle({ deletedModel: safeName, allowEmptyModels: true });
+                const p = path.resolve(publicCustomDir, safeName);
+                if (fs.existsSync(p)) {
+                  fs.unlinkSync(p);
+                  deleted = true;
+                }
                 res.setHeader('Content-Type', 'application/json');
-                return res.end(JSON.stringify({ success: true, deleted, filename: safeName, bundleStats }));
+                return res.end(JSON.stringify({ success: true, deleted, filename: safeName }));
               };
 
               try {
@@ -503,7 +417,7 @@ export function getBundledCustomDocsList() {
             res.end('Method Not Allowed');
           });
 
-          // Servidor estático directo para modelos personalizados subidos (con 404 real si falta el binario)
+          // Servidor estático directo para modelos personalizados (fuente única: public/assets/models/custom)
           server.middlewares.use('/assets/models/custom', (req, res, next) => {
             const cleanUrl = (req.url || '').split('?')[0].replace(/^\//, '');
             let decodedUrl = '';
@@ -519,10 +433,8 @@ export function getBundledCustomDocsList() {
               return next();
             }
             const pubFile = path.resolve(__dirname, 'public/assets/models/custom', safeFile);
-            const assetFile = path.resolve(__dirname, 'assets/models/custom', safeFile);
-            const target = fs.existsSync(pubFile) ? pubFile : (fs.existsSync(assetFile) ? assetFile : null);
-            if (target) {
-              const stat = fs.statSync(target);
+            if (fs.existsSync(pubFile)) {
+              const stat = fs.statSync(pubFile);
               res.setHeader('Content-Type', safeFile.toLowerCase().endsWith('.gltf') ? 'model/gltf+json' : 'model/gltf-binary');
               res.setHeader('Content-Length', String(stat.size));
               res.setHeader('Cache-Control', 'no-cache');
@@ -530,19 +442,17 @@ export function getBundledCustomDocsList() {
                 res.statusCode = 200;
                 return res.end();
               }
-              return fs.createReadStream(target).pipe(res);
+              return fs.createReadStream(pubFile).pipe(res);
             }
-            // Devolver 404 explícito para evitar que Vite entregue index.html como falso GLB
             res.statusCode = 404;
             res.setHeader('Content-Type', 'application/json');
             return res.end(JSON.stringify({ error: 'Custom model not found', filename: safeFile }));
           });
 
           // ======================================================
-          // GESTOR PERMANENTE DE DOCUMENTOS PDF (DevTools F9 + GitHub)
+          // GESTOR PERMANENTE DE DOCUMENTOS PDF (Fuente única: public/assets/docs)
           // ======================================================
           server.middlewares.use('/api/upload-pdf', async (req, res) => {
-            const docsDir = path.resolve(__dirname, 'assets/docs');
             const publicDocsDir = path.resolve(__dirname, 'public/assets/docs');
             const manifestFilename = 'docs_manifest.json';
 
@@ -562,7 +472,7 @@ export function getBundledCustomDocsList() {
 
             const inferDefaultMeta = (fname: string) => {
               const lower = fname.toLowerCase();
-              if (lower === 'higiene_visual.pdf') {
+              if (lower === 'higiene_visual.pdf' || lower.includes('higien')) {
                 return {
                   missionId: 'mission002',
                   missionLabel: 'Misión 2: El Registro de Entrada',
@@ -596,98 +506,85 @@ export function getBundledCustomDocsList() {
             const sanitizeCatalogId = (raw: unknown) =>
               sanitizeMetaText(raw, 60).replace(/[^a-zA-Z0-9_-]/g, '');
 
-            type PdfManifestEntry = {
-              missionId: string;
-              missionLabel: string;
-              title: string;
-              catalogId?: string;
-              updatedAt: number;
-            };
-
             const readDocsManifest = (): Record<string, PdfManifestEntry> => {
-              const candidates = [
-                path.resolve(docsDir, manifestFilename),
-                path.resolve(publicDocsDir, manifestFilename)
-              ];
-              for (const p of candidates) {
-                try {
-                  if (!fs.existsSync(p)) continue;
+              const p = path.resolve(publicDocsDir, manifestFilename);
+              try {
+                if (fs.existsSync(p)) {
                   const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
                   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                     return parsed as Record<string, PdfManifestEntry>;
                   }
-                } catch (_) {}
-              }
+                }
+              } catch (_) {}
               return {};
             };
 
             const writeDocsManifest = (manifest: Record<string, PdfManifestEntry>) => {
               const json = JSON.stringify(manifest, null, 2) + '\n';
-              fs.mkdirSync(docsDir, { recursive: true });
               fs.mkdirSync(publicDocsDir, { recursive: true });
-              fs.writeFileSync(path.resolve(docsDir, manifestFilename), json, 'utf8');
               fs.writeFileSync(path.resolve(publicDocsDir, manifestFilename), json, 'utf8');
             };
 
             if (req.method === 'GET') {
               try {
                 const manifest = readDocsManifest();
-                const docsMap = new Map<string, {
+                const docs: Array<{
                   filename: string;
                   url: string;
                   assetPath: string;
                   size: number;
+                  hash: string;
                   updatedAt: number;
-                  inAssets: boolean;
                   inPublic: boolean;
+                  inRepoBaseline: boolean;
+                  matchesRepoHash: boolean;
                   missionId: string;
                   missionLabel: string;
                   title: string;
                   catalogId: string;
                   manifestUpdatedAt: number;
-                }>();
+                }> = [];
 
-                const scanDir = (dir: string, sourceKey: 'inAssets' | 'inPublic') => {
-                  if (!fs.existsSync(dir)) return;
-                  for (const entry of fs.readdirSync(dir)) {
+                if (fs.existsSync(publicDocsDir)) {
+                  for (const entry of fs.readdirSync(publicDocsDir)) {
                     if (!entry.toLowerCase().endsWith('.pdf')) continue;
-                    const fullPath = path.resolve(dir, entry);
+                    const fullPath = path.resolve(publicDocsDir, entry);
                     try {
                       const stat = fs.statSync(fullPath);
                       if (!stat.isFile()) continue;
-                      const prev = docsMap.get(entry);
+                      const buf = fs.readFileSync(fullPath);
+                      const fileHash = computeSha256Short(buf);
+                      const baselineInfo = baselineRepoAssets.hashes[`assets/docs/${entry}`];
                       const fallbackMeta = inferDefaultMeta(entry);
                       const savedMeta = manifest[entry];
-                      if (prev) {
-                        prev[sourceKey] = true;
-                        prev.size = Math.max(prev.size, stat.size);
-                        prev.updatedAt = Math.max(prev.updatedAt, stat.mtimeMs);
-                      } else {
-                        docsMap.set(entry, {
-                          filename: entry,
-                          url: `./assets/docs/${encodeURIComponent(entry)}`,
-                          assetPath: `assets/docs/${entry}`,
-                          size: stat.size,
-                          updatedAt: stat.mtimeMs,
-                          inAssets: sourceKey === 'inAssets',
-                          inPublic: sourceKey === 'inPublic',
-                          missionId: sanitizeMetaText(savedMeta?.missionId, 60) || fallbackMeta.missionId,
-                          missionLabel: sanitizeMetaText(savedMeta?.missionLabel, 120) || fallbackMeta.missionLabel,
-                          title: sanitizeMetaText(savedMeta?.title, 120) || fallbackMeta.title,
-                          catalogId: sanitizeCatalogId(savedMeta?.catalogId),
-                          manifestUpdatedAt: Number(savedMeta?.updatedAt || 0)
-                        });
-                      }
+                      docs.push({
+                        filename: entry,
+                        url: `./assets/docs/${encodeURIComponent(entry)}`,
+                        assetPath: `assets/docs/${entry}`,
+                        size: stat.size,
+                        hash: fileHash,
+                        updatedAt: stat.mtimeMs,
+                        inPublic: true,
+                        inRepoBaseline: Boolean(baselineInfo),
+                        matchesRepoHash: Boolean(baselineInfo && baselineInfo.hash === fileHash),
+                        missionId: sanitizeMetaText(savedMeta?.missionId, 60) || fallbackMeta.missionId,
+                        missionLabel: sanitizeMetaText(savedMeta?.missionLabel, 120) || fallbackMeta.missionLabel,
+                        title: sanitizeMetaText(savedMeta?.title, 120) || fallbackMeta.title,
+                        catalogId: sanitizeCatalogId(savedMeta?.catalogId),
+                        manifestUpdatedAt: Number(savedMeta?.updatedAt || 0)
+                      });
                     } catch (_) {}
                   }
-                };
+                }
 
-                scanDir(docsDir, 'inAssets');
-                scanDir(publicDocsDir, 'inPublic');
-
-                const docs = Array.from(docsMap.values()).sort((a, b) => a.filename.localeCompare(b.filename));
+                docs.sort((a, b) => a.filename.localeCompare(b.filename));
                 res.setHeader('Content-Type', 'application/json');
-                return res.end(JSON.stringify({ success: true, docs, manifest }));
+                return res.end(JSON.stringify({
+                  success: true,
+                  docs,
+                  manifest,
+                  baselineManifest: baselineRepoAssets.docsManifest
+                }));
               } catch (err) {
                 res.statusCode = 500;
                 res.setHeader('Content-Type', 'application/json');
@@ -730,17 +627,14 @@ export function getBundledCustomDocsList() {
                   return res.end(JSON.stringify({ error: 'El archivo seleccionado no tiene una cabecera PDF válida (%PDF-).' }));
                 }
 
-                const assetFilePath = path.resolve(docsDir, safeName);
                 const publicFilePath = path.resolve(publicDocsDir, safeName);
-                if (!assetFilePath.startsWith(docsDir + path.sep) || !publicFilePath.startsWith(publicDocsDir + path.sep)) {
+                if (!publicFilePath.startsWith(publicDocsDir + path.sep)) {
                   res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({ error: 'Nombre de archivo no permitido.' }));
                 }
 
-                const alreadyExists = fs.existsSync(assetFilePath) || fs.existsSync(publicFilePath);
-
-                if (alreadyExists && !overwrite) {
+                if (fs.existsSync(publicFilePath) && !overwrite) {
                   res.statusCode = 409;
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(JSON.stringify({
@@ -750,11 +644,10 @@ export function getBundledCustomDocsList() {
                   }));
                 }
 
-                fs.mkdirSync(docsDir, { recursive: true });
                 fs.mkdirSync(publicDocsDir, { recursive: true });
-                fs.writeFileSync(assetFilePath, buffer);
                 fs.writeFileSync(publicFilePath, buffer);
 
+                const fileHash = computeSha256Short(buffer);
                 const fallbackMeta = inferDefaultMeta(safeName);
                 const manifest = readDocsManifest();
                 const prevMeta = manifest[safeName];
@@ -783,8 +676,6 @@ export function getBundledCustomDocsList() {
                 };
                 writeDocsManifest(manifest);
 
-                const bundleStats = writeCustomAssetsBundle();
-
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
@@ -792,12 +683,12 @@ export function getBundledCustomDocsList() {
                   url: `./assets/docs/${encodeURIComponent(safeName)}`,
                   assetPath: `assets/docs/${safeName}`,
                   size: buffer.length,
+                  hash: fileHash,
                   updatedAt: now,
                   missionId: finalMissionId,
                   missionLabel: finalMissionLabel,
                   title: finalTitle,
-                  catalogId: finalCatalogId,
-                  bundleStats
+                  catalogId: finalCatalogId
                 }));
               } catch (err) {
                 res.statusCode = 500;
@@ -816,12 +707,11 @@ export function getBundledCustomDocsList() {
                   return res.end(JSON.stringify({ error: 'filename es requerido' }));
                 }
                 const safeName = sanitizePdfName(filename);
-                const assetFilePath = path.resolve(docsDir, safeName);
                 const publicFilePath = path.resolve(publicDocsDir, safeName);
-                if (!fs.existsSync(assetFilePath) && !fs.existsSync(publicFilePath)) {
+                if (!fs.existsSync(publicFilePath)) {
                   res.statusCode = 404;
                   res.setHeader('Content-Type', 'application/json');
-                  return res.end(JSON.stringify({ error: `No existe el archivo "${safeName}".` }));
+                  return res.end(JSON.stringify({ error: `No existe el archivo "${safeName}" en public/assets/docs/.` }));
                 }
 
                 const fallbackMeta = inferDefaultMeta(safeName);
@@ -871,23 +761,19 @@ export function getBundledCustomDocsList() {
             if (req.method === 'DELETE') {
               const handleDelete = (rawName: string) => {
                 const safeName = sanitizePdfName(rawName);
-                const assetFilePath = path.resolve(docsDir, safeName);
                 const publicFilePath = path.resolve(publicDocsDir, safeName);
                 let deleted = false;
-                [assetFilePath, publicFilePath].forEach((p) => {
-                  if (fs.existsSync(p)) {
-                    fs.unlinkSync(p);
-                    deleted = true;
-                  }
-                });
+                if (fs.existsSync(publicFilePath)) {
+                  fs.unlinkSync(publicFilePath);
+                  deleted = true;
+                }
                 const manifest = readDocsManifest();
                 if (manifest[safeName]) {
                   delete manifest[safeName];
                   writeDocsManifest(manifest);
                 }
-                const bundleStats = writeCustomAssetsBundle({ deletedDoc: safeName, allowEmptyDocs: true });
                 res.setHeader('Content-Type', 'application/json');
-                return res.end(JSON.stringify({ success: true, deleted, filename: safeName, bundleStats }));
+                return res.end(JSON.stringify({ success: true, deleted, filename: safeName }));
               };
 
               try {
@@ -916,7 +802,7 @@ export function getBundledCustomDocsList() {
             res.end('Method Not Allowed');
           });
 
-          // Servidor estático directo para documentos PDF (devuelve 404 JSON si no existe)
+          // Servidor estático directo para documentos PDF/JSON (fuente única: public/assets/docs)
           server.middlewares.use('/assets/docs', (req, res, next) => {
             const cleanUrl = (req.url || '').split('?')[0].replace(/^\//, '');
             let decodedUrl = '';
@@ -932,10 +818,8 @@ export function getBundledCustomDocsList() {
               return next();
             }
             const pubFile = path.resolve(__dirname, 'public/assets/docs', safeFile);
-            const assetFile = path.resolve(__dirname, 'assets/docs', safeFile);
-            const target = fs.existsSync(pubFile) ? pubFile : (fs.existsSync(assetFile) ? assetFile : null);
-            if (target) {
-              const stat = fs.statSync(target);
+            if (fs.existsSync(pubFile)) {
+              const stat = fs.statSync(pubFile);
               const isJson = safeFile.toLowerCase().endsWith('.json');
               res.setHeader('Content-Type', isJson ? 'application/json; charset=utf-8' : 'application/pdf');
               if (!isJson) {
@@ -947,7 +831,7 @@ export function getBundledCustomDocsList() {
                 res.statusCode = 200;
                 return res.end();
               }
-              return fs.createReadStream(target).pipe(res);
+              return fs.createReadStream(pubFile).pipe(res);
             }
             res.statusCode = 404;
             res.setHeader('Content-Type', 'application/json');
@@ -1445,9 +1329,6 @@ export const DEFAULT_3D_PRESETS = ${JSON.stringify(customItems, null, 4)};
                   fs.writeFileSync(path.resolve(publicDataDir, 'custom_3d_items.json'), cStr, 'utf8');
                 }
 
-                // 5. Regenerar src/systems/customAssetsBundle.js con todos los .GLB/.GLTF y .PDF actuales
-                const bundleStats = writeCustomAssetsBundle();
-
                 res.setHeader('Content-Type', 'application/json');
                 return res.end(JSON.stringify({
                   success: true,
@@ -1455,8 +1336,7 @@ export const DEFAULT_3D_PRESETS = ${JSON.stringify(customItems, null, 4)};
                   message: 'Escenario, objetos y catálogo 3D horneados con éxito en el código fuente para Git',
                   npcsCount: Object.keys(bakedLayout?.npcs || {}).length,
                   objectsCount: objectsList.length,
-                  customItemsCount: hasCustomItems ? customItems.length : 0,
-                  bundleStats
+                  customItemsCount: hasCustomItems ? customItems.length : 0
                 }));
               } catch (err) {
                 console.error('[Server] Error en /api/bake-world-to-code:', err);
@@ -1550,7 +1430,8 @@ REGLAS DE CÓDIGO THREE.JS:
           });
         },
         closeBundle() {
-          // Blindaje de compilación para GitHub Pages: eliminar backups y archivos de verificación si reapareciesen en public/
+          // Blindaje de compilación para GitHub Pages: eliminar backups y archivos de verificación
+          // y enriquecer dist/assets/docs/docs_manifest.json con sha256 + size reales
           const distDir = path.resolve(__dirname, 'dist');
           if (!fs.existsSync(distDir)) return;
 
@@ -1573,6 +1454,14 @@ REGLAS DE CÓDIGO THREE.JS:
           };
 
           pruneDir(distDir);
+
+          try {
+            const snapshot = scanPublicAssetsState();
+            const distManifestPath = path.resolve(distDir, 'assets/docs/docs_manifest.json');
+            if (fs.existsSync(path.dirname(distManifestPath))) {
+              fs.writeFileSync(distManifestPath, JSON.stringify(snapshot.docsManifest, null, 2) + '\n', 'utf8');
+            }
+          } catch (_) {}
         }
       }
     ],

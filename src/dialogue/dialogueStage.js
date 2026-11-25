@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { resolveVersionedAssetUrl } from '../systems/repoAssetResolver.js';
 
 /**
  * Escenario Cinemático de Estudio para Diálogos con NPCs (Opción 1):
@@ -82,7 +83,7 @@ export function getNPCModelUrl(speakerName) {
  * 3. Ruta directa a assets/ui/monteserin_academy_logo_clean.png
  */
 export function getOfficialLogoUrl() {
-    return './assets/ui/monteserin_academy_logo_clean.png?v=trans_verified';
+    return resolveVersionedAssetUrl('assets/ui/monteserin_academy_logo_clean.png');
 }
 
 /**

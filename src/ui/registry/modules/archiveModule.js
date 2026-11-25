@@ -9,6 +9,7 @@ import { openDocumentViewer } from "../../documentViewer.js";
 import { gameState } from "../../../state/gameState.js";
 import { saveGame } from "../../../systems/saveSystem.js";
 import { triggerResolvedDocumentDownload } from "../../../systems/pdfDocumentStore.js";
+import { resolveVersionedAssetUrl } from "../../../systems/repoAssetResolver.js";
 
 let archiveRoot = null;
 let archivePanel = null;
@@ -212,7 +213,8 @@ function renderDocumentList() {
 
         const thumb = document.createElement("img");
         thumb.className = "archiveItemThumb";
-        thumb.src = doc.thumbnail || doc.documentImage;
+        const thumbSrc = doc.thumbnail || doc.documentImage;
+        thumb.src = resolveVersionedAssetUrl(thumbSrc) || thumbSrc;
         thumb.alt = doc.title;
         thumb.draggable = false;
 
@@ -285,7 +287,8 @@ function renderSelectedDocument() {
 
     const previewImg = document.createElement("img");
     previewImg.className = "archivePreviewImage";
-    previewImg.src = isPdfDoc ? (doc.thumbnail || docSource) : docSource;
+    const previewSrc = isPdfDoc ? (doc.thumbnail || docSource) : docSource;
+    previewImg.src = resolveVersionedAssetUrl(previewSrc) || previewSrc;
     previewImg.alt = doc.title;
     previewImg.draggable = false;
 

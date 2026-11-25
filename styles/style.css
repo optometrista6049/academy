@@ -5817,9 +5817,129 @@ body.registry-open .devSuiteTriggerBtn,
 }
 
 .devPdfSyncBadge.localOnly{
-    background:rgba(56, 189, 248, 0.18);
-    color:#7dd3fc;
-    border-color:rgba(56, 189, 248, 0.42);
+    background:rgba(245, 158, 11, 0.18);
+    color:#fde68a;
+    border-color:rgba(245, 158, 11, 0.45);
+}
+
+.devPdfSyncBadge.repoOk{
+    background:rgba(16, 185, 129, 0.18);
+    color:#6ee7b7;
+    border-color:rgba(16, 185, 129, 0.42);
+}
+
+.devRepoGlobalBanner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    flex-wrap:wrap;
+    padding:9px 12px;
+    margin-bottom:12px;
+    border-radius:9px;
+    font-size:0.75rem;
+    line-height:1.35;
+}
+
+.devRepoGlobalBanner.ok{
+    background:rgba(16, 185, 129, 0.12);
+    border:1px solid rgba(16, 185, 129, 0.4);
+    color:#a7f3d0;
+}
+
+.devRepoGlobalBanner.pending{
+    background:rgba(245, 158, 11, 0.14);
+    border:1px solid rgba(245, 158, 11, 0.45);
+    color:#fde68a;
+}
+
+.devRepoGlobalText{
+    flex:1;
+    min-width:220px;
+}
+
+.devRepoGlobalActions{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-wrap:wrap;
+}
+
+.devSlotHeaderTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    flex-wrap:wrap;
+}
+
+.devRepoSyncBadge{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    padding:2px 7px;
+    border-radius:6px;
+    font-size:0.64rem;
+    font-weight:700;
+}
+
+.devRepoSyncBadge.repoOk{
+    background:rgba(16, 185, 129, 0.16);
+    color:#6ee7b7;
+    border:1px solid rgba(16, 185, 129, 0.4);
+}
+
+.devRepoSyncBadge.pending{
+    background:rgba(245, 158, 11, 0.16);
+    color:#fde68a;
+    border:1px solid rgba(245, 158, 11, 0.45);
+}
+
+.devPdfModelList{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    max-height:145px;
+    overflow-y:auto;
+    margin-top:2px;
+    padding-right:2px;
+}
+
+.devPdfModelRow{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:6px;
+    background:rgba(8, 12, 9, 0.72);
+    border:1px solid rgba(212, 175, 55, 0.25);
+    border-radius:6px;
+    padding:5px 7px;
+}
+
+.devPdfModelInfo{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+    flex:1;
+}
+
+.devPdfModelName{
+    font-size:0.71rem;
+    font-weight:700;
+    color:#fff8e7;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.devPdfModelMeta{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:5px;
+    font-size:0.63rem;
+    color:#94a3b8;
 }
 
 .devPdfAssignRow{

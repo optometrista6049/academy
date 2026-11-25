@@ -1,15 +1,24 @@
 /* ======================================================
-   MONTESERIN ACADEMY - ASSET MANAGER (DEV SUITE)
-   Gestor de recursos con ranuras aisladas (Slots) para
-   evitar confusiones entre logos, carnets, documentos PDF y modelos 3D.
+   MONTESERIN ACADEMY - ASSET MANAGER (OPCIÓN 1)
+   Gestor unificado con fuente única en public/assets/:
+   - Hash SHA-256 automático por build (virtual:repo-assets)
+   - Indicadores reales: 🟢 En repositorio vs 🟡 Solo local / Modificado
+   - Ranuras aisladas: Logo, Carnet, PDFs por Misión y Modelos 3D (.GLB)
    ====================================================== */
 
 import { registryCatalog } from '../ui/registry/registryCatalog.js';
 import { equipItem, loadGLBEquipment } from '../player/playerEquipment.js';
 import { showDevModalDialog, escapeHtml } from './devModalDialog.js';
 import { showDevToast } from './devPanel.js';
-import { getBundledCustomDocsList, getBundledCustomDocDataUri } from '../systems/customAssetsBundle.js';
 import { missions } from '../systems/missions/missionData.js';
+import {
+    resolveVersionedAssetUrl,
+    getRepoAssetHashInfo,
+    getRepoAssetHashesMap,
+    getRepoBaselineDocsManifest,
+    getRepoBaselineModelsList,
+    fetchLiveRepoAssetsStatus
+} from '../systems/repoAssetResolver.js';
 import {
     initPdfDocumentStore,
     setServerManifestCache,
@@ -26,9 +35,20 @@ import {
     buildExportableDocsPackage,
     base64ToPdfBlob
 } from '../systems/pdfDocumentStore.js';
+import {
+    uploadLocalModelToServer,
+    registerUploadedModel,
+    getUploadedModelsCatalog,
+    deleteUploadedModel,
+    getGlbFromLocalCache,
+    normalizeCustomModelUrl
+} from '../systems/worldObjectsManager.js';
+
+const LOGO_ASSET_PATH = 'assets/ui/monteserin_academy_logo_clean.png';
+const CARNET_ASSET_PATH = 'assets/ui/ASPIRANTE.jpg';
 
 const DEFAULT_KNOWN_PDF_META = {
-    'higiene_visual.pdf': {
+    'guia-higienes-postural-2.pdf': {
         missionId: 'mission002',
         missionLabel: 'Misión 2: El Registro de Entrada',
         title: 'Guía de Higiene Visual y Postural'
@@ -41,6 +61,8 @@ const DEFAULT_KNOWN_PDF_META = {
 };
 
 let existingServerPdfs = [];
+let existingModelsList = [];
+let liveRepoStatusCache = null;
 
 function normalizeMissionId(rawId) {
     const val = String(rawId || '').trim();
@@ -85,7 +107,6 @@ function formatDefaultMissionLabel(missionId, fallbackLabel = '') {
 function buildMissionChoices(docs = []) {
     const map = new Map();
 
-    // 1. Misiones oficiales declaradas en missionData.js
     Object.values(missions || {}).forEach((m) => {
         if (!m || !m.id) return;
         map.set(m.id, {
@@ -95,7 +116,6 @@ function buildMissionChoices(docs = []) {
         });
     });
 
-    // 2. Ranuras próximas habituales para ir preparando misión a misión
     ['mission003', 'mission004', 'mission005'].forEach((upcomingId) => {
         if (!map.has(upcomingId)) {
             map.set(upcomingId, {
@@ -106,7 +126,6 @@ function buildMissionChoices(docs = []) {
         }
     });
 
-    // 3. Misiones personalizadas ya presentes en el manifiesto/discos
     (docs || []).forEach((doc) => {
         const mId = normalizeMissionId(doc.missionId);
         if (!mId || mId === 'unassigned') return;
@@ -179,58 +198,164 @@ function normalizePdfFilenameInput(raw) {
     return val;
 }
 
+function triggerBlobDownload(filename, blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 15000);
+}
+
+async function copyTextSafe(text, toastMsg = '📋 Copiado al portapapeles') {
+    try {
+        await navigator.clipboard.writeText(text);
+        showDevToast(toastMsg);
+    } catch {
+        showDevToast(`📋 ${text}`);
+    }
+}
+
+function buildBaselinePdfFallbackList() {
+    const manifest = getRepoBaselineDocsManifest();
+    const hashes = getRepoAssetHashesMap();
+    return Object.entries(hashes)
+        .filter(([assetPath]) => assetPath.toLowerCase().startsWith('assets/docs/') && assetPath.toLowerCase().endsWith('.pdf'))
+        .map(([assetPath, info]) => {
+            const fname = assetPath.split('/').pop() || assetPath;
+            const mEntry = manifest[fname] || {};
+            const fallback = DEFAULT_KNOWN_PDF_META[fname.toLowerCase()] || {};
+            return {
+                filename: fname,
+                url: `./assets/docs/${encodeURIComponent(fname)}`,
+                assetPath: `assets/docs/${fname}`,
+                size: Number(info?.size || 0),
+                hash: info?.hash || '',
+                updatedAt: Number(mEntry.updatedAt || 0),
+                manifestUpdatedAt: Number(mEntry.updatedAt || 0),
+                missionId: mEntry.missionId || fallback.missionId || 'unassigned',
+                missionLabel: mEntry.missionLabel || fallback.missionLabel || 'Sin misión asignada',
+                title: mEntry.title || fallback.title || '',
+                catalogId: mEntry.catalogId || '',
+                inPublic: true,
+                inRepoBaseline: true,
+                matchesRepoHash: true
+            };
+        })
+        .sort((a, b) => a.filename.localeCompare(b.filename));
+}
+
+function isDocSyncedWithRepo(doc, linked, baselineManifest) {
+    if (!doc || doc.localOnly || doc.hasLocalOverride) return false;
+    if (!doc.inRepoBaseline || !doc.matchesRepoHash) return false;
+
+    const baseCatalogId = baselineManifest?.[doc.filename]?.catalogId || '';
+    const activeCatalogId = linked?.catalogId || '';
+
+    if (activeCatalogId) {
+        return Boolean(linked?.inRepoBaseline);
+    }
+    if (baseCatalogId) {
+        return false;
+    }
+    return true;
+}
+
+function describeDocPendingReason(doc, linked, baselineManifest) {
+    if (doc.localOnly) return 'Solo en navegador (IndexedDB): falta subir al proyecto / fijar en repo';
+    if (doc.hasLocalOverride) return 'Copia en navegador (IndexedDB) más reciente que el archivo del repo';
+    if (!doc.inRepoBaseline) return 'Archivo nuevo en public/assets/docs/: falta consolidar en commit/build';
+    if (!doc.matchesRepoHash) return 'Contenido modificado en disco respecto al último build';
+    const baseCatalogId = baselineManifest?.[doc.filename]?.catalogId || '';
+    if ((linked && !linked.inRepoBaseline) || (!linked && baseCatalogId)) {
+        return 'Enlace de misión modificado localmente respecto a docs_manifest.json del repo';
+    }
+    return 'Pendiente de sincronizar';
+}
+
 export function renderAssetManagerTab(container) {
+    const initialLogoUrl = resolveVersionedAssetUrl(LOGO_ASSET_PATH) || LOGO_ASSET_PATH;
+    const initialCarnetUrl = resolveVersionedAssetUrl(CARNET_ASSET_PATH) || CARNET_ASSET_PATH;
+
     container.innerHTML = `
+        <div id="devRepoGlobalBanner" class="devRepoGlobalBanner ok">
+            <div class="devRepoGlobalText">
+                ⏳ Comprobando sincronización con <code>public/assets/</code>...
+            </div>
+            <div class="devRepoGlobalActions">
+                <button type="button" id="devCopyGlobalSyncPromptBtn" class="devPdfMiniBtn" style="display:none;">
+                    📋 Copiar instrucción para AI Studio
+                </button>
+            </div>
+        </div>
+
         <div class="devSlotGrid">
             <!-- RANURA 1: LOGOTIPO OFICIAL -->
             <div class="devSlotCard">
                 <div class="devSlotHeader">
-                    <span class="devSlotBadge">RANURA 1</span>
+                    <div class="devSlotHeaderTop">
+                        <span class="devSlotBadge">RANURA 1</span>
+                        <span id="devLogoRepoBadge" class="devRepoSyncBadge repoOk">🟢 En repositorio</span>
+                    </div>
                     <h4 class="devSlotTitle">Logotipo Oficial (Cinemática)</h4>
                 </div>
                 <p class="devSlotDesc">Logotipo que se proyecta en la esquina superior derecha durante los diálogos.</p>
                 <div class="devSlotPreviewFrame checkerBg">
-                    <img id="devLogoPreviewImg" src="assets/ui/monteserin_academy_logo_clean.png?v=${Date.now()}" alt="Logo Oficial" />
+                    <img id="devLogoPreviewImg" src="${escapeHtml(initialLogoUrl)}" alt="Logo Oficial" />
                 </div>
                 <div class="devSlotMeta">
-                    <span>Destino: <code>assets/ui/monteserin_academy_logo_clean.png</code></span>
+                    <span>Fuente única: <code>public/assets/ui/monteserin_academy_logo_clean.png</code></span>
                     <span>Formatos: <strong>PNG (con transparencia), SVG</strong></span>
                 </div>
                 <label class="devFileBtn">
                     📁 Seleccionar nuevo logotipo
                     <input type="file" id="devLogoInput" accept="image/png, image/svg+xml" style="display:none;" />
                 </label>
+                <button type="button" id="devLogoDownloadBtn" class="devSecondaryBtn" style="display:none;">
+                    📦 Descargar PNG para GitHub
+                </button>
                 <div id="devLogoStatus" class="devStatusMsg"></div>
             </div>
 
             <!-- RANURA 2: CARNET DE ASPIRANTE -->
             <div class="devSlotCard">
                 <div class="devSlotHeader">
-                    <span class="devSlotBadge">RANURA 2</span>
+                    <div class="devSlotHeaderTop">
+                        <span class="devSlotBadge">RANURA 2</span>
+                        <span id="devCarnetRepoBadge" class="devRepoSyncBadge repoOk">🟢 En repositorio</span>
+                    </div>
                     <h4 class="devSlotTitle">Carnet de Aspirante (Misión 1)</h4>
                 </div>
                 <p class="devSlotDesc">Acreditación oficial entregada por Monty, visualizable a pantalla completa y descargable.</p>
                 <div class="devSlotPreviewFrame">
-                    <img id="devCarnetPreviewImg" src="assets/ui/ASPIRANTE.jpg?v=${Date.now()}" alt="Carnet Oficial" />
+                    <img id="devCarnetPreviewImg" src="${escapeHtml(initialCarnetUrl)}" alt="Carnet Oficial" />
                 </div>
                 <div class="devSlotMeta">
-                    <span>Destino: <code>assets/ui/ASPIRANTE.jpg</code></span>
+                    <span>Fuente única: <code>public/assets/ui/ASPIRANTE.jpg</code></span>
                     <span>Formatos: <strong>JPG / JPEG</strong></span>
                 </div>
                 <label class="devFileBtn">
                     📁 Seleccionar nuevo carnet oficial
                     <input type="file" id="devCarnetInput" accept="image/jpeg, image/jpg" style="display:none;" />
                 </label>
+                <button type="button" id="devCarnetDownloadBtn" class="devSecondaryBtn" style="display:none;">
+                    📦 Descargar JPG para GitHub
+                </button>
                 <div id="devCarnetStatus" class="devStatusMsg"></div>
             </div>
 
-            <!-- RANURA 4: MODELO 3D GLB PARA EL PLAYER -->
+            <!-- RANURA 4: MODELOS 3D .GLB / .GLTF -->
             <div class="devSlotCard">
                 <div class="devSlotHeader">
-                    <span class="devSlotBadge">RANURA 4</span>
-                    <h4 class="devSlotTitle">Cargar Herramienta 3D (.GLB)</h4>
+                    <div class="devSlotHeaderTop">
+                        <span class="devSlotBadge">RANURA 4</span>
+                        <span id="devGlbRepoBadge" class="devRepoSyncBadge repoOk">🟢 En repositorio</span>
+                    </div>
+                    <h4 class="devSlotTitle">Modelos 3D (.GLB / .GLTF)</h4>
                 </div>
-                <p class="devSlotDesc">Acopla un modelo 3D externo directamente a la mano o espalda del Player.</p>
+                <p class="devSlotDesc">Sube un modelo a <code>public/assets/models/custom/</code> y acóplalo al Player para probarlo.</p>
                 <div class="devSlotInputs">
                     <select id="devGlbSocketSelect" class="devSelect">
                         <option value="rightHand">Mano Derecha (rightHand)</option>
@@ -239,25 +364,26 @@ export function renderAssetManagerTab(container) {
                     </select>
                 </div>
                 <label class="devFileBtn">
-                    📁 Seleccionar archivo .glb
+                    📁 Subir y acoplar .glb / .gltf
                     <input type="file" id="devGlbFileInput" accept=".glb, .gltf" style="display:none;" />
                 </label>
+                <div id="devGlbModelsList" class="devPdfModelList styledScrollbar"></div>
                 <div id="devGlbStatus" class="devStatusMsg"></div>
             </div>
 
-            <!-- RANURA 3 (AMPLIADA Y PERMANENTE): REPOSITORIO DE DOCUMENTOS PDF POR MISIONES -->
+            <!-- RANURA 3 (AMPLIADA): REPOSITORIO DE DOCUMENTOS PDF POR MISIONES -->
             <div class="devSlotCard devSlotCardWide">
                 <div class="devSlotHeader" style="flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        <span class="devSlotBadge">RANURA 3 · PERMANENTE</span>
-                        <h4 class="devSlotTitle">Gestor de Documentos PDF por Misión (Dev + GitHub)</h4>
+                        <span class="devSlotBadge">RANURA 3 · OPCIÓN 1</span>
+                        <h4 class="devSlotTitle">Gestor de Documentos PDF por Misión (Repo + GitHub)</h4>
                     </div>
                     <span style="font-size:0.7rem;color:#94a3b8;">
-                        Guardado binario en <code>assets/docs/</code> + <code>public/assets/docs/</code> + índice de misiones
+                        Fuente única: <code>public/assets/docs/</code> + <code>docs_manifest.json</code> (auto-hash SHA-256)
                     </span>
                 </div>
                 <p class="devSlotDesc">
-                    Organiza los archivos <strong>.PDF</strong> por misión, asígnalos a documentos del juego con un clic y consérvalos en tu navegador mientras desarrollas.
+                    Organiza los archivos <strong>.PDF</strong> por misión y enlázalos al juego. En cada build Vite genera el hash anti-caché automáticamente para GitHub Pages.
                 </p>
 
                 <div id="devPdfEnvBanner" class="devPdfEnvBanner" style="display:none;"></div>
@@ -296,7 +422,7 @@ export function renderAssetManagerTab(container) {
                                 type="text"
                                 id="devPdfTitleInput"
                                 class="devInputText"
-                                placeholder="Ej: Manual de Seguridad del Taller"
+                                placeholder="Ej: Guía de Higiene Visual y Postural"
                                 autocomplete="off"
                             />
                         </div>
@@ -309,12 +435,12 @@ export function renderAssetManagerTab(container) {
                                 type="text"
                                 id="devPdfTargetNameInput"
                                 class="devInputText"
-                                value="higiene_visual.pdf"
+                                value="guia-higienes-postural-2.pdf"
                                 placeholder="ej: m03_manual_seguridad.pdf"
                                 autocomplete="off"
                             />
                             <div id="devPdfTargetPathHint" class="devSlotMeta">
-                                <span>Ruta final: <code>assets/docs/higiene_visual.pdf</code></span>
+                                <span>Ruta final: <code>public/assets/docs/guia-higienes-postural-2.pdf</code></span>
                             </div>
                         </div>
 
@@ -340,7 +466,7 @@ export function renderAssetManagerTab(container) {
                         </div>
 
                         <div id="devPdfVerifyBox" class="devPdfVerifyBox">
-                            <span>✅ Guardado en disco y <code>public/</code></span>
+                            <span>✅ Guardado en <code>public/assets/docs/</code></span>
                             <a id="devPdfVerifyLink" href="#" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn">
                                 👁️ Verificar PDF
                             </a>
@@ -358,17 +484,17 @@ export function renderAssetManagerTab(container) {
                                     <option value="all">Todas las misiones</option>
                                     <option value="__pending__">⏳ Pendientes de enlazar</option>
                                 </select>
-                                <button type="button" id="devExportPdfPackBtn" class="devPdfMiniBtn" title="Exportar manifiesto, bundle y copias locales para GitHub / Proyecto">
+                                <button type="button" id="devExportPdfPackBtn" class="devPdfMiniBtn" title="Exportar docs_manifest.json y copias modificadas para GitHub">
                                     📦 Exportar
                                 </button>
-                                <button type="button" id="devRefreshPdfListBtn" class="devPdfMiniBtn" title="Actualizar lista desde disco y navegador">
+                                <button type="button" id="devRefreshPdfListBtn" class="devPdfMiniBtn" title="Actualizar estado desde disco y navegador">
                                     ↻
                                 </button>
                             </div>
                         </div>
 
                         <div id="devPdfListContainer" class="devPdfListContainer styledScrollbar">
-                            <div class="devPdfEmptyMsg">Cargando documentos del servidor...</div>
+                            <div class="devPdfEmptyMsg">Cargando documentos del proyecto...</div>
                         </div>
 
                         <div id="devPdfExportBox" class="devPdfExportBox" style="display:none;"></div>
@@ -378,178 +504,39 @@ export function renderAssetManagerTab(container) {
         </div>
     `;
 
-    setupSlotEvents();
-    setupPdfManagerEvents();
+    setupUnifiedAssetManager();
 }
 
-function setupSlotEvents() {
-    // ------------------------------------------
-    // Ranura 1: Logo
-    // ------------------------------------------
+function setupUnifiedAssetManager() {
+    const globalBanner = document.getElementById('devRepoGlobalBanner');
+    const copyGlobalPromptBtn = document.getElementById('devCopyGlobalSyncPromptBtn');
+
+    // Ranura 1 (Logo)
     const logoInput = document.getElementById('devLogoInput');
     const logoPreview = document.getElementById('devLogoPreviewImg');
     const logoStatus = document.getElementById('devLogoStatus');
+    const logoRepoBadge = document.getElementById('devLogoRepoBadge');
+    const logoDownloadBtn = document.getElementById('devLogoDownloadBtn');
+    let pendingLocalLogoDataUrl = null;
+    let logoModifiedInSession = false;
 
-    if (logoInput) {
-        logoInput.onchange = (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                const rawDataUrl = evt.target?.result;
-                if (!rawDataUrl) return;
-
-                // Convertir a PNG válido antes de persistir en assets/ui/monteserin_academy_logo_clean.png
-                let cleanPngDataUrl = rawDataUrl;
-                try {
-                    cleanPngDataUrl = await new Promise((resolve) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = img.naturalWidth || img.width || 512;
-                            canvas.height = img.naturalHeight || img.height || 512;
-                            const ctx = canvas.getContext('2d');
-                            if (ctx) {
-                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                                resolve(canvas.toDataURL('image/png'));
-                            } else {
-                                resolve(rawDataUrl);
-                            }
-                        };
-                        img.onerror = () => resolve(rawDataUrl);
-                        img.src = rawDataUrl;
-                    });
-                } catch (_) {}
-
-                logoPreview.src = cleanPngDataUrl;
-                const stageLogo = document.querySelector('.dialogue-stage-logo');
-                if (stageLogo) stageLogo.src = cleanPngDataUrl;
-
-                logoStatus.textContent = `⏳ Guardando logotipo "${file.name}" en el proyecto...`;
-                logoStatus.className = 'devStatusMsg';
-
-                try {
-                    const res = await fetch('/api/upload-logo', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            cleanBase64Data: cleanPngDataUrl,
-                            rawBase64Data: cleanPngDataUrl
-                        })
-                    });
-                    const ctype = (res.headers.get('content-type') || '').toLowerCase();
-                    if (!res.ok || !ctype.includes('application/json')) {
-                        throw new Error('Sin servidor de desarrollo local');
-                    }
-                    logoPreview.src = `assets/ui/monteserin_academy_logo_clean.png?v=${Date.now()}`;
-                    logoStatus.textContent = `✅ Logo guardado permanentemente en assets/ y public/: ${file.name}`;
-                    logoStatus.className = 'devStatusMsg success';
-                    showDevToast(`🎨 Logotipo guardado en disco: ${file.name}`);
-                } catch (_) {
-                    logoStatus.textContent = `⚠️ Logo aplicado solo en memoria temporal (requiere servidor dev para grabar en disco): ${file.name}`;
-                    logoStatus.className = 'devStatusMsg warning';
-                }
-            };
-            reader.readAsDataURL(file);
-        };
-    }
-
-    // ------------------------------------------
-    // Ranura 2: Carnet
-    // ------------------------------------------
+    // Ranura 2 (Carnet)
     const carnetInput = document.getElementById('devCarnetInput');
     const carnetPreview = document.getElementById('devCarnetPreviewImg');
     const carnetStatus = document.getElementById('devCarnetStatus');
+    const carnetRepoBadge = document.getElementById('devCarnetRepoBadge');
+    const carnetDownloadBtn = document.getElementById('devCarnetDownloadBtn');
+    let pendingLocalCarnetDataUrl = null;
+    let carnetModifiedInSession = false;
 
-    if (carnetInput) {
-        carnetInput.onchange = (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-
-            const isJpg = file.type.includes('jpeg') || /\.jpe?g$/i.test(file.name);
-            if (!isJpg) {
-                carnetStatus.textContent = '⚠️ Selecciona una imagen en formato .JPG o .JPEG.';
-                carnetStatus.className = 'devStatusMsg error';
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = async (evt) => {
-                const dataUrl = evt.target?.result;
-                if (!dataUrl) return;
-                carnetPreview.src = dataUrl;
-
-                if (registryCatalog.aspirantCard) {
-                    registryCatalog.aspirantCard.thumbnail = dataUrl;
-                    registryCatalog.aspirantCard.documentImage = dataUrl;
-                }
-
-                carnetStatus.textContent = `⏳ Guardando carnet "${file.name}" en el proyecto...`;
-                carnetStatus.className = 'devStatusMsg';
-
-                try {
-                    const res = await fetch('/api/upload-carnet', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ carnetBase64Data: dataUrl })
-                    });
-                    const ctype = (res.headers.get('content-type') || '').toLowerCase();
-                    if (!res.ok || !ctype.includes('application/json')) {
-                        throw new Error('Sin servidor de desarrollo local');
-                    }
-                    const bustedUrl = `assets/ui/ASPIRANTE.jpg?v=${Date.now()}`;
-                    carnetPreview.src = bustedUrl;
-                    if (registryCatalog.aspirantCard) {
-                        registryCatalog.aspirantCard.thumbnail = bustedUrl;
-                        registryCatalog.aspirantCard.documentImage = bustedUrl;
-                    }
-                    carnetStatus.textContent = `✅ Carnet JPG guardado permanentemente en assets/ y public/: ${file.name}`;
-                    carnetStatus.className = 'devStatusMsg success';
-                    showDevToast(`🪪 Carnet JPG guardado en disco: ${file.name}`);
-                } catch (_) {
-                    carnetStatus.textContent = `⚠️ Carnet aplicado en memoria temporal (requiere servidor dev para grabar en disco): ${file.name}`;
-                    carnetStatus.className = 'devStatusMsg warning';
-                }
-            };
-            reader.readAsDataURL(file);
-        };
-    }
-
-    // ------------------------------------------
-    // Ranura 4: Modelo 3D GLB
-    // ------------------------------------------
+    // Ranura 4 (GLB)
     const glbInput = document.getElementById('devGlbFileInput');
     const glbSocket = document.getElementById('devGlbSocketSelect');
     const glbStatus = document.getElementById('devGlbStatus');
+    const glbRepoBadge = document.getElementById('devGlbRepoBadge');
+    const glbModelsListEl = document.getElementById('devGlbModelsList');
 
-    if (glbInput) {
-        glbInput.onchange = (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-
-            const blobUrl = URL.createObjectURL(file);
-            const targetSocket = glbSocket ? glbSocket.value : 'rightHand';
-
-            loadGLBEquipment(
-                blobUrl,
-                (model) => {
-                    URL.revokeObjectURL(blobUrl);
-                    equipItem(targetSocket, model, { scale: 1.0 });
-                    glbStatus.textContent = `✅ Modelo "${file.name}" acoplado a ${targetSocket}!`;
-                    glbStatus.className = 'devStatusMsg success';
-                },
-                (err) => {
-                    URL.revokeObjectURL(blobUrl);
-                    glbStatus.textContent = `❌ Error al cargar modelo 3D: ${err.message || 'Formato no soportado'}`;
-                    glbStatus.className = 'devStatusMsg error';
-                }
-            );
-        };
-    }
-}
-
-function setupPdfManagerEvents() {
+    // Ranura 3 (PDFs)
     const missionSelect = document.getElementById('devPdfMissionSelect');
     const customMissionWrap = document.getElementById('devPdfCustomMissionWrap');
     const customMissionInput = document.getElementById('devPdfCustomMissionInput');
@@ -578,11 +565,507 @@ function setupPdfManagerEvents() {
     let pendingBase64 = null;
     let pendingOriginalName = '';
     let selectedMissionId = 'mission002';
-    let uploadMode = 'existing'; // 'existing' | 'new'
-    let activeTargetFilename = 'higiene_visual.pdf';
+    let uploadMode = 'existing';
+    let activeTargetFilename = 'guia-higienes-postural-2.pdf';
     let isManualFilename = false;
     let isDevServerAvailable = true;
+    let globalSyncPromptText = '';
 
+    // ======================================================
+    // ESTADO GLOBAL Y RANURAS 1 & 2 (LOGO / CARNET)
+    // ======================================================
+    async function refreshImageSlotsStatus() {
+        liveRepoStatusCache = await fetchLiveRepoAssetsStatus();
+        const baselineHashes = liveRepoStatusCache?.baseline?.hashes || getRepoAssetHashesMap();
+        const liveHashes = liveRepoStatusCache?.live?.hashes || null;
+
+        // Logo
+        const baseLogoHash = baselineHashes[LOGO_ASSET_PATH]?.hash || getRepoAssetHashInfo(LOGO_ASSET_PATH)?.hash || '';
+        const liveLogoHash = liveHashes ? (liveHashes[LOGO_ASSET_PATH]?.hash || '') : baseLogoHash;
+        const logoChangedOnDisk = Boolean(liveHashes && liveLogoHash && baseLogoHash && liveLogoHash !== baseLogoHash);
+        const logoPending = Boolean(pendingLocalLogoDataUrl || logoChangedOnDisk || logoModifiedInSession);
+
+        if (logoRepoBadge) {
+            logoRepoBadge.className = `devRepoSyncBadge ${logoPending ? 'pending' : 'repoOk'}`;
+            logoRepoBadge.textContent = logoPending ? '🟡 Modificado en runtime' : '🟢 En repositorio';
+        }
+        if (logoDownloadBtn) {
+            logoDownloadBtn.style.display = logoPending ? 'block' : 'none';
+        }
+        if (logoChangedOnDisk && logoPreview && !pendingLocalLogoDataUrl) {
+            logoPreview.src = resolveVersionedAssetUrl(LOGO_ASSET_PATH, liveLogoHash);
+        }
+
+        // Carnet
+        const baseCarnetHash = baselineHashes[CARNET_ASSET_PATH]?.hash || getRepoAssetHashInfo(CARNET_ASSET_PATH)?.hash || '';
+        const liveCarnetHash = liveHashes ? (liveHashes[CARNET_ASSET_PATH]?.hash || '') : baseCarnetHash;
+        const carnetChangedOnDisk = Boolean(liveHashes && liveCarnetHash && baseCarnetHash && liveCarnetHash !== baseCarnetHash);
+        const carnetPending = Boolean(pendingLocalCarnetDataUrl || carnetChangedOnDisk || carnetModifiedInSession);
+
+        if (carnetRepoBadge) {
+            carnetRepoBadge.className = `devRepoSyncBadge ${carnetPending ? 'pending' : 'repoOk'}`;
+            carnetRepoBadge.textContent = carnetPending ? '🟡 Modificado en runtime' : '🟢 En repositorio';
+        }
+        if (carnetDownloadBtn) {
+            carnetDownloadBtn.style.display = carnetPending ? 'block' : 'none';
+        }
+        if (carnetChangedOnDisk && carnetPreview && !pendingLocalCarnetDataUrl) {
+            carnetPreview.src = resolveVersionedAssetUrl(CARNET_ASSET_PATH, liveCarnetHash);
+        }
+
+        return { logoPending, carnetPending };
+    }
+
+    function updateGlobalRepoBanner(imageState = { logoPending: false, carnetPending: false }) {
+        if (!globalBanner) return;
+        const baselineManifest = getRepoBaselineDocsManifest();
+        const linkMap = buildRegistryPdfLinkMap();
+
+        const pendingItems = [];
+        if (imageState.logoPending) pendingItems.push('Logotipo oficial (public/assets/ui/monteserin_academy_logo_clean.png)');
+        if (imageState.carnetPending) pendingItems.push('Carnet de Aspirante (public/assets/ui/ASPIRANTE.jpg)');
+
+        existingServerPdfs.forEach((doc) => {
+            const linked = linkMap.get(doc.filename.toLowerCase());
+            if (!isDocSyncedWithRepo(doc, linked, baselineManifest)) {
+                pendingItems.push(`PDF ${doc.filename}${linked ? ` -> ${linked.catalogId}` : ''}`);
+            }
+        });
+
+        existingModelsList.forEach((m) => {
+            if (!m.inRepoBaseline || !m.matchesRepoHash || m.localOnly) {
+                pendingItems.push(`Modelo 3D ${m.filename}`);
+            }
+        });
+
+        const textEl = globalBanner.querySelector('.devRepoGlobalText');
+        if (pendingItems.length === 0) {
+            globalBanner.className = 'devRepoGlobalBanner ok';
+            if (textEl) {
+                textEl.innerHTML = `🟢 <strong>Todo sincronizado con el repositorio</strong> (<code>public/assets/</code>) · Listo para commit a GitHub.`;
+            }
+            if (copyGlobalPromptBtn) copyGlobalPromptBtn.style.display = 'none';
+            globalSyncPromptText = '';
+        } else {
+            globalBanner.className = 'devRepoGlobalBanner pending';
+            if (textEl) {
+                textEl.innerHTML = `🟡 <strong>${pendingItems.length} recurso(s) modificado(s) o solo local(es):</strong> ${escapeHtml(pendingItems.slice(0, 3).join(' · '))}${pendingItems.length > 3 ? ` (+${pendingItems.length - 3} más)` : ''}. Consolídalos antes del commit a GitHub.`;
+            }
+            globalSyncPromptText = `Fija en el repositorio (public/assets/) los cambios pendientes detectados en F9 antes del commit a GitHub: ${pendingItems.join('; ')}.`;
+            if (copyGlobalPromptBtn) copyGlobalPromptBtn.style.display = 'inline-flex';
+        }
+    }
+
+    if (copyGlobalPromptBtn) {
+        copyGlobalPromptBtn.onclick = () => {
+            if (globalSyncPromptText) {
+                copyTextSafe(globalSyncPromptText, '📋 Instrucción copiada para pegar en AI Studio');
+            }
+        };
+    }
+
+    if (logoDownloadBtn) {
+        logoDownloadBtn.onclick = async () => {
+            try {
+                const src = pendingLocalLogoDataUrl || resolveVersionedAssetUrl(LOGO_ASSET_PATH, Date.now());
+                const res = await fetch(src, { cache: 'no-store' });
+                const blob = await res.blob();
+                triggerBlobDownload('monteserin_academy_logo_clean.png', blob);
+                showDevToast('📦 Descargado monteserin_academy_logo_clean.png');
+            } catch {
+                showDevToast('❌ No se pudo descargar el PNG del logotipo');
+            }
+        };
+    }
+
+    if (carnetDownloadBtn) {
+        carnetDownloadBtn.onclick = async () => {
+            try {
+                const src = pendingLocalCarnetDataUrl || resolveVersionedAssetUrl(CARNET_ASSET_PATH, Date.now());
+                const res = await fetch(src, { cache: 'no-store' });
+                const blob = await res.blob();
+                triggerBlobDownload('ASPIRANTE.jpg', blob);
+                showDevToast('📦 Descargado ASPIRANTE.jpg');
+            } catch {
+                showDevToast('❌ No se pudo descargar el JPG del carnet');
+            }
+        };
+    }
+
+    if (logoInput) {
+        logoInput.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                const rawDataUrl = evt.target?.result;
+                if (!rawDataUrl) return;
+
+                let cleanPngDataUrl = rawDataUrl;
+                try {
+                    cleanPngDataUrl = await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.naturalWidth || img.width || 512;
+                            canvas.height = img.naturalHeight || img.height || 512;
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                resolve(canvas.toDataURL('image/png'));
+                            } else {
+                                resolve(rawDataUrl);
+                            }
+                        };
+                        img.onerror = () => resolve(rawDataUrl);
+                        img.src = rawDataUrl;
+                    });
+                } catch (_) {}
+
+                logoPreview.src = cleanPngDataUrl;
+                const stageLogo = document.querySelector('.dialogue-stage-logo');
+                if (stageLogo) stageLogo.src = cleanPngDataUrl;
+
+                logoStatus.textContent = `⏳ Guardando logotipo "${file.name}" en public/assets/ui/...`;
+                logoStatus.className = 'devStatusMsg';
+
+                try {
+                    const res = await fetch('/api/upload-logo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            cleanBase64Data: cleanPngDataUrl,
+                            rawBase64Data: cleanPngDataUrl
+                        })
+                    });
+                    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                    if (!res.ok || !ctype.includes('application/json')) {
+                        throw new Error('Sin servidor de desarrollo local');
+                    }
+                    const data = await res.json();
+                    pendingLocalLogoDataUrl = null;
+                    logoModifiedInSession = true;
+                    const bustedUrl = resolveVersionedAssetUrl(LOGO_ASSET_PATH, data.hash || Date.now());
+                    logoPreview.src = bustedUrl;
+                    if (stageLogo) stageLogo.src = bustedUrl;
+                    logoStatus.textContent = `✅ Guardado en public/assets/ui/: ${file.name}`;
+                    logoStatus.className = 'devStatusMsg success';
+                    showDevToast(`🎨 Logotipo guardado en public/assets/ui/: ${file.name}`);
+                } catch (_) {
+                    pendingLocalLogoDataUrl = cleanPngDataUrl;
+                    logoModifiedInSession = true;
+                    logoStatus.textContent = `🟡 Aplicado solo en memoria temporal (vista estática): ${file.name}`;
+                    logoStatus.className = 'devStatusMsg warning';
+                }
+
+                const imgState = await refreshImageSlotsStatus();
+                updateGlobalRepoBanner(imgState);
+            };
+            reader.readAsDataURL(file);
+        };
+    }
+
+    if (carnetInput) {
+        carnetInput.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            const isJpg = file.type.includes('jpeg') || /\.jpe?g$/i.test(file.name);
+            if (!isJpg) {
+                carnetStatus.textContent = '⚠️ Selecciona una imagen en formato .JPG o .JPEG.';
+                carnetStatus.className = 'devStatusMsg error';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+                const dataUrl = evt.target?.result;
+                if (!dataUrl) return;
+                carnetPreview.src = dataUrl;
+
+                if (registryCatalog.aspirantCard) {
+                    registryCatalog.aspirantCard.thumbnail = dataUrl;
+                    registryCatalog.aspirantCard.documentImage = dataUrl;
+                }
+
+                carnetStatus.textContent = `⏳ Guardando carnet "${file.name}" en public/assets/ui/...`;
+                carnetStatus.className = 'devStatusMsg';
+
+                try {
+                    const res = await fetch('/api/upload-carnet', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ carnetBase64Data: dataUrl })
+                    });
+                    const ctype = (res.headers.get('content-type') || '').toLowerCase();
+                    if (!res.ok || !ctype.includes('application/json')) {
+                        throw new Error('Sin servidor de desarrollo local');
+                    }
+                    const data = await res.json();
+                    pendingLocalCarnetDataUrl = null;
+                    carnetModifiedInSession = true;
+                    const bustedUrl = resolveVersionedAssetUrl(CARNET_ASSET_PATH, data.hash || Date.now());
+                    carnetPreview.src = bustedUrl;
+                    if (registryCatalog.aspirantCard) {
+                        registryCatalog.aspirantCard.thumbnail = bustedUrl;
+                        registryCatalog.aspirantCard.documentImage = bustedUrl;
+                    }
+                    carnetStatus.textContent = `✅ Carnet JPG guardado en public/assets/ui/: ${file.name}`;
+                    carnetStatus.className = 'devStatusMsg success';
+                    showDevToast(`🪪 Carnet JPG guardado en disco: ${file.name}`);
+                } catch (_) {
+                    pendingLocalCarnetDataUrl = dataUrl;
+                    carnetModifiedInSession = true;
+                    carnetStatus.textContent = `🟡 Aplicado en memoria temporal (vista estática): ${file.name}`;
+                    carnetStatus.className = 'devStatusMsg warning';
+                }
+
+                const imgState = await refreshImageSlotsStatus();
+                updateGlobalRepoBanner(imgState);
+            };
+            reader.readAsDataURL(file);
+        };
+    }
+
+    // ======================================================
+    // RANURA 4: MODELOS 3D (.GLB / .GLTF)
+    // ======================================================
+    async function refreshGlbModelsLibrary() {
+        const baselineModels = getRepoBaselineModelsList();
+        const baselineMap = new Map(baselineModels.map((m) => [m.filename.toLowerCase(), m]));
+        const merged = new Map();
+
+        let liveModels = null;
+        try {
+            const res = await fetch(`/api/upload-custom-model?v=${Date.now()}`, { cache: 'no-store' });
+            const ctype = (res.headers.get('content-type') || '').toLowerCase();
+            if (res.ok && ctype.includes('application/json')) {
+                const data = await res.json();
+                liveModels = Array.isArray(data.models) ? data.models : [];
+            }
+        } catch (_) {
+            liveModels = null;
+        }
+
+        const sourceList = liveModels !== null ? liveModels : baselineModels;
+        sourceList.forEach((m) => {
+            if (!m || !m.filename) return;
+            const lower = m.filename.toLowerCase();
+            const base = baselineMap.get(lower);
+            merged.set(lower, {
+                id: `server_${m.filename}`,
+                filename: m.filename,
+                url: normalizeCustomModelUrl(m.url || `./assets/models/custom/${m.filename}`),
+                assetPath: m.assetPath || `assets/models/custom/${m.filename}`,
+                size: Number(m.size || base?.size || 0),
+                hash: m.hash || base?.hash || '',
+                inRepoBaseline: Boolean(base),
+                matchesRepoHash: Boolean(base && m.hash && base.hash === m.hash),
+                localOnly: false
+            });
+        });
+
+        // Combinar catálogo local (IndexedDB / localStorage) si falta en servidor
+        const localCatalog = getUploadedModelsCatalog();
+        for (const item of localCatalog) {
+            if (!item || !item.filename) continue;
+            const lower = item.filename.toLowerCase();
+            if (merged.has(lower)) continue;
+            const cached = await getGlbFromLocalCache(item.url || item.filename) || await getGlbFromLocalCache(item.filename);
+            if (!cached) continue;
+            merged.set(lower, {
+                id: item.id || `local_${item.filename}`,
+                filename: item.filename,
+                url: normalizeCustomModelUrl(item.url || `./assets/models/custom/${item.filename}`),
+                assetPath: `assets/models/custom/${item.filename}`,
+                size: 0,
+                hash: '',
+                inRepoBaseline: false,
+                matchesRepoHash: false,
+                localOnly: true
+            });
+        }
+
+        existingModelsList = Array.from(merged.values()).sort((a, b) => a.filename.localeCompare(b.filename));
+        renderGlbModelsList();
+    }
+
+    function renderGlbModelsList() {
+        const allSynced = existingModelsList.every((m) => m.inRepoBaseline && m.matchesRepoHash && !m.localOnly);
+        if (glbRepoBadge) {
+            glbRepoBadge.className = `devRepoSyncBadge ${allSynced ? 'repoOk' : 'pending'}`;
+            glbRepoBadge.textContent = allSynced ? '🟢 En repositorio' : '🟡 Cambios locales';
+        }
+
+        if (!glbModelsListEl) return;
+        if (existingModelsList.length === 0) {
+            glbModelsListEl.innerHTML = `<div class="devPdfEmptyMsg" style="padding:10px;">Sin modelos en <code>public/assets/models/custom/</code>.</div>`;
+            return;
+        }
+
+        glbModelsListEl.innerHTML = existingModelsList.map((m) => {
+            const inRepo = m.inRepoBaseline && m.matchesRepoHash && !m.localOnly;
+            const badgeText = inRepo
+                ? '🟢 En repositorio'
+                : (m.localOnly ? '🟡 Solo local' : '🟡 Modificado');
+            const badgeClass = inRepo ? 'repoOk' : 'localOnly';
+            return `
+                <div class="devPdfModelRow">
+                    <div class="devPdfModelInfo">
+                        <div class="devPdfModelName" title="${escapeHtml(m.assetPath)}">🧊 ${escapeHtml(m.filename)}</div>
+                        <div class="devPdfModelMeta">
+                            ${m.size ? `<span>${formatBytes(m.size)}</span>` : ''}
+                            <span class="devPdfSyncBadge ${badgeClass}">${badgeText}</span>
+                        </div>
+                    </div>
+                    <div class="devPdfItemActions">
+                        <button type="button" class="devPdfMiniBtn devGlbEquipBtn" data-filename="${escapeHtml(m.filename)}" title="Acoplar al Player en el socket elegido">
+                            🎒
+                        </button>
+                        <button type="button" class="devPdfMiniBtn devGlbDownloadBtn" data-filename="${escapeHtml(m.filename)}" title="Descargar archivo .GLB para GitHub">
+                            ⬇️
+                        </button>
+                        <button type="button" class="devPdfMiniBtn danger devGlbDeleteBtn" data-filename="${escapeHtml(m.filename)}" data-id="${escapeHtml(m.id)}" title="Eliminar modelo 3D">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        glbModelsListEl.querySelectorAll('.devGlbEquipBtn').forEach((btn) => {
+            btn.onclick = async () => {
+                const fname = btn.getAttribute('data-filename');
+                const entry = existingModelsList.find((x) => x.filename === fname);
+                if (!entry) return;
+                const targetSocket = glbSocket ? glbSocket.value : 'rightHand';
+                const cached = entry.localOnly
+                    ? (await getGlbFromLocalCache(entry.url) || await getGlbFromLocalCache(entry.filename))
+                    : null;
+                const loadSrc = cached || resolveVersionedAssetUrl(entry.assetPath, entry.hash || Date.now());
+                loadGLBEquipment(
+                    loadSrc,
+                    (model) => {
+                        equipItem(targetSocket, model, { scale: 1.0 });
+                        if (glbStatus) {
+                            glbStatus.textContent = `✅ "${fname}" acoplado a ${targetSocket}.`;
+                            glbStatus.className = 'devStatusMsg success';
+                        }
+                    },
+                    (err) => {
+                        if (glbStatus) {
+                            glbStatus.textContent = `❌ Error cargando "${fname}": ${err?.message || 'Error'}`;
+                            glbStatus.className = 'devStatusMsg error';
+                        }
+                    }
+                );
+            };
+        });
+
+        glbModelsListEl.querySelectorAll('.devGlbDownloadBtn').forEach((btn) => {
+            btn.onclick = async () => {
+                const fname = btn.getAttribute('data-filename');
+                const entry = existingModelsList.find((x) => x.filename === fname);
+                if (!entry) return;
+                try {
+                    const cached = await getGlbFromLocalCache(entry.url) || await getGlbFromLocalCache(entry.filename);
+                    if (cached) {
+                        const res = await fetch(cached);
+                        const blob = await res.blob();
+                        triggerBlobDownload(entry.filename, blob);
+                    } else {
+                        const url = resolveVersionedAssetUrl(entry.assetPath, entry.hash || Date.now());
+                        const res = await fetch(url, { cache: 'no-store' });
+                        const blob = await res.blob();
+                        triggerBlobDownload(entry.filename, blob);
+                    }
+                    showDevToast(`⬇️ Descargado ${entry.filename}`);
+                } catch {
+                    showDevToast(`❌ No se pudo descargar ${entry.filename}`);
+                }
+            };
+        });
+
+        glbModelsListEl.querySelectorAll('.devGlbDeleteBtn').forEach((btn) => {
+            btn.onclick = () => {
+                const fname = btn.getAttribute('data-filename');
+                const id = btn.getAttribute('data-id');
+                if (!fname) return;
+                showDevModalDialog({
+                    title: 'Eliminar Modelo 3D',
+                    message: `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> de <code>public/assets/models/custom/</code> y de tu caché local?`,
+                    confirmText: 'Eliminar Modelo',
+                    cancelText: 'Cancelar',
+                    isDanger: true,
+                    onConfirm: async () => {
+                        deleteUploadedModel(id);
+                        await refreshGlbModelsLibrary();
+                        const imgState = await refreshImageSlotsStatus();
+                        updateGlobalRepoBanner(imgState);
+                        showDevToast(`🗑️ Eliminado modelo: ${fname}`);
+                    }
+                });
+            };
+        });
+    }
+
+    if (glbInput) {
+        glbInput.onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            const blobUrl = URL.createObjectURL(file);
+            const targetSocket = glbSocket ? glbSocket.value : 'rightHand';
+
+            loadGLBEquipment(
+                blobUrl,
+                async (model) => {
+                    URL.revokeObjectURL(blobUrl);
+                    equipItem(targetSocket, model, { scale: 1.0 });
+                    if (glbStatus) {
+                        glbStatus.textContent = `⏳ "${file.name}" acoplado a ${targetSocket}. Guardando en public/assets/models/custom/...`;
+                        glbStatus.className = 'devStatusMsg';
+                    }
+                    try {
+                        const saved = await uploadLocalModelToServer(file);
+                        registerUploadedModel({
+                            id: `model_${saved.filename || file.name}`,
+                            filename: saved.filename || file.name,
+                            name: file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '),
+                            url: saved.url || `./assets/models/custom/${saved.filename || file.name}`,
+                            uploadedAt: Date.now()
+                        });
+                        if (glbStatus) {
+                            glbStatus.textContent = saved.fromLocalCache
+                                ? `🟡 "${file.name}" acoplado y guardado en IndexedDB (solo local).`
+                                : `✅ "${file.name}" acoplado y guardado en public/assets/models/custom/.`;
+                            glbStatus.className = `devStatusMsg ${saved.fromLocalCache ? 'warning' : 'success'}`;
+                        }
+                    } catch (err) {
+                        if (glbStatus) {
+                            glbStatus.textContent = `⚠️ Acoplado en escena, pero fallo al persistir: ${err?.message || err}`;
+                            glbStatus.className = 'devStatusMsg warning';
+                        }
+                    }
+                    await refreshGlbModelsLibrary();
+                    const imgState = await refreshImageSlotsStatus();
+                    updateGlobalRepoBanner(imgState);
+                },
+                (err) => {
+                    URL.revokeObjectURL(blobUrl);
+                    if (glbStatus) {
+                        glbStatus.textContent = `❌ Error al cargar modelo 3D: ${err?.message || 'Formato no soportado'}`;
+                        glbStatus.className = 'devStatusMsg error';
+                    }
+                }
+            );
+        };
+    }
+
+    // ======================================================
+    // RANURA 3: DOCUMENTOS PDF POR MISIÓN
+    // ======================================================
     function getSelectedMissionMeta() {
         const rawSelect = missionSelect ? missionSelect.value : selectedMissionId;
         if (rawSelect === '__custom__') {
@@ -740,9 +1223,9 @@ function setupPdfManagerEvents() {
                 targetPathHint.innerHTML = `<span style="color:#fca5a5;">Escribe un nombre válido (ej: <code>${escapeHtml(pref || 'm03_')}documento.pdf</code>)</span>`;
             } else if (existingMatch) {
                 const mLabel = getEffectiveDocMeta(existingMatch).missionLabel;
-                targetPathHint.innerHTML = `<span>Ruta: <code>assets/docs/${escapeHtml(normalized)}</code> · <strong style="color:#fbbf24;">Existe en ${escapeHtml(mLabel)} (se reemplazará)</strong></span>`;
+                targetPathHint.innerHTML = `<span>Ruta: <code>public/assets/docs/${escapeHtml(normalized)}</code> · <strong style="color:#fbbf24;">Existe en ${escapeHtml(mLabel)} (se reemplazará)</strong></span>`;
             } else {
-                targetPathHint.innerHTML = `<span>Ruta nueva: <code>assets/docs/${escapeHtml(normalized)}</code> + <code>public/assets/docs/${escapeHtml(normalized)}</code></span>`;
+                targetPathHint.innerHTML = `<span>Ruta nueva: <code>public/assets/docs/${escapeHtml(normalized)}</code></span>`;
             }
         }
 
@@ -818,17 +1301,23 @@ function setupPdfManagerEvents() {
 
     function updateEnvBanner() {
         if (!envBanner) return;
-        const localOverrideDocs = existingServerPdfs.filter((d) => d.hasLocalOverride);
+        const baselineManifest = getRepoBaselineDocsManifest();
+        const linkMap = buildRegistryPdfLinkMap();
+        const pendingDocs = existingServerPdfs.filter((doc) => {
+            const linked = linkMap.get(doc.filename.toLowerCase());
+            return !isDocSyncedWithRepo(doc, linked, baselineManifest);
+        });
+
         if (!isDevServerAvailable) {
             envBanner.style.display = 'flex';
             envBanner.className = 'devPdfEnvBanner warning';
-            envBanner.innerHTML = `<span>⚠️ <strong>Vista estática / sin servidor dev:</strong> los PDFs subidos se guardan solo en tu navegador (<code>IndexedDB</code>). Usa <strong>📦 Exportar</strong> para llevarlos a GitHub/Proyecto.</span>`;
+            envBanner.innerHTML = `<span>⚠️ <strong>Vista estática / GitHub Pages:</strong> leyendo snapshot del repositorio (<code>public/assets/docs/</code>). Los PDFs que pruebes aquí se guardan solo en tu navegador (<code>IndexedDB</code>). Usa <strong>📦 Exportar</strong> para descargarlos.</span>`;
             return;
         }
-        if (localOverrideDocs.length > 0) {
+        if (pendingDocs.length > 0) {
             envBanner.style.display = 'flex';
             envBanner.className = 'devPdfEnvBanner info';
-            envBanner.innerHTML = `<span>💾 Tienes <strong>${localOverrideDocs.length}</strong> cambio(s) en <code>IndexedDB</code> más recientes que el disco (protegidos frente a recargas y resyncs de AI Studio). Usa <strong>📦 Exportar</strong> para fijarlos en tu repo.</span>`;
+            envBanner.innerHTML = `<span>🟡 Hay <strong>${pendingDocs.length}</strong> documento(s) con cambios locales o en disco distintos al último commit/build. Usa <strong>📦 Exportar</strong> o pídele a AI Studio consolidarlos antes de subir a GitHub.</span>`;
             return;
         }
         envBanner.style.display = 'none';
@@ -837,14 +1326,7 @@ function setupPdfManagerEvents() {
 
     function triggerTextFileDownload(filename, textContent, mimeType = 'text/plain;charset=utf-8') {
         const blob = new Blob([textContent], { type: mimeType });
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        triggerBlobDownload(filename, blob);
     }
 
     async function performUpload(overwrite = false) {
@@ -861,9 +1343,7 @@ function setupPdfManagerEvents() {
                 message: `Ya existe <strong>${escapeHtml(targetFilename)}</strong> en el proyecto.<br><br>¿Deseas sobrescribirlo con <strong>${escapeHtml(pendingOriginalName)}</strong> y asociarlo a <strong>${escapeHtml(missionLabel)}</strong>?`,
                 confirmText: 'Sí, reemplazar',
                 cancelText: 'Cancelar',
-                onConfirm: () => {
-                    performUpload(true);
-                },
+                onConfirm: () => performUpload(true),
                 onCancel: () => {
                     setStatus('Subida cancelada. Cambia el nombre de destino si quieres conservar ambos.', 'warning');
                     updatePathHintAndUploadState();
@@ -876,7 +1356,7 @@ function setupPdfManagerEvents() {
             uploadBtn.disabled = true;
             uploadBtn.textContent = '⏳ Guardando PDF...';
         }
-        setStatus('Guardando PDF en servidor y en almacenamiento local (IndexedDB)...', '');
+        setStatus('Guardando PDF en public/assets/docs/ y en caché local de prueba...', '');
 
         let savedToServer = false;
         let finalFilename = targetFilename;
@@ -908,9 +1388,7 @@ function setupPdfManagerEvents() {
                     message: `Ya existe <strong>${escapeHtml(targetFilename)}</strong> en el proyecto.<br><br>¿Deseas sobrescribirlo con <strong>${escapeHtml(pendingOriginalName)}</strong> y asociarlo a <strong>${escapeHtml(missionLabel)}</strong>?`,
                     confirmText: 'Sí, reemplazar',
                     cancelText: 'Cancelar',
-                    onConfirm: () => {
-                        performUpload(true);
-                    },
+                    onConfirm: () => performUpload(true),
                     onCancel: () => {
                         setStatus('Subida cancelada. Cambia el nombre de destino si quieres conservar ambos.', 'warning');
                         updatePathHintAndUploadState();
@@ -941,17 +1419,23 @@ function setupPdfManagerEvents() {
             isDevServerAvailable = false;
         }
 
-        // Guardar siempre copia binaria en IndexedDB para resistir recargas y resyncs de AI Studio
-        const localRec = await saveLocalPdfOverride({
-            filename: finalFilename,
-            base64Data: pendingBase64,
-            size: finalSize,
-            updatedAt: finalUpdatedAt,
-            missionId,
-            missionLabel,
-            title: docTitle || existingMatch?.title || '',
-            catalogId: finalCatalogId
-        });
+        // Si se guardó en disco (servidor dev), eliminamos overrides viejos si procede o guardamos timestamp sincronizado;
+        // en vista estática (sin servidor dev), guardamos siempre en IndexedDB como prueba local.
+        let localRec = null;
+        if (!savedToServer) {
+            localRec = await saveLocalPdfOverride({
+                filename: finalFilename,
+                base64Data: pendingBase64,
+                size: finalSize,
+                updatedAt: finalUpdatedAt,
+                missionId,
+                missionLabel,
+                title: docTitle || existingMatch?.title || '',
+                catalogId: finalCatalogId
+            });
+        } else {
+            await removeLocalPdfOverride(finalFilename);
+        }
 
         finalSize = finalSize || localRec?.size || 0;
 
@@ -972,11 +1456,11 @@ function setupPdfManagerEvents() {
         }
 
         if (savedToServer) {
-            setStatus(`✅ "${finalFilename}" guardado en disco y en IndexedDB (${missionLabel} · ${formatBytes(finalSize)}).`, 'success');
+            setStatus(`✅ "${finalFilename}" guardado en public/assets/docs/ (${missionLabel} · ${formatBytes(finalSize)}).`, 'success');
             showDevToast(`📄 PDF guardado (${missionLabel}): ${finalFilename}`);
         } else {
-            setStatus(`💾 "${finalFilename}" guardado en tu navegador (IndexedDB · ${formatBytes(finalSize)}). Usa 📦 Exportar para llevarlo a GitHub/Proyecto.`, 'warning');
-            showDevToast(`💾 PDF guardado en navegador: ${finalFilename}`);
+            setStatus(`🟡 "${finalFilename}" guardado solo en tu navegador (IndexedDB · ${formatBytes(finalSize)}). Usa 📦 Exportar para fijarlo en GitHub.`, 'warning');
+            showDevToast(`🟡 PDF guardado en prueba local: ${finalFilename}`);
         }
 
         pendingBase64 = null;
@@ -987,7 +1471,7 @@ function setupPdfManagerEvents() {
         if (fileInput) fileInput.value = '';
         if (metaBox) metaBox.style.display = 'none';
 
-        await fetchPdfLibrary();
+        await refreshAllManagerViews();
         updatePathHintAndUploadState();
     }
 
@@ -1025,12 +1509,12 @@ function setupPdfManagerEvents() {
         await updateLocalPdfMetadata(targetFilename, { missionId, missionLabel, title: docTitle });
 
         if (serverSaved) {
-            setStatus(`✅ Misión y título actualizados para "${targetFilename}" (${missionLabel}).`, 'success');
+            setStatus(`✅ Misión y título actualizados en docs_manifest.json para "${targetFilename}" (${missionLabel}).`, 'success');
         } else {
-            setStatus(`💾 Misión y título actualizados en copia local para "${targetFilename}".`, 'warning');
+            setStatus(`🟡 Misión y título actualizados en copia local para "${targetFilename}".`, 'warning');
         }
         showDevToast(`🏷️ Organizado en ${missionLabel}: ${targetFilename}`);
-        await fetchPdfLibrary();
+        await refreshAllManagerViews();
 
         if (saveMetaBtn) {
             saveMetaBtn.disabled = false;
@@ -1043,12 +1527,7 @@ function setupPdfManagerEvents() {
         const meta = doc ? getEffectiveDocMeta(doc) : { missionId: 'unassigned', missionLabel: '', title: '' };
         const now = Date.now();
 
-        if (catalogId) {
-            await setLocalCatalogBinding(catalogId, filename, now);
-        } else {
-            await clearLocalBindingForFilename(filename);
-        }
-
+        let persistedOnServer = false;
         if (isDevServerAvailable && !doc?.localOnly) {
             try {
                 const res = await fetch('/api/upload-pdf', {
@@ -1066,22 +1545,20 @@ function setupPdfManagerEvents() {
                 if (res.ok && ctype.includes('application/json')) {
                     const data = await res.json();
                     if (data.manifest) setServerManifestCache(data.manifest);
+                    persistedOnServer = true;
                 }
             } catch (_) {}
         }
 
+        if (catalogId) {
+            await setLocalCatalogBinding(catalogId, filename, persistedOnServer ? now : now);
+        } else {
+            await clearLocalBindingForFilename(filename);
+        }
+
         const slotTitle = catalogId ? (registryCatalog?.[catalogId]?.title || catalogId) : 'Sin enlace fijo';
         showDevToast(catalogId ? `🔗 ${filename} → ${slotTitle}` : `🔗 Enlace quitado de ${filename}`);
-        await fetchPdfLibrary();
-    }
-
-    async function copyToClipboard(text, toastPrefix = '📋 Copiado') {
-        try {
-            await navigator.clipboard.writeText(text);
-            showDevToast(`${toastPrefix}`);
-        } catch {
-            showDevToast(`📄 ${text}`);
-        }
+        await refreshAllManagerViews();
     }
 
     function buildRegistrySnippet(doc) {
@@ -1138,7 +1615,7 @@ function setupPdfManagerEvents() {
         if (!docs || docs.length === 0) {
             listContainer.innerHTML = `
                 <div class="devPdfEmptyMsg">
-                    Aún no hay archivos PDF guardados en <code>assets/docs/</code>.<br>
+                    Aún no hay archivos PDF guardados en <code>public/assets/docs/</code>.<br>
                     Selecciona una misión y sube un documento en la columna izquierda.
                 </div>
             `;
@@ -1146,6 +1623,7 @@ function setupPdfManagerEvents() {
         }
 
         const linkMap = buildRegistryPdfLinkMap();
+        const baselineManifest = getRepoBaselineDocsManifest();
         const activeFilter = libraryFilter ? libraryFilter.value : 'all';
 
         const filteredDocs = docs.filter((doc) => {
@@ -1165,7 +1643,6 @@ function setupPdfManagerEvents() {
             return;
         }
 
-        // Agrupar por misión
         const groups = new Map();
         filteredDocs.forEach((doc) => {
             const meta = getEffectiveDocMeta(doc);
@@ -1199,13 +1676,21 @@ function setupPdfManagerEvents() {
                     <span class="devPdfMissionGroupCount">${group.items.length} PDF${group.items.length === 1 ? '' : 's'}</span>
                 </div>
                 ${group.items.map(({ doc, meta }) => {
-                    const bothSynced = doc.inAssets && doc.inPublic;
                     const linked = linkMap.get(doc.filename.toLowerCase());
                     const displayTitle = linked?.title || meta.title;
                     const selectedCatId = linked ? linked.catalogId : '';
-                    const syncBadgeHtml = doc.hasLocalOverride
-                        ? `<span class="devPdfSyncBadge localOnly" title="Copia guardada en IndexedDB de tu navegador (sobrevive a recargas/resyncs)">💾 Local (navegador)</span>`
-                        : `<span class="devPdfSyncBadge ${bothSynced ? '' : 'partial'}" title="${bothSynced ? 'Sincronizado en assets/docs y public/assets/docs' : 'Falta copia en una de las carpetas'}">${bothSynced ? '✓ Dev + GitHub' : (doc.inPublic ? 'Solo public/' : 'Solo assets/')}</span>`;
+                    const synced = isDocSyncedWithRepo(doc, linked, baselineManifest);
+                    const pendingReason = synced ? '' : describeDocPendingReason(doc, linked, baselineManifest);
+
+                    const shortPendingLabel = doc.localOnly || doc.hasLocalOverride
+                        ? 'Solo prueba local'
+                        : (!doc.inRepoBaseline || !doc.matchesRepoHash
+                            ? 'Modificado en disco'
+                            : 'Enlace sin consolidar');
+
+                    const syncBadgeHtml = synced
+                        ? `<span class="devPdfSyncBadge repoOk" title="Archivo y enlace consolidados en public/assets/docs/ (listo para GitHub)">🟢 En repositorio</span>`
+                        : `<span class="devPdfSyncBadge localOnly" title="${escapeHtml(pendingReason)}">🟡 ${escapeHtml(shortPendingLabel)}</span>`;
 
                     const assignOptionsHtml = [
                         `<option value="">— Sin enlace en Registro —</option>`,
@@ -1215,6 +1700,8 @@ function setupPdfManagerEvents() {
                             return `<option value="${escapeHtml(slot.catalogId)}" ${isSel ? 'selected' : ''}>${escapeHtml(slot.title)}${suffix}</option>`;
                         })
                     ].join('');
+
+                    const openUrl = resolveVersionedAssetUrl(doc.assetPath, doc.hash || doc.updatedAt || Date.now());
 
                     return `
                         <div class="devPdfItemRow">
@@ -1236,14 +1723,14 @@ function setupPdfManagerEvents() {
                                 </div>
                             </div>
                             <div class="devPdfItemActions">
-                                <a href="${escapeHtml(doc.url)}?v=${Number(doc.updatedAt) || Date.now()}" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn devOpenPdfBtn" data-filename="${escapeHtml(doc.filename)}" data-url="${escapeHtml(doc.url)}" title="Abrir PDF en nueva pestaña">
+                                <a href="${escapeHtml(openUrl)}" target="_blank" rel="noopener noreferrer" class="devPdfMiniBtn devOpenPdfBtn" data-filename="${escapeHtml(doc.filename)}" data-url="${escapeHtml(openUrl)}" title="Abrir PDF en nueva pestaña">
                                     👁️
                                 </a>
                                 <button type="button" class="devPdfMiniBtn devSelectForEditBtn" data-filename="${escapeHtml(doc.filename)}" title="Reemplazar PDF o cambiar su misión/título">
                                     🔄
                                 </button>
                                 ${doc.hasLocalOverride ? `
-                                    <button type="button" class="devPdfMiniBtn devClearLocalBtn" data-filename="${escapeHtml(doc.filename)}" title="Descartar copia local del navegador y volver a la versión del proyecto">
+                                    <button type="button" class="devPdfMiniBtn devClearLocalBtn" data-filename="${escapeHtml(doc.filename)}" title="Descartar copia local del navegador y volver a la versión del repositorio">
                                         🧹
                                     </button>
                                 ` : ''}
@@ -1253,7 +1740,7 @@ function setupPdfManagerEvents() {
                                 <button type="button" class="devPdfMiniBtn devCopyPdfPathBtn" data-path="${escapeHtml(doc.assetPath)}" title="Copiar ruta del proyecto">
                                     📋
                                 </button>
-                                <button type="button" class="devPdfMiniBtn danger devDeletePdfBtn" data-filename="${escapeHtml(doc.filename)}" title="Eliminar PDF de assets/, public/ y navegador">
+                                <button type="button" class="devPdfMiniBtn danger devDeletePdfBtn" data-filename="${escapeHtml(doc.filename)}" title="Eliminar PDF de public/assets/docs/ y navegador">
                                     🗑️
                                 </button>
                             </div>
@@ -1271,8 +1758,7 @@ function setupPdfManagerEvents() {
         });
 
         listContainer.querySelectorAll('.devOpenPdfBtn').forEach((link) => {
-            link.onclick = async (e) => {
-                const rawUrl = link.getAttribute('data-url');
+            link.onclick = (e) => {
                 const fname = link.getAttribute('data-filename');
                 const localRec = getLocalPdfRecord(fname);
                 const docEntry = existingServerPdfs.find((d) => d.filename === fname);
@@ -1286,28 +1772,7 @@ function setupPdfManagerEvents() {
                     a.rel = 'noopener noreferrer';
                     a.click();
                     setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-                    return;
                 }
-
-                const bundledDataUri = getBundledCustomDocDataUri(rawUrl) || getBundledCustomDocDataUri(fname);
-                if (!bundledDataUri) return;
-
-                try {
-                    const headRes = await fetch(`${rawUrl}?v=${Date.now()}`, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
-                    const ctype = (headRes?.headers?.get('content-type') || '').toLowerCase();
-                    if (headRes && headRes.ok && ctype.includes('application/pdf')) {
-                        return;
-                    }
-                    e.preventDefault();
-                    const blob = base64ToPdfBlob(bundledDataUri);
-                    const blobUrl = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = blobUrl;
-                    a.target = '_blank';
-                    a.rel = 'noopener noreferrer';
-                    a.click();
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-                } catch (_) {}
             };
         });
 
@@ -1325,7 +1790,7 @@ function setupPdfManagerEvents() {
                 if (!fname) return;
                 await removeLocalPdfOverride(fname);
                 showDevToast(`🧹 Copia local eliminada para ${fname}`);
-                await fetchPdfLibrary();
+                await refreshAllManagerViews();
             };
         });
 
@@ -1334,7 +1799,7 @@ function setupPdfManagerEvents() {
                 const fname = btn.getAttribute('data-filename');
                 const doc = existingServerPdfs.find((d) => d.filename === fname);
                 if (doc) {
-                    copyToClipboard(buildRegistrySnippet(doc), `🧩 Snippet copiado para ${fname}`);
+                    copyTextSafe(buildRegistrySnippet(doc), `🧩 Snippet copiado para ${fname}`);
                 }
             };
         });
@@ -1342,7 +1807,7 @@ function setupPdfManagerEvents() {
         listContainer.querySelectorAll('.devCopyPdfPathBtn').forEach((btn) => {
             btn.onclick = () => {
                 const p = btn.getAttribute('data-path');
-                copyToClipboard(p, `📋 Ruta copiada: ${p}`);
+                copyTextSafe(p, `📋 Ruta copiada: ${p}`);
             };
         });
 
@@ -1355,7 +1820,7 @@ function setupPdfManagerEvents() {
                     title: 'Eliminar Documento PDF',
                     message: docEntry?.localOnly
                         ? `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> del almacenamiento local del navegador?`
-                        : `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> tanto de <code>assets/docs/</code> como de <code>public/assets/docs/</code> y del navegador?`,
+                        : `¿Seguro que quieres eliminar <strong>${escapeHtml(fname)}</strong> de <code>public/assets/docs/</code> y del navegador?`,
                     confirmText: 'Eliminar PDF',
                     cancelText: 'Cancelar',
                     isDanger: true,
@@ -1372,9 +1837,10 @@ function setupPdfManagerEvents() {
                                 if (!res.ok || !data.success) {
                                     throw new Error(data.error || 'No se pudo eliminar en disco');
                                 }
+                                if (data.manifest) setServerManifestCache(data.manifest);
                             }
                             showDevToast(`🗑️ Eliminado: ${fname}`);
-                            await fetchPdfLibrary();
+                            await refreshAllManagerViews();
                         } catch (err) {
                             showDevToast(`❌ Error eliminando PDF: ${err.message || err}`);
                         }
@@ -1389,7 +1855,7 @@ function setupPdfManagerEvents() {
         let baseDocs = [];
 
         try {
-            const res = await fetch('/api/upload-pdf', { cache: 'no-store' });
+            const res = await fetch(`/api/upload-pdf?v=${Date.now()}`, { cache: 'no-store' });
             const ctype = (res.headers.get('content-type') || '').toLowerCase();
             if (!res.ok || !ctype.includes('application/json')) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
@@ -1398,10 +1864,9 @@ function setupPdfManagerEvents() {
             baseDocs = Array.isArray(data.docs) ? data.docs : [];
         } catch (_) {
             isDevServerAvailable = false;
-            baseDocs = getBundledCustomDocsList();
+            baseDocs = buildBaselinePdfFallbackList();
         }
 
-        // Fusionar copias locales guardadas en IndexedDB
         const mergedMap = new Map();
         baseDocs.forEach((doc) => {
             mergedMap.set(doc.filename.toLowerCase(), { ...doc, hasLocalOverride: false, localOnly: false });
@@ -1429,8 +1894,9 @@ function setupPdfManagerEvents() {
                     assetPath: `assets/docs/${rec.filename}`,
                     size: rec.size || 0,
                     updatedAt: rec.updatedAt || Date.now(),
-                    inAssets: false,
                     inPublic: false,
+                    inRepoBaseline: false,
+                    matchesRepoHash: false,
                     missionId: rec.missionId || 'unassigned',
                     missionLabel: rec.missionLabel || 'Sin misión asignada',
                     title: rec.title || '',
@@ -1450,6 +1916,15 @@ function setupPdfManagerEvents() {
         renderPdfLibraryList(existingServerPdfs);
         updateEnvBanner();
         updatePathHintAndUploadState();
+    }
+
+    async function refreshAllManagerViews() {
+        await Promise.all([
+            fetchPdfLibrary(),
+            refreshGlbModelsLibrary()
+        ]);
+        const imgState = await refreshImageSlotsStatus();
+        updateGlobalRepoBanner(imgState);
     }
 
     if (missionSelect) {
@@ -1512,7 +1987,6 @@ function setupPdfManagerEvents() {
         };
     }
 
-    // Dropzone & selector de archivo
     if (dropZone && fileInput) {
         dropZone.onclick = () => fileInput.click();
         fileInput.onchange = (e) => {
@@ -1544,7 +2018,7 @@ function setupPdfManagerEvents() {
     }
 
     if (refreshBtn) {
-        refreshBtn.onclick = () => fetchPdfLibrary();
+        refreshBtn.onclick = () => refreshAllManagerViews();
     }
 
     if (exportPackBtn && exportBox) {
@@ -1555,19 +2029,19 @@ function setupPdfManagerEvents() {
             }
             const pkg = await buildExportableDocsPackage(existingServerPdfs);
             const localBtnsHtml = pkg.localOnlyFiles.map((f) => `
-                <button type="button" class="devPdfMiniBtn devExportPdfFileBtn" data-filename="${escapeHtml(f.filename)}">
+                <button type="button" class="devPdfMiniBtn devExportPdfFileBtn" data-filename="${escapeHtml(f.filename)}" title="${escapeHtml(f.reason || '')}">
                     ⬇️ ${escapeHtml(f.filename)} (${formatBytes(f.size)})
                 </button>
             `).join('');
 
             exportBox.innerHTML = `
                 <div class="devPdfExportHeader">
-                    <span>📦 Exportar para GitHub / Proyecto (${pkg.localOnlyFiles.length} copia(s) local(es))</span>
+                    <span>📦 Exportar para GitHub (<code>public/assets/docs/</code> · ${pkg.localOnlyFiles.length} archivo(s) con cambios)</span>
                     <button type="button" id="devCloseExportBoxBtn" class="devPdfMiniBtn">✕</button>
                 </div>
                 <div class="devPdfExportActions">
                     <button type="button" id="devDownloadManifestBtn" class="devPdfMiniBtn">📄 Descargar docs_manifest.json</button>
-                    <button type="button" id="devDownloadBundleBtn" class="devPdfMiniBtn">📦 Descargar customAssetsBundle.js</button>
+                    <button type="button" id="devCopyAiPromptBtn" class="devPdfMiniBtn">📋 Copiar instrucción para AI Studio</button>
                     ${localBtnsHtml}
                 </div>
             `;
@@ -1584,29 +2058,31 @@ function setupPdfManagerEvents() {
                 };
             }
 
-            const dlBundleBtn = document.getElementById('devDownloadBundleBtn');
-            if (dlBundleBtn) {
-                dlBundleBtn.onclick = () => {
-                    triggerTextFileDownload('customAssetsBundle.js', pkg.bundleJs, 'application/javascript;charset=utf-8');
-                    showDevToast('📦 Descargado customAssetsBundle.js');
+            const copyAiPromptBtn = document.getElementById('devCopyAiPromptBtn');
+            if (copyAiPromptBtn) {
+                copyAiPromptBtn.onclick = () => {
+                    copyTextSafe(pkg.aiStudioPrompt, '📋 Instrucción copiada para AI Studio');
                 };
             }
 
             exportBox.querySelectorAll('.devExportPdfFileBtn').forEach((btn) => {
-                btn.onclick = () => {
+                btn.onclick = async () => {
                     const fname = btn.getAttribute('data-filename');
                     const fileObj = pkg.localOnlyFiles.find((x) => x.filename === fname);
                     if (!fileObj) return;
-                    const blob = base64ToPdfBlob(fileObj.base64Data);
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = fileObj.filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    setTimeout(() => URL.revokeObjectURL(url), 15000);
-                    showDevToast(`⬇️ Descargado ${fileObj.filename}`);
+                    if (fileObj.base64Data) {
+                        triggerBlobDownload(fileObj.filename, base64ToPdfBlob(fileObj.base64Data));
+                        showDevToast(`⬇️ Descargado ${fileObj.filename}`);
+                        return;
+                    }
+                    try {
+                        const res = await fetch(`${fileObj.url}?v=${Date.now()}`, { cache: 'no-store' });
+                        const blob = await res.blob();
+                        triggerBlobDownload(fileObj.filename, blob);
+                        showDevToast(`⬇️ Descargado ${fileObj.filename}`);
+                    } catch {
+                        showDevToast(`❌ No se pudo descargar ${fileObj.filename}`);
+                    }
                 };
             });
         };
@@ -1615,5 +2091,5 @@ function setupPdfManagerEvents() {
     populateMissionSelect(false);
     renderQuickMissionDocsRow();
     updatePathHintAndUploadState();
-    fetchPdfLibrary();
+    refreshAllManagerViews();
 }

@@ -15,6 +15,7 @@ import {
     createProceduralItem
 } from "../../../player/playerEquipment.js";
 import { getCustomItemById } from "../../../systems/customItemStorage.js";
+import { resolveVersionedAssetUrl } from "../../../systems/repoAssetResolver.js";
 
 let inventoryModule;
 
@@ -481,7 +482,7 @@ for (let i = 0; i < 20; i++) {
 
         const icon = document.createElement("img");
 
-        icon.src = object.thumbnail;
+        icon.src = resolveVersionedAssetUrl(object.thumbnail) || object.thumbnail;
 
         icon.alt = object.title;
 
@@ -795,7 +796,7 @@ function refreshGrid(){
 
         const icon = document.createElement("img");
 
-        icon.src = object.thumbnail;
+        icon.src = resolveVersionedAssetUrl(object.thumbnail) || object.thumbnail;
 
         icon.alt = object.title;
 
@@ -919,8 +920,9 @@ function setPreviewImage(imageURL){
 
     }
 
+    const resolvedUrl = resolveVersionedAssetUrl(imageURL) || imageURL;
     previewImage.style.backgroundImage =
-        `url("${imageURL}")`;
+        `url("${resolvedUrl}")`;
 
     previewImage.style.backgroundSize = "contain";
 

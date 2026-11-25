@@ -6,6 +6,8 @@
    - Totalmente adaptado a PC y móvil (Landscape 100%)
    ====================================================== */
 
+import { resolveVersionedAssetUrl } from '../systems/repoAssetResolver.js';
+
 let bannerElement = null;
 let dismissTimer = null;
 let audioCtx = null;
@@ -82,7 +84,7 @@ export function showItemObtainedBanner({
     const nameEl = bannerElement.querySelector('.itemObtainedItemName');
     const subEl = bannerElement.querySelector('.itemObtainedSubtitle');
 
-    if (thumbImg) thumbImg.src = thumbnail;
+    if (thumbImg) thumbImg.src = resolveVersionedAssetUrl(thumbnail) || thumbnail;
     if (headerTitle) headerTitle.textContent = title;
     if (nameEl) nameEl.textContent = itemName;
     if (subEl) subEl.textContent = subtitle;
@@ -126,7 +128,7 @@ function buildBannerDOM() {
     bannerElement.innerHTML = `
         <div class="itemObtainedGlow"></div>
         <div class="itemObtainedThumbFrame">
-            <img class="itemObtainedThumb" src="assets/ui/ASPIRANTE.jpg" alt="Objeto" draggable="false" />
+            <img class="itemObtainedThumb" src="${resolveVersionedAssetUrl('assets/ui/ASPIRANTE.jpg') || 'assets/ui/ASPIRANTE.jpg'}" alt="Objeto" draggable="false" />
         </div>
         <div class="itemObtainedContent">
             <div class="itemObtainedHeaderTitle">¡Acreditación Obtenida!</div>

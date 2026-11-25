@@ -15,6 +15,7 @@ import {
     isPdfSource,
     getPdfCatalogSlots
 } from '../systems/pdfDocumentStore.js';
+import { resolveVersionedAssetUrl } from '../systems/repoAssetResolver.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -143,7 +144,7 @@ export function openDocumentViewer(docSrc, title = 'Documento', catalogId = '') 
     } else {
         if (viewerPdfStage) viewerPdfStage.style.display = 'none';
         viewerImg.style.display = 'block';
-        viewerImg.src = docSrc;
+        viewerImg.src = resolveVersionedAssetUrl(docSrc) || docSrc;
         viewerImg.alt = title;
     }
 }
@@ -241,27 +242,21 @@ async function loadPdfDocument(pdfSrc, catalogId = '') {
 
             if (resolved.localBase64) {
                 pdfBytes = base64ToUint8Array(resolved.localBase64);
-            } else {
-                try {
-                    const response = await fetch(resolved.url, { cache: 'no-cache' });
-                    const ctype = (response.headers.get('content-type') || '').toLowerCase();
-                    if (response.ok && !ctype.includes('text/html')) {
-                        const buffer = await response.arrayBuffer();
-                        if (buffer && buffer.byteLength > 0) {
-                            pdfBytes = new Uint8Array(buffer);
-                        }
+            }
+
+            if (!pdfBytes) {
+                const response = await fetch(resolved.url, { cache: 'no-cache' });
+                const ctype = (response.headers.get('content-type') || '').toLowerCase();
+                if (response.ok && !ctype.includes('text/html')) {
+                    const buffer = await response.arrayBuffer();
+                    if (buffer && buffer.byteLength > 0) {
+                        pdfBytes = new Uint8Array(buffer);
                     }
-                } catch (_) {
-                    // Fallback al bundle si la red/estático falla
                 }
+            }
 
-                if (!pdfBytes && resolved.bundleDataUri) {
-                    pdfBytes = base64ToUint8Array(resolved.bundleDataUri);
-                }
-
-                if (!pdfBytes) {
-                    throw new Error(`No se pudo obtener el PDF (${resolved.url})`);
-                }
+            if (!pdfBytes) {
+                throw new Error(`No se pudo obtener el PDF (${resolved.url})`);
             }
 
             if (token !== pdfLoadToken || !isDocumentViewerOpen()) return;

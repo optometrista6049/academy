@@ -1,21 +1,18 @@
 /* ======================================================
-   MONTESERIN ACADEMY - PDF DOCUMENT STORE
-   Gestión unificada de documentos PDF:
-   - Persistencia local en IndexedDB (sobrevive a recargas y resyncs)
-   - Lectura de docs_manifest.json (asignación dinámica + ?v=updatedAt)
-   - Respaldo automático con customAssetsBundle.js para GitHub Pages
+   MONTESERIN ACADEMY - PDF DOCUMENT STORE (OPCIÓN 1)
+   Gestión unificada de documentos PDF con fuente única en public/assets/docs/:
+   - Línea base del repositorio compilada con hash SHA-256 (virtual:repo-assets)
+   - Lectura de docs_manifest.json (asignación dinámica + ?v=sha256 anti-caché)
+   - Persistencia temporal de pruebas en IndexedDB (marcada como "Solo local")
    ====================================================== */
 
 import { registryCatalog } from '../ui/registry/registryCatalog.js';
 import {
-    CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES,
-    CUSTOM_ASSETS_BUNDLE_UPDATED_AT,
-    BUNDLED_CUSTOM_MODELS_META,
-    BUNDLED_CUSTOM_DOCS_META,
-    BUNDLED_CUSTOM_MODELS,
-    BUNDLED_CUSTOM_DOCS,
-    getBundledCustomDocDataUri
-} from './customAssetsBundle.js';
+    getRepoBuildTimestamp,
+    getRepoAssetHashInfo,
+    getRepoBaselineDocsManifest,
+    resolveVersionedAssetUrl
+} from './repoAssetResolver.js';
 
 const DB_NAME = 'monteserin_pdf_store_v1';
 const DB_VERSION = 1;
@@ -26,8 +23,8 @@ const BINDINGS_META_KEY = 'catalogBindings';
 let dbPromise = null;
 let initPromise = null;
 
-// Estado en memoria sincronizado con IndexedDB y docs_manifest.json
-let serverManifest = {};
+// Estado en memoria sincronizado con línea base del repo, servidor y IndexedDB
+let serverManifest = getRepoBaselineDocsManifest();
 let localPdfs = new Map();       // lowerFilename -> record
 let localBindings = {};          // catalogId -> { filename, updatedAt }
 
@@ -131,7 +128,8 @@ async function loadIndexedDbState() {
 
 export async function refreshManifestFromServer() {
     try {
-        const res = await fetch(`./assets/docs/docs_manifest.json?v=${Date.now()}`, { cache: 'no-store' });
+        const cacheToken = getRepoBuildTimestamp() || Date.now();
+        const res = await fetch(`./assets/docs/docs_manifest.json?v=${cacheToken}`, { cache: 'no-store' });
         if (!res.ok) return serverManifest;
         const ctype = (res.headers.get('content-type') || '').toLowerCase();
         if (!ctype.includes('application/json') && !ctype.includes('text/plain')) return serverManifest;
@@ -140,7 +138,7 @@ export async function refreshManifestFromServer() {
             serverManifest = parsed;
         }
     } catch {
-        // En offline o sin manifiesto, mantenemos el estado actual
+        // Mantenemos el manifiesto compilado del repositorio como respaldo
     }
     return serverManifest;
 }
@@ -262,7 +260,6 @@ export async function setLocalCatalogBinding(catalogId, filename, updatedAt = Da
     const cleanName = extractFilename(filename) || filename;
     const ts = Number(updatedAt) || Date.now();
 
-    // Limpiar si este archivo estaba enlazado a otro catalogId localmente
     Object.keys(localBindings).forEach((cid) => {
         if (cid !== catalogId && localBindings[cid]?.filename?.toLowerCase() === cleanName.toLowerCase()) {
             localBindings[cid] = { filename: '', updatedAt: ts };
@@ -345,6 +342,10 @@ export function getAllLocalPdfRecords() {
     return Array.from(localPdfs.values());
 }
 
+export function getLocalCatalogBindings() {
+    return { ...localBindings };
+}
+
 export function getPdfCatalogSlots() {
     const slots = [];
     Object.entries(registryCatalog || {}).forEach(([catalogId, entry]) => {
@@ -363,7 +364,7 @@ export function getPdfCatalogSlots() {
 
 /**
  * Resuelve qué nombre de archivo PDF le corresponde actualmente a un slot del catálogo,
- * comparando enlaces en IndexedDB, docs_manifest.json y el valor por defecto de registryCatalog.js.
+ * comparando enlaces locales válidos (IndexedDB), docs_manifest.json y registryCatalog.js.
  */
 export function resolveFilenameForCatalogId(catalogId) {
     if (!catalogId) return '';
@@ -384,7 +385,16 @@ export function resolveFilenameForCatalogId(catalogId) {
     const manifestTs = Number(manifestMatch?.updatedAt) || 0;
 
     if (localBind && localTs > manifestTs) {
-        if (localBind.filename) return localBind.filename;
+        if (localBind.filename) {
+            const existsInRepo = Boolean(
+                serverManifest[localBind.filename] ||
+                getRepoAssetHashInfo(`assets/docs/${localBind.filename}`) ||
+                getLocalPdfRecord(localBind.filename)
+            );
+            if (existsInRepo) {
+                return localBind.filename;
+            }
+        }
     }
     if (manifestMatch && manifestMatch.filename) {
         return manifestMatch.filename;
@@ -395,7 +405,27 @@ export function resolveFilenameForCatalogId(catalogId) {
 }
 
 /**
- * Devuelve un mapa filenameLower -> { catalogId, title, isExplicit } para F9.
+ * Indica qué filename está consolidado en la línea base compilada del repositorio para un catalogId.
+ */
+export function resolveBaselineFilenameForCatalogId(catalogId) {
+    if (!catalogId) return '';
+    const baselineManifest = getRepoBaselineDocsManifest();
+    let best = null;
+    for (const [fname, meta] of Object.entries(baselineManifest)) {
+        if (meta && meta.catalogId === catalogId) {
+            const ts = Number(meta.updatedAt) || 0;
+            if (!best || ts > best.updatedAt) {
+                best = { filename: fname, updatedAt: ts };
+            }
+        }
+    }
+    if (best?.filename) return best.filename;
+    const entry = registryCatalog?.[catalogId];
+    return extractFilename(entry?.documentImage || '');
+}
+
+/**
+ * Devuelve un mapa filenameLower -> { catalogId, title, isExplicit, inRepoBaseline } para F9.
  */
 export function getActivePdfCatalogLinkMap() {
     const map = new Map();
@@ -404,15 +434,26 @@ export function getActivePdfCatalogLinkMap() {
     slots.forEach((slot) => {
         const activeFname = resolveFilenameForCatalogId(slot.catalogId);
         if (!activeFname) return;
+        const baselineFname = resolveBaselineFilenameForCatalogId(slot.catalogId);
+        const baselineManifest = getRepoBaselineDocsManifest();
         const isExplicit = Boolean(
             (localBindings[slot.catalogId]?.filename) ||
             Object.values(serverManifest || {}).some((m) => m?.catalogId === slot.catalogId)
+        );
+        const inRepoBaseline = Boolean(
+            baselineFname &&
+            baselineFname.toLowerCase() === activeFname.toLowerCase() &&
+            (
+                baselineManifest[activeFname]?.catalogId === slot.catalogId ||
+                slot.defaultFilename.toLowerCase() === activeFname.toLowerCase()
+            )
         );
         map.set(activeFname.toLowerCase(), {
             catalogId: slot.catalogId,
             title: slot.title,
             downloadFilename: slot.downloadFilename || activeFname,
-            isExplicit
+            isExplicit,
+            inRepoBaseline
         });
     });
 
@@ -420,7 +461,7 @@ export function getActivePdfCatalogLinkMap() {
 }
 
 /**
- * Indica si existe una copia local en IndexedDB más reciente que la del servidor.
+ * Indica si existe una copia local en IndexedDB más reciente que el archivo del proyecto/servidor.
  */
 export function isLocalOverrideNewerThanServer(filename, serverDocMeta = null) {
     const localRec = getLocalPdfRecord(filename);
@@ -430,13 +471,14 @@ export function isLocalOverrideNewerThanServer(filename, serverDocMeta = null) {
     const serverTs = Math.max(
         Number(manifestEntry?.updatedAt) || 0,
         Number(serverDocMeta?.manifestUpdatedAt) || 0,
-        Number(CUSTOM_ASSETS_BUNDLE_UPDATED_AT) || 0
+        getRepoBuildTimestamp()
     );
     return Number(localRec.updatedAt) > serverTs + 1500;
 }
 
 /**
  * Resuelve la fuente final de un documento para abrirlo o descargarlo.
+ * Usa ?v=<sha256> automático para evitar caché vieja en GitHub Pages.
  */
 export async function resolveDocumentAsset({ catalogId = '', defaultSrc = '', downloadFilename = '' } = {}) {
     await initPdfDocumentStore();
@@ -448,9 +490,10 @@ export async function resolveDocumentAsset({ catalogId = '', defaultSrc = '', do
     const effectiveDefault = srcStr || slotDefaultSrc;
 
     if (!isPdfSource(effectiveDefault) && !(catalogId && getPdfCatalogSlots().some((s) => s.catalogId === catalogId))) {
+        const versionedStatic = resolveVersionedAssetUrl(effectiveDefault);
         return {
             isPdf: false,
-            url: effectiveDefault,
+            url: versionedStatic || effectiveDefault,
             filename: extractFilename(effectiveDefault),
             downloadFilename: downloadFilename || extractFilename(effectiveDefault) || 'documento',
             sourceType: 'static'
@@ -462,33 +505,32 @@ export async function resolveDocumentAsset({ catalogId = '', defaultSrc = '', do
 
     const localRec = getLocalPdfRecord(targetFilename);
     const manifestEntry = serverManifest[targetFilename] || null;
-    const serverTs = Math.max(Number(manifestEntry?.updatedAt) || 0, Number(CUSTOM_ASSETS_BUNDLE_UPDATED_AT) || 0);
+    const repoHashInfo = getRepoAssetHashInfo(`assets/docs/${targetFilename}`);
+    const serverTs = Math.max(Number(manifestEntry?.updatedAt) || 0, getRepoBuildTimestamp());
     const localTs = Number(localRec?.updatedAt) || 0;
-    const useLocalBytes = Boolean(localRec && localRec.base64Data && localTs >= serverTs);
+    const useLocalBytes = Boolean(localRec && localRec.base64Data && localTs > serverTs + 1500);
 
-    const versionTs = Math.max(localTs, serverTs, 1);
-    const cleanUrl = targetFilename ? `./assets/docs/${encodeURIComponent(targetFilename)}?v=${versionTs}` : effectiveDefault;
-    const bundleDataUri = getBundledCustomDocDataUri(targetFilename);
+    const hashOrTs = manifestEntry?.sha256 || repoHashInfo?.hash || Math.max(localTs, serverTs, 1);
+    const cleanUrl = targetFilename
+        ? resolveVersionedAssetUrl(`assets/docs/${targetFilename}`, hashOrTs)
+        : effectiveDefault;
 
-    let finalDownloadName = downloadFilename || '';
-    if (!finalDownloadName) {
-        finalDownloadName = targetFilename || 'documento.pdf';
-    }
+    const finalDownloadName = downloadFilename || targetFilename || 'documento.pdf';
 
     return {
         isPdf: true,
         filename: targetFilename,
         url: cleanUrl,
         localBase64: useLocalBytes ? localRec.base64Data : null,
-        bundleDataUri: bundleDataUri || null,
         downloadFilename: finalDownloadName,
-        updatedAt: versionTs,
-        sourceType: useLocalBytes ? 'indexeddb' : 'server'
+        updatedAt: Math.max(localTs, serverTs, 1),
+        hash: repoHashInfo?.hash || manifestEntry?.sha256 || '',
+        sourceType: useLocalBytes ? 'indexeddb' : 'repo'
     };
 }
 
 /**
- * Descarga el documento resuelto (usando copia local IndexedDB, servidor sin caché o bundle fallback).
+ * Descarga el documento resuelto (usando copia local IndexedDB si hay prueba reciente, o archivo versionado del repo).
  */
 export async function triggerResolvedDocumentDownload({ catalogId = '', defaultSrc = '', downloadFilename = '' } = {}) {
     const resolved = await resolveDocumentAsset({ catalogId, defaultSrc, downloadFilename });
@@ -519,11 +561,7 @@ export async function triggerResolvedDocumentDownload({ catalogId = '', defaultS
                 }
             }
         } catch {
-            // Intentamos fallback bundle
-        }
-
-        if (!blob && resolved.bundleDataUri) {
-            blob = base64ToPdfBlob(resolved.bundleDataUri);
+            // Fallback directo al enlace
         }
     }
 
@@ -548,18 +586,18 @@ export async function triggerResolvedDocumentDownload({ catalogId = '', defaultS
 }
 
 /**
- * Construye los archivos exportables (docs_manifest.json + customAssetsBundle.js)
- * combinando el estado del servidor e IndexedDB para llevarlos a GitHub/Proyecto.
+ * Construye el paquete limpio listo para fijar en public/assets/docs/ (Opción 1):
+ * - docs_manifest.json actualizado
+ * - lista de archivos PDF nuevos/modificados respecto al snapshot del repositorio
+ * - texto listo para pedirle al agente en AI Studio que consolide los cambios
  */
 export async function buildExportableDocsPackage(serverDocsList = []) {
     await initPdfDocumentStore();
     const now = Date.now();
     const mergedManifest = { ...(serverManifest || {}) };
-    const mergedDocsData = { ...(BUNDLED_CUSTOM_DOCS || {}) };
-    const mergedDocsMeta = { ...(BUNDLED_CUSTOM_DOCS_META || {}) };
-    const localOnlyFiles = [];
+    const filesToExportMap = new Map();
 
-    // 1. Incluir metadatos de archivos del servidor conocidos
+    // 1. Consolidar estado actual del disco del servidor
     (serverDocsList || []).forEach((doc) => {
         if (!doc || !doc.filename) return;
         const prev = mergedManifest[doc.filename] || {};
@@ -570,9 +608,20 @@ export async function buildExportableDocsPackage(serverDocsList = []) {
             ...(doc.catalogId || prev.catalogId ? { catalogId: doc.catalogId || prev.catalogId } : {}),
             updatedAt: Number(doc.manifestUpdatedAt || prev.updatedAt || now)
         };
+
+        // Si fue subido o modificado en runtime respecto al baseline del repo, marcar para exportar
+        if (!doc.localOnly && (!doc.inRepoBaseline || !doc.matchesRepoHash)) {
+            filesToExportMap.set(doc.filename.toLowerCase(), {
+                filename: doc.filename,
+                size: Number(doc.size || 0),
+                base64Data: doc.localBase64 || null,
+                url: doc.url,
+                reason: !doc.inRepoBaseline ? 'Nuevo en disco (falta en snapshot)' : 'Modificado en disco'
+            });
+        }
     });
 
-    // 2. Superponer registros locales de IndexedDB (archivos nuevos o reemplazados)
+    // 2. Superponer archivos locales en IndexedDB
     localPdfs.forEach((rec) => {
         const prev = mergedManifest[rec.filename] || {};
         const prevTs = Number(prev.updatedAt) || 0;
@@ -587,20 +636,12 @@ export async function buildExportableDocsPackage(serverDocsList = []) {
             };
 
             const size = Number(rec.size) || base64ToUint8Array(rec.base64Data).length;
-            const skippedOversize = size > CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES;
-            mergedDocsMeta[rec.filename] = {
-                filename: rec.filename,
-                size,
-                skippedOversize
-            };
-            if (!skippedOversize) {
-                mergedDocsData[rec.filename] = rec.base64Data;
-            }
-            localOnlyFiles.push({
+            filesToExportMap.set(rec.filename.toLowerCase(), {
                 filename: rec.filename,
                 size,
                 base64Data: rec.base64Data,
-                updatedAt: recTs
+                url: `./assets/docs/${encodeURIComponent(rec.filename)}`,
+                reason: 'Copia en navegador (IndexedDB)'
             });
         }
     });
@@ -609,7 +650,6 @@ export async function buildExportableDocsPackage(serverDocsList = []) {
     Object.entries(localBindings || {}).forEach(([cid, bind]) => {
         if (!bind) return;
         const bindTs = Number(bind.updatedAt) || 0;
-        // Limpiar si el manifest tenía otro archivo con ese catalogId más viejo
         Object.keys(mergedManifest).forEach((fname) => {
             if (mergedManifest[fname]?.catalogId === cid && fname.toLowerCase() !== String(bind.filename || '').toLowerCase()) {
                 if ((Number(mergedManifest[fname].updatedAt) || 0) <= bindTs) {
@@ -625,79 +665,35 @@ export async function buildExportableDocsPackage(serverDocsList = []) {
         }
     });
 
-    const manifestJson = JSON.stringify(mergedManifest, null, 2) + '\n';
-
-    const bundleJs = `/* ======================================================
-   MONTESERIN ACADEMY - CUSTOM ASSETS FALLBACK BUNDLE (AUTO-GENERATED)
-   Contiene copias Data-URI Base64 en texto plano (.js) de modelos .GLB/.GLTF
-   y documentos .PDF personalizados para garantizar disponibilidad total en
-   GitHub Pages aunque el sincronizador omita binarios creados en tiempo de ejecución.
-   Regenerado automáticamente por vite.config.ts al subir, borrar u hornear.
-   ====================================================== */
-
-export const CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES = ${CUSTOM_ASSETS_BUNDLE_MAX_FILE_BYTES};
-export const CUSTOM_ASSETS_BUNDLE_UPDATED_AT = ${now};
-
-export const BUNDLED_CUSTOM_MODELS_META = ${JSON.stringify(BUNDLED_CUSTOM_MODELS_META || {}, null, 4)};
-export const BUNDLED_CUSTOM_DOCS_META = ${JSON.stringify(mergedDocsMeta, null, 4)};
-
-export const BUNDLED_CUSTOM_MODELS = ${JSON.stringify(BUNDLED_CUSTOM_MODELS || {}, null, 4)};
-export const BUNDLED_CUSTOM_DOCS = ${JSON.stringify(mergedDocsData, null, 4)};
-
-function extractAssetFilename(urlOrFilename) {
-    if (!urlOrFilename || typeof urlOrFilename !== "string") return "";
-    const noHash = urlOrFilename.split("#")[0].split("?")[0].trim();
-    if (!noHash || noHash.startsWith("data:") || noHash.startsWith("blob:")) return "";
-    const parts = noHash.split("/");
-    const last = parts[parts.length - 1] || "";
-    try {
-        return decodeURIComponent(last);
-    } catch (_) {
-        return last;
-    }
-}
-
-function findInBundleMap(map, urlOrFilename) {
-    const fname = extractAssetFilename(urlOrFilename);
-    if (!fname || !map) return null;
-    if (map[fname]) return map[fname];
-    const lower = fname.toLowerCase();
-    for (const key of Object.keys(map)) {
-        if (key.toLowerCase() === lower) return map[key];
-    }
-    return null;
-}
-
-export function getBundledCustomModelDataUri(urlOrFilename) {
-    return findInBundleMap(BUNDLED_CUSTOM_MODELS, urlOrFilename);
-}
-
-export function getBundledCustomDocDataUri(urlOrFilename) {
-    return findInBundleMap(BUNDLED_CUSTOM_DOCS, urlOrFilename);
-}
-
-export function getBundledCustomDocsList() {
-    return Object.keys(BUNDLED_CUSTOM_DOCS_META).map((fname) => {
-        const meta = BUNDLED_CUSTOM_DOCS_META[fname] || {};
-        return {
-            filename: fname,
-            url: "./assets/docs/" + encodeURIComponent(fname),
-            assetPath: "assets/docs/" + fname,
-            size: Number(meta.size || 0),
-            updatedAt: CUSTOM_ASSETS_BUNDLE_UPDATED_AT,
-            inAssets: true,
-            inPublic: true,
-            inBundle: Boolean(BUNDLED_CUSTOM_DOCS[fname]),
-            skippedOversize: Boolean(meta.skippedOversize)
+    // Eliminar metadatos de sha256/size generados en build del JSON editable
+    const cleanManifest = {};
+    Object.entries(mergedManifest).forEach(([fname, entry]) => {
+        if (!entry || typeof entry !== 'object') return;
+        cleanManifest[fname] = {
+            missionId: entry.missionId || 'unassigned',
+            missionLabel: entry.missionLabel || 'Sin misión asignada',
+            title: entry.title || '',
+            ...(entry.catalogId ? { catalogId: entry.catalogId } : {}),
+            updatedAt: Number(entry.updatedAt || now)
         };
-    }).sort((a, b) => a.filename.localeCompare(b.filename));
-}
-`;
+    });
+
+    const manifestJson = JSON.stringify(cleanManifest, null, 2) + '\n';
+    const localOnlyFiles = Array.from(filesToExportMap.values());
+
+    const activeLinksSummary = Object.entries(cleanManifest)
+        .filter(([, e]) => Boolean(e.catalogId))
+        .map(([fname, e]) => `${e.catalogId} -> ${fname}`)
+        .join(', ');
+
+    const aiStudioPrompt = activeLinksSummary
+        ? `Fija en el repositorio public/assets/docs/ el docs_manifest.json y los enlaces actuales (${activeLinksSummary}) antes del commit a GitHub.`
+        : `Fija en el repositorio public/assets/docs/ los PDFs y el docs_manifest.json actuales antes del commit a GitHub.`;
 
     return {
         manifestJson,
-        bundleJs,
         localOnlyFiles,
+        aiStudioPrompt,
         updatedAt: now
     };
 }
